@@ -9,8 +9,8 @@
 - [x] `CLAUDE.md` project rules
 - [x] `PROGRESS.md` and `tests/BEHAVIOURS.md` trackers
 - [x] `docs/PRD.md` v0.1 drafted (2026-10-12)
-- [x] PRD v0.2: OQ-1 and OQ-2 resolved (2026-10-12) — awaiting project-owner review
-- [ ] PRD reviewed and approved (Phase 0 exit criterion)
+- [x] PRD v0.2: OQ-1 and OQ-2 resolved (2026-10-12)
+- [x] PRD v0.2 reviewed and approved by project owner (2026-10-12; committed in `1b83722`) — Phase 0 exit criterion
 
 ### Open questions from the PRD (see PRD Appendix)
 - OQ-1 PDF library — **resolved**: pdfplumber (MIT), PRD D-01
