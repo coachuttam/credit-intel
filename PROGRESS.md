@@ -21,7 +21,13 @@
 Scope: FR-001, FR-002, D-01 table-extraction check. Plan approved 2026-10-12.
 
 - [x] Commit 1 — package layout (`src/credit_intel/`, `ingestion/`), `uv_build` backend, dependencies, licence notes
-- [ ] Commit 2 — validation and error codes (FR-001)
+- [x] Commit 2 — validation and error codes (FR-001.1–.5, .7–.9); `E-INPUT-NO-TEXT-LAYER` defined, raised in commit 3
+  - `ingestion/validation.py::validate_pdf` checks in order: readable → size → `%PDF-` signature → SHA-256 → parse/encryption → page count
+  - Verified pdfplumber 0.11.10 behaviour before mapping errors: user-password PDFs raise `PdfminerException` wrapping `PDFPasswordIncorrect`; **owner-password-only PDFs open normally**, so encryption is detected via the document's `/Encrypt` entry; corrupt/truncated files raise `PdfminerException` wrapping `PDFSyntaxError`/`PSEOF`
+  - Any exception raised by the PDF library while parsing the (untrusted) input maps to `E-INPUT-CORRUPT`; the original is kept as `__cause__` and its text is never shown to users. The broad `except` wraps only the two parsing calls (`pdfplumber.open`, page-tree load); our own code sits outside it, so programming errors surface instead of being reported as corrupt input (regression test included)
+  - Known limitation: the file is opened several times (signature, hash, parse, later extraction). The SHA-256 identifies the bytes at hashing time; a file edited or replaced mid-run could be read differently by later steps. Inputs are assumed stable during a run; if enforcement is needed, read once and parse from in-memory bytes
+  - Unreadable-file test simulates `PermissionError` instead of using `chmod`, which root and some containers bypass
+  - Synthetic PDFs built with reportlab in pytest `tmp_path` (`tests/conftest.py`); none written to the repository
 - [ ] Commit 3 — page text extraction behind `TextExtractor` (FR-002.1–.5)
 - [ ] Commit 4 — statement locator (FR-002.6)
 - [ ] Commit 5 — table-extraction check on synthetic PDFs (D-01)
