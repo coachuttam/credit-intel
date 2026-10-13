@@ -1,4 +1,4 @@
-"""Input error codes and the exception that carries them (PRD FR-001, FR-011).
+"""Ingestion error codes and the exception that carries them (PRD FR-001, FR-011, G.1).
 
 Messages are fixed, user-safe text: they never include document content,
 library error text, or stack traces. The underlying library exception, if
@@ -16,6 +16,8 @@ class ErrorCode(StrEnum):
     ENCRYPTED = "E-INPUT-ENCRYPTED"
     TOO_MANY_PAGES = "E-INPUT-TOO-MANY-PAGES"
     NO_TEXT_LAYER = "E-INPUT-NO-TEXT-LAYER"
+    PAGE_RANGE = "E-INPUT-PAGE-RANGE"
+    BASIS_UNAVAILABLE = "E-EXTRACT-BASIS-UNAVAILABLE"
 
 
 MESSAGES: dict[ErrorCode, str] = {
@@ -28,6 +30,14 @@ MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.NO_TEXT_LAYER: (
         "The PDF has no extractable text layer. Scanned or image-only PDFs are not supported "
         "(OCR is not supported)."
+    ),
+    ErrorCode.PAGE_RANGE: (
+        "The page range is invalid. Use comma-separated 1-based page numbers or ranges within "
+        "the document and no larger than the candidate-page limit, e.g. 110-115,120."
+    ),
+    ErrorCode.BASIS_UNAVAILABLE: (
+        "No financial statement of the configured basis was found. Review the document; "
+        "to analyse another basis, re-run with --basis."
     ),
 }
 

@@ -41,14 +41,19 @@ Scope: FR-001, FR-002, D-01 table-extraction check. Plan approved 2026-10-12.
   - Page labels come from the PDF's `/PageLabels` metadata via pdfminer; an absent or malformed label tree gives `None` and never rejects the document
   - Python 3.12 check moved to `tests/test_package.py`; `tests/test_placeholder.py` removed
   - Limitations: (1) page labels are metadata, not printed footer numbers — many reports define none; (2) only pdfplumber's default (non-layout) text mode is used; column/table fidelity is assessed in commit 5 (D-01); (3) the former FR-001.6 "minimum share of candidate pages" clause is removed in the PRD v0.3 draft (D-03), so there is nothing further to implement for it; (4) extraction speed is not yet measured (SC-10)
-- [ ] Commit 4 — statement locator (FR-013 in PRD v0.3; formerly FR-002.6)
+- [x] Commit 4 — statement locator (FR-013) and statement-basis check (H.4.6), implemented 2026-10-13
+  - `ingestion/locator.py`: `locate_statements` (rules 1–5, 7–8), `parse_page_range`, `statement_runs` (rule 6), `check_statement_basis` (H.4.6); works on `PageText` from ingestion, no second PDF parse
+  - `config.LocatorSettings` holds the PRD's initial phrase lists and thresholds; new error codes `E-INPUT-PAGE-RANGE` and `E-EXTRACT-BASIS-UNAVAILABLE` (messages state what the user should do)
+  - Tests: 85 new test cases (including parametrised cases) in `tests/unit/test_locator.py` (B-121–B-130); 15 deliberate bugs were introduced in a scratch copy and each made at least one test fail (two initially survived — missing title requirement and missing NFKC — and tests were added for both)
+  - Owner-approved clarifications (2026-10-13): (1) a statement's basis (H.4.6) comes from its title block — the line(s) containing the title phrase, plus the line directly above or below only if it holds nothing but a basis word (e.g. "STANDALONE" / "(Consolidated)"); basis words elsewhere (company names, notes, other lines) are ignored; if the basis cannot be established it stays `unknown`, and absent consolidated evidence is never read as standalone; (2) whitespace is allowed around page-range numbers, hyphens, and commas but not inside a number (`1 - 10` valid, `1 0` invalid); (3) `LocatorResult.range_pages_without_text` is an approved additional output field: pages in the requested range without usable text, in ascending order, empty for keyword location
+  - Limitations: (1) phrase lists and thresholds are **not validated on real documents** (OD-3); no statement-location accuracy is claimed; (2) `E-EXTRACT-NO-STATEMENT-PAGES` is not raised here — the locator returns an empty result and FR-003.7 (Phase 2) raises it; (3) settings are not yet loaded from `config/settings.toml`, and `--pages`/`--basis` are not wired to a CLI (FR-014, Phase 5); (4) the manifest and memo listing of range pages without text depends on FR-012/FR-009 (Phase 5); (5) a basis word on a separate line is recognised only when that line is directly adjacent to the title and contains nothing else; other layouts give basis `unknown`
 - [ ] Commit 5 — table-extraction check on synthetic PDFs (D-01)
 - [ ] Public annual-report check (D-01) — **pending**: 1–2 public reports (ideally one Indian) to be placed in git-ignored `private/`; only findings are recorded, never contents
 
 ### Known gaps between the code and PRD v0.3 (recorded 2026-10-13)
 - FR-002.3: determinism is tested within one process only (B-115); the fresh-process golden-output test PRD v0.3 requires does not exist yet (B-120, planned)
 - G.1: no CLI exit codes exist yet (FR-014, Phase 5); the seven implemented input-error messages do not yet include the "what the user should do" text
-- FR-001.6 page-range case and all of FR-013: not implemented (commit 4)
+- FR-001.6 page-range case and FR-013: implemented in commit 4 (see above); SC-12 recall not yet measured
 - Fixed 2026-10-13: `CLAUDE.md` and `.gitignore` no longer describe committed fixture PDFs; the `tests/fixtures/` exceptions for PDF, XLSX, and CSV files were removed, so these file types are ignored everywhere
 
 ### Dependencies added (2026-10-12)

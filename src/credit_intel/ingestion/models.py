@@ -47,3 +47,27 @@ class IngestedDocument:
 
     file_info: FileInfo
     pages: tuple[PageText, ...]
+
+
+@dataclass(frozen=True)
+class CandidatePage:
+    """A page selected for field extraction (FR-013)."""
+
+    page_number: int  # 1-based physical page number
+    statement_types: tuple[str, ...]  # sorted; empty for a page range
+    score: int | None  # None for a page range
+    matched_phrases: tuple[str, ...]  # empty for a page range
+
+
+@dataclass(frozen=True)
+class LocatorResult:
+    """Candidate pages in ascending page order (FR-013).
+
+    ``range_pages_without_text`` lists, in ascending order, the pages inside a
+    supplied page range that have no extractable text (FR-013 rule 8); it is
+    empty for keyword location.
+    """
+
+    method: str  # "keywords" or "page_range"
+    candidates: tuple[CandidatePage, ...]
+    range_pages_without_text: tuple[int, ...] = ()
