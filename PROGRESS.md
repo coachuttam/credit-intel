@@ -28,7 +28,14 @@ Scope: FR-001, FR-002, D-01 table-extraction check. Plan approved 2026-10-12.
   - Known limitation: the file is opened several times (signature, hash, parse, later extraction). The SHA-256 identifies the bytes at hashing time; a file edited or replaced mid-run could be read differently by later steps. Inputs are assumed stable during a run; if enforcement is needed, read once and parse from in-memory bytes
   - Unreadable-file test simulates `PermissionError` instead of using `chmod`, which root and some containers bypass
   - Synthetic PDFs built with reportlab in pytest `tmp_path` (`tests/conftest.py`); none written to the repository
-- [ ] Commit 3 — page text extraction behind `TextExtractor` (FR-002.1–.5)
+- [x] Commit 3 — page text extraction behind `TextExtractor` (FR-002.1–.5) and `E-INPUT-NO-TEXT-LAYER` (FR-001.6)
+  - `TextExtractor.extract_pages()` added; pdfplumber code stays in `pdfplumber_extractor.py`
+  - `ingestion/ingest.py::ingest` = `validate_pdf` → `extract_pages` → numbering check → no-text check; returns `IngestedDocument(file_info, pages)`
+  - Text is stored exactly as pdfplumber's default `extract_text()` returns it (empty string for pages without text); no cleanup, so it stays usable as evidence
+  - A page "has text" if it contains any non-whitespace character; the PDF is rejected only if no page has text
+  - Page labels come from the PDF's `/PageLabels` metadata via pdfminer; an absent or malformed label tree gives `None` and never rejects the document
+  - Python 3.12 check moved to `tests/test_package.py`; `tests/test_placeholder.py` removed
+  - Limitations: (1) page labels are metadata, not printed footer numbers — many reports define none; (2) only pdfplumber's default (non-layout) text mode is used; column/table fidelity is assessed in commit 5 (D-01); (3) the optional minimum text-share threshold (PRD FR-001.6, "share of candidate pages") is not implemented yet — it depends on candidate pages from the statement locator (commit 4) and is disabled by default; (4) extraction speed is not yet measured (SC-10)
 - [ ] Commit 4 — statement locator (FR-002.6)
 - [ ] Commit 5 — table-extraction check on synthetic PDFs (D-01)
 - [ ] Public annual-report check (D-01) — **pending**: 1–2 public reports (ideally one Indian) to be placed in git-ignored `private/`; only findings are recorded, never contents
