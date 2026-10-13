@@ -11,11 +11,16 @@
 - [x] `docs/PRD.md` v0.1 drafted (2026-10-12)
 - [x] PRD v0.2: OQ-1 and OQ-2 resolved (2026-10-12)
 - [x] PRD v0.2 reviewed and approved by project owner (2026-10-12; committed in `1b83722`) — Phase 0 exit criterion
+- [x] PRD v0.3 approved by the project owner **as a specification only** (2026-10-13). Produced by a staged review (audit → diagnosis → revision) and a second audit; incorporates owner decisions D-06 to D-12. Approval covers what is to be built; implementation status is tracked below and in `tests/BEHAVIOURS.md`.
 
 ### Open questions from the PRD (see PRD Appendix)
 - OQ-1 PDF library — **resolved**: pdfplumber (MIT), PRD D-01
 - OQ-2 LLM provider/model — **resolved**: OpenAI API, `gpt-4o-mini` proposed, PRD D-02
-- OQ-3 to OQ-6 — open; needed in Phases 1–5
+- OQ-3 evaluation documents and tuning/held-out split — open
+- OQ-4 synthetic-PDF tool — **resolved**: reportlab (dev-only), installed in Phase 1
+- OQ-5 lease liabilities — **closed for Release 1** in PRD v0.3 (excluded, no setting; D-07)
+- OQ-6 analyst override file — open
+- Open decisions in PRD v0.3 (no defaults adopted): OD-1 (period-column method; before Phase 2), OD-3 (locator settings, SC-12 target; before first evaluation report), OD-6 (parse limits; by Phase 6), OD-7 (PDF header leniency; after public-report check), OD-8 (token ceiling — owner's approval message for this item was incomplete; before first live LLM call), OD-9 (borrowings when current maturities are not presented separately; before Phase 3), OD-10 (statements whose title names no basis; before Phase 2)
 
 ## Phase 1 — PDF ingestion and extraction (started 2026-10-12)
 Scope: FR-001, FR-002, D-01 table-extraction check. Plan approved 2026-10-12.
@@ -35,10 +40,16 @@ Scope: FR-001, FR-002, D-01 table-extraction check. Plan approved 2026-10-12.
   - A page "has text" if it contains any non-whitespace character; the PDF is rejected only if no page has text
   - Page labels come from the PDF's `/PageLabels` metadata via pdfminer; an absent or malformed label tree gives `None` and never rejects the document
   - Python 3.12 check moved to `tests/test_package.py`; `tests/test_placeholder.py` removed
-  - Limitations: (1) page labels are metadata, not printed footer numbers — many reports define none; (2) only pdfplumber's default (non-layout) text mode is used; column/table fidelity is assessed in commit 5 (D-01); (3) the optional minimum text-share threshold (PRD FR-001.6, "share of candidate pages") is not implemented yet — it depends on candidate pages from the statement locator (commit 4) and is disabled by default; (4) extraction speed is not yet measured (SC-10)
-- [ ] Commit 4 — statement locator (FR-002.6)
+  - Limitations: (1) page labels are metadata, not printed footer numbers — many reports define none; (2) only pdfplumber's default (non-layout) text mode is used; column/table fidelity is assessed in commit 5 (D-01); (3) the former FR-001.6 "minimum share of candidate pages" clause is removed in the PRD v0.3 draft (D-03), so there is nothing further to implement for it; (4) extraction speed is not yet measured (SC-10)
+- [ ] Commit 4 — statement locator (FR-013 in PRD v0.3; formerly FR-002.6)
 - [ ] Commit 5 — table-extraction check on synthetic PDFs (D-01)
 - [ ] Public annual-report check (D-01) — **pending**: 1–2 public reports (ideally one Indian) to be placed in git-ignored `private/`; only findings are recorded, never contents
+
+### Known gaps between the code and PRD v0.3 (recorded 2026-10-13)
+- FR-002.3: determinism is tested within one process only (B-115); the fresh-process golden-output test PRD v0.3 requires does not exist yet (B-120, planned)
+- G.1: no CLI exit codes exist yet (FR-014, Phase 5); the seven implemented input-error messages do not yet include the "what the user should do" text
+- FR-001.6 page-range case and all of FR-013: not implemented (commit 4)
+- Fixed 2026-10-13: `CLAUDE.md` and `.gitignore` no longer describe committed fixture PDFs; the `tests/fixtures/` exceptions for PDF, XLSX, and CSV files were removed, so these file types are ignored everywhere
 
 ### Dependencies added (2026-10-12)
 | Package | Version | Group | Licence (from installed metadata) | Pulled in by |

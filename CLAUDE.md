@@ -17,7 +17,7 @@ Product requirements live in `docs/PRD.md`.
 
 ## Data handling
 - Never commit real financial documents, `.env` files, or secrets (see `.gitignore`).
-- Use synthetic or anonymised fixtures under `tests/fixtures/` for tests.
+- Use only synthetic or anonymised test data. Synthetic PDFs are generated at test time (reportlab, in pytest's temporary directories) and are never committed. `tests/fixtures/` holds only recorded LLM responses and golden outputs, not PDFs.
 
 ## Tracking
 - `PROGRESS.md` — what has been done, what is next.

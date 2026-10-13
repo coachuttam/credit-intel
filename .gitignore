@@ -27,7 +27,8 @@ credentials*.json
 
 # --- Private financial documents ---
 # Real borrower/company documents must never be committed.
-# Use synthetic or anonymised fixtures under tests/fixtures/ instead.
+# Synthetic test PDFs are generated at test time and never committed.
+# No exceptions: PDFs, spreadsheets, and CSVs are ignored everywhere.
 data/
 private/
 uploads/
@@ -35,9 +36,6 @@ uploads/
 *.xlsx
 *.xls
 *.csv
-!tests/fixtures/**/*.pdf
-!tests/fixtures/**/*.xlsx
-!tests/fixtures/**/*.csv
 
 # --- OS / editor ---
 .DS_Store
