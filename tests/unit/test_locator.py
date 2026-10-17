@@ -135,9 +135,9 @@ def test_non_consecutive_pages_form_separate_runs():
 def test_matching_ignores_case_whitespace_and_compatibility_forms():
     text = (
         "BALANCE SHEET\n"  # no-break space
-        "TOTAL   CURRENT\tASSETS 1\n"  # runs of whitespace
-        "Total\nequity 2\n"  # phrase split across a line break
-        "Proﬁt before tax 3"  # "ﬁ" ligature; not a balance-sheet phrase
+        "TOTAL   CURRENT\tASSETS 1.00\n"  # runs of whitespace
+        "Total\nequity 2.00\n"  # phrase split across a line break
+        "Proﬁt before tax 3.00"  # "ﬁ" ligature; not a balance-sheet phrase
     )
 
     candidate = locate_statements([PageText(1, text)]).candidates[0]
@@ -149,7 +149,7 @@ def test_matching_ignores_case_whitespace_and_compatibility_forms():
 
 def test_fullwidth_characters_are_normalised_before_matching():
     # Only NFKC maps fullwidth letters to ASCII; case-folding alone does not.
-    text = "ＢＡＬＡＮＣＥ ＳＨＥＥＴ\nTotal current assets 1\nTotal equity 2"
+    text = "ＢＡＬＡＮＣＥ ＳＨＥＥＴ\nTotal current assets 1.00\nTotal equity 2.00"
 
     candidate = locate_statements([PageText(1, text)]).candidates[0]
 
@@ -157,7 +157,7 @@ def test_fullwidth_characters_are_normalised_before_matching():
 
 
 def test_ligature_is_normalised_before_matching():
-    text = "Statement of Proﬁt and Loss\nRevenue from operations 1\nProﬁt before tax 2"
+    text = "Statement of Proﬁt and Loss\nRevenue from operations 1.00\nProﬁt before tax 2.00"
 
     candidate = locate_statements([PageText(1, text)]).candidates[0]
 
@@ -181,7 +181,7 @@ def test_ligature_is_normalised_before_matching():
 def test_phrase_presence_respects_word_boundaries(text, phrase, present):
     # A titled balance sheet page whose remaining line items are fixed, so
     # the only variable is whether ``phrase`` is present in ``text``.
-    base = "Balance Sheet\nTotal non-current assets 1\nTotal liabilities\n"
+    base = "Balance Sheet\nTotal non-current assets 1.00\nTotal liabilities\n"
     settings = LocatorSettings(min_line_items_with_title=1)
 
     candidates = locate_statements([PageText(1, base + text)], settings).candidates
@@ -191,8 +191,8 @@ def test_phrase_presence_respects_word_boundaries(text, phrase, present):
 
 
 def test_repeating_a_phrase_does_not_change_the_score():
-    once = "Balance Sheet\nTotal equity 1\nTotal assets 2"
-    many = "Balance Sheet\n" + "Total equity 1\n" * 5 + "Total assets 2"
+    once = "Balance Sheet\nTotal equity 1.00\nTotal assets 2.00"
+    many = "Balance Sheet\n" + "Total equity 1.00\n" * 5 + "Total assets 2.00"
 
     score_once = locate_statements([PageText(1, once)]).candidates[0].score
     score_many = locate_statements([PageText(1, many)]).candidates[0].score
@@ -205,8 +205,11 @@ def test_page_qualifying_for_both_types_scores_both():
 
     candidate = locate_statements([PageText(1, text)]).candidates[0]
 
-    assert candidate.statement_types == ("balance_sheet", "income_statement")
-    assert candidate.score == 9 + 10
+    # G.0: the profit-and-loss title lies below the balance-sheet figure
+    # lines, so it is not a title line and the page qualifies only as a
+    # balance sheet (the one intentional rule change among the O.1 tests).
+    assert candidate.statement_types == ("balance_sheet",)
+    assert candidate.score == 9
 
 
 # --- AC3: ranking, ties, limit, order ------------------------------------

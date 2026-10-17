@@ -60,14 +60,35 @@ class CandidatePage:
 
 
 @dataclass(frozen=True)
+class ExcludedCandidate:
+    """A (page, statement type) pair removed by the cap or a chain cut (FR-013, P1-2).
+
+    Member order is the PRD's LOC-2 schema. ``score`` is the page's rule-4
+    score exactly as used for ranking; ``chain_start_page`` is the original
+    rule-3a page that began the chain for this type, even if that page was
+    itself removed.
+    """
+
+    page_number: int  # 1-based physical page number
+    statement_type: str  # an existing statement-type identifier, e.g. "balance_sheet"
+    reason: str  # "cap" or "chain_cut"
+    score: int
+    chain_start_page: int
+
+
+@dataclass(frozen=True)
 class LocatorResult:
     """Candidate pages in ascending page order (FR-013).
 
     ``range_pages_without_text`` lists, in ascending order, the pages inside a
     supplied page range that have no extractable text (FR-013 rule 8); it is
-    empty for keyword location.
+    empty for keyword location. ``excluded_candidates`` (P1-2, LOC-2) records
+    every excluded (page, statement type) pair in ascending page, then
+    statement-type order; it is empty when nothing is excluded and for a page
+    range.
     """
 
     method: str  # "keywords" or "page_range"
     candidates: tuple[CandidatePage, ...]
     range_pages_without_text: tuple[int, ...] = ()
+    excluded_candidates: tuple[ExcludedCandidate, ...] = ()
