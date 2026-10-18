@@ -40,15 +40,16 @@
 | U-3 | Grouping validity (the stricter rule in `docs/PRD_v0.4_proposal.md` §3.8): not decided, not in OD-1. |
 | U-4 | Three-year statements (DEC-C): not decided, not in OD-1. Column structure here tolerates an extra period column, nothing more. |
 | U-5 | Hazard H1 (§13.1) is a **known residual risk** of the approved direction. The Q9 label-contiguity guard is **deferred, not adopted and not approved**; it is not part of the proposed algorithm. Evidence gap in §13.6. |
-| U-6 | Whether `extract_words` lines agree with `extract_text` lines on real reports: unmeasured. |
+| U-6 | Whether `extract_words` lines agree with `extract_text` lines on real reports: unmeasured. Partly measured on ten pages on 2026-10-19: see §14. |
 | U-7 | The reason code for a field blocked by a non-`extracted` document-level attribute (H.1.2): unspecified. |
 | U-8 | How FR-005.10 recognises a note reference when the page has no recognised "Note" header. G.0 treats a plain integer as a numeric token and FR-005.10 says a note reference counts as a figure, but neither says how a note reference is recognised. The PRD is unchanged; this stays an owner/PRD clarification (Q12). |
 | U-9 | How FR-005.9 validates a year-only **comparative** header (it requires a full date on the page whose year equals the header's year). AC-OD1-4 and AC-OD1-5 fixtures therefore carry full dates; behaviour on real reports is unmeasured. |
 | U-10 | Attached currency symbols (`$1,234`, `₹1,234`) are not numeric tokens under G.0, so the position rule cannot assign them. FR-004.3 normalisation is **not** changed. Owner decision requested (Q10). |
 | U-11 | Headerless continuation pages: the fail-safe rule in 3.9 is narrower than the current FR-005.7 text. Owner decision requested (Q11). |
 | U-12 | **Multi-line quotes.** FR-005.10 defines the label as the text before the quoted row's first figure but does not say which line's text that is when a quote spans lines. A quote that includes a label-only line could reintroduce label joining, which A-2 disables. The PRD is unchanged; PRD clarification needed. No outcome is proposed here. |
-| U-13 | **Narrow tokens.** A short figure or a nil dash right-aligned under a centred header may not overlap its ±3 pt region. It would then be a stray token and the line would fail safe (B fails), losing the row. No scenario or evidence covers this; it matters for the FR-004.3 nil convention. Untested assumption; evidence gap (§13.6-style real-report inspection needs separate authorisation). |
+| U-13 | **Narrow tokens.** A short figure or a nil dash right-aligned under a centred header may not overlap its ±3 pt region. It would then be a stray token and the line would fail safe (B fails), losing the row. No scenario or evidence covers this; it matters for the FR-004.3 nil convention. Untested assumption; evidence gap (§13.6-style real-report inspection needs separate authorisation). Partly measured on ten pages on 2026-10-19: see §14. |
 | U-14 | **Reason code for the two cases in 3.3 (no usable anchor; claimed period with no column).** The proposal uses `period_not_verified`, which the current FR-005.7 wording supports ("if the column order cannot be determined, or the value is in a different column"). Whether the PRD intends a more specific reason for a period that is absent from the page is **unresolved** and needs PRD clarification. |
+| U-15 | **Note-region margin (new, 2026-10-19).** A region of the "Note" header word ±3 pt missed two real note references (`2.3` and `2.21`, 7.3 pt and 4.9 pt outside it) on two of the ten inspected R1 pages (§14). Under 3.7 a stray token makes the whole line unverified, so those two rows would be lost. A wider margin, an alignment rule or another definition of the note region is needed; this is a design decision for the owner, related to U-8 and Q2. Not decided. |
 
 **Not changed by this update:** OD-1 is open and undecided; B-133 is open; D-01 is not marked met or not met (the pdfplumber / MIT choice is decided and not reopened); D-14a is unrecorded and unapproved; Phase 1 is incomplete; no checklist waiver is approved; no acceptance criterion outside this proposal is changed; the PRD is not amended beyond a factual status pointer. Several expected outcomes **inside this proposal's §6** were corrected on 2026-10-17 (AC-OD1-4 to 11, 13, 14, 16 to 18 and 21 to 23) to remove contradictions found by audits, and AC-OD1-6 was corrected again in a second pass; they remain proposed and unapproved. This is a proposal, not an approval: nothing here makes OD-1 ready for implementation.
 
@@ -350,7 +351,7 @@ Form under review: a **separate Protocol**, so that `TextExtractor` is not modif
 +@dataclass(frozen=True)
 +class PageWords:
 +    page_number: int        # 1-based physical page number
-+    width: float            # points, as the page is displayed
++    width: float            # points; pdfplumber reports the UNROTATED page size, not the displayed size (see §15)
 +    height: float
 +    rotation: int           # degrees: 0, 90, 180 or 270
 +    words: tuple[Word, ...]
@@ -386,12 +387,12 @@ Form under review: a **separate Protocol**, so that `TextExtractor` is not modif
 | New requirement | Only the future period-column verifier needs a `WordExtractor` |
 
 **Open compatibility questions (not decided here)**
-- Whether pdfplumber's page width and height already reflect rotation, and which attribute gives rotation, is **unverified** and must be checked in the review.
+- Whether pdfplumber's page width and height already reflect rotation, and which attribute gives rotation, is **unverified** and must be checked in the review. **Answered on synthetic PDFs on 2026-10-19 (§15):** they do not reflect rotation; `page.rotation` gives it.
 - How duplicate, unsorted, empty or out-of-range `page_numbers` are handled (reject with `IngestionError`, or ignore) is unspecified.
 - Which `extract_words` parameters are pinned (for example `x_tolerance`, `y_tolerance`), and how they relate to `extract_text`, is unspecified; AC-OD1-25 depends on it.
-- Whether crop-box or media-box offsets and `UserUnit` change coordinates is unchecked.
+- Whether crop-box or media-box offsets and `UserUnit` change coordinates is unchecked. **Partly answered on 2026-10-19 (§15):** a crop box changed no coordinate; `UserUnit` is inconclusive.
 
-**Planned tests (when approved; none written):** the full existing suite passes unchanged (147 tests at the last check); a golden `extract_words` result in a fresh process (as B-120); `PdfplumberExtractor` satisfies both protocols; page number, width, height and rotation on synthetic pages, including a rotated page (reportlab can set page rotation); errors map to `IngestionError`; empty, duplicate and out-of-range page lists behave as specified; `extract_words` and `extract_pages` agree on page numbering. This review is on paper; no code was changed and no test was run for it.
+**Planned tests (when approved; none written):** the full existing suite passes unchanged (147 tests at the last check on 2026-10-17; 362 passed at `3be8acd`); a golden `extract_words` result in a fresh process (as B-120); `PdfplumberExtractor` satisfies both protocols; page number, width, height and rotation on synthetic pages, including a rotated page (reportlab can set page rotation); errors map to `IngestionError`; empty, duplicate and out-of-range page lists behave as specified; `extract_words` and `extract_pages` agree on page numbering. This review is on paper; no code was changed and no test was run for it.
 
 ---
 
@@ -514,6 +515,39 @@ Interaction with AC-OD1-1 to AC-OD1-26 if the guard were adopted: no existing ex
 
 ### 13.6 Remaining evidence gap
 - Real-report **gap distributions** between label words and first values, how real PDFs encode spaces, how often dot leaders occur, and whether H1 occurs at all are all unmeasured.
-- The two tuning documents have not been examined for this question. Doing so would require **separate, explicit owner authorisation to access `private/`**; that authorisation has not been given and `private/` was not accessed.
+- The two tuning documents have not been examined for this question. Doing so would require **separate, explicit owner authorisation to access `private/`**; that authorisation has not been given and `private/` was not accessed. **Update 2026-10-19:** a narrow check of the ten inspected pages has since been made with the owner's authorisation (§14); H1 frequency, gap distributions between label words and first values, and dot leaders remain unmeasured.
 - Two documents would show whether the pattern occurs, not how often. If H1 or a close variant is found, a cross-row alignment check may be a better candidate than a spacing threshold; that is a note, not a proposal.
 - Adopting any guard would need a separate owner decision and an approved amendment to §6.
+
+
+---
+
+## 14. Evidence from the narrow tuning-document check (2026-10-19)
+
+**Status:** evidence note only. It decides nothing, changes no algorithm or setting, and claims no accuracy. OD-1 stays open.
+
+- **Authorisation and scope:** the owner authorised, on 2026-10-19, a narrow read-only check of `private/` for U-6 and U-13 only. Only the two tuning PDFs were opened (R1 physical pages 194–197 and 274–277; R2 physical pages 36 and 38), read-only. No page, statement or text was copied; only counts and a few short tokens were recorded.
+- **Method and its limits:** an approximation of this proposal's rules, not an implementation of it. Word-lines were grouped as in 3.2 (tolerance 3). Anchors were the year tokens on the lowest header line above the first figure line; the note region was the "Note" header word; regions were the header extent ±3 pt; the label limit was the leftmost region edge. Figure words were detected by the G.0 pattern. These heuristics may differ from a real implementation.
+- **U-6 (word-lines versus `extract_text` lines):** on all ten pages the word-lines were identical to the lines of `extract_text` (the text the pipeline stores): **347 of 347 lines**, no mismatch. This supports the assumption behind 3.5 on these two documents. It does not show agreement on other layouts.
+- **U-13 (narrow tokens), 539 numeric or nil tokens classified:** 419 fell in exactly one period region; 92 in the note region; 25 left of the label limit (label text); **3 in no region (stray)**; none in two regions. Nil dashes: two found; one was in a period region and one was left of the label limit (inside a label); none was lost. No short figure was lost.
+- **The three stray tokens:** two were **note references** (`2.3` on R1 p196, 7.3 pt outside the note region; `2.21` on R1 p276, 4.9 pt outside it); one was an 8-digit number on R1 p195 that is not in a financial column (2.5 pt from a region). Under the 3.7 rule each stray token makes its whole line unverified, so each of the three lines would be lost. R2 has no note column, and all 62 and 72 numeric tokens on its two pages fell in period regions.
+- **What this shows:** the narrow-dash hazard in U-13 did not occur in this sample. A different hazard did: a ±3 pt note region is narrower than the real alignment of note references (U-15). That affects Q2 and U-8. The period-column margin was not stressed in this sample (no token fell in two regions), but it remains unvalidated for other layouts.
+- **Not covered:** H1 frequency, gap distributions, dot leaders, currency tokenisation on the real pages (the earlier log records `$` as a separate token in R2), headerless continuation pages, and any document other than R1 and R2.
+
+---
+
+## 15. Compatibility review of `extract_words` on synthetic PDFs (2026-10-19)
+
+**Status:** evidence note only. It decides nothing, changes no algorithm or setting, and implements nothing. OD-1 stays open. The owner authorised this read-only review on 2026-10-19 (item 14 of the OD-1 question sheet). `private/` was not used for it.
+
+- **Method:** scratch scripts outside the repository, with synthetic reportlab PDFs (default A4 page size). Versions: pdfplumber 0.11.10, pdfminer 20260107, reportlab 5.0.1. Nothing was added to the repository.
+- **Rotation:** `width` and `height` stayed 595.3 × 841.9 at page rotations 0, 90, 180 and 270, so they are the **unrotated** page size. Rotation is available as `page.rotation` (and the page's `/Rotate` entry). Word coordinates fell in the rotated frame (x up to 697.5 on a page reported 595.3 wide at 90°), the word text came out reversed at 180° and 270° (`olleH`, `432,1`), and x was negative at 270°. Geometry on a rotated page is not usable, which supports the decision that rotated pages are unverifiable (A-3). The comment in the §9 diff ("as the page is displayed") was wrong for pdfplumber and has been annotated.
+- **Crop box:** setting a crop box changed `cropbox` but not `bbox`, and no word coordinate moved.
+- **`UserUnit`:** inconclusive. The test PDF was hand-edited with stale cross-reference offsets; pdfplumber reported unchanged dimensions and coordinates.
+- **Parameters:** `extract_words` defaults use a 3 pt tolerance. Pinning `x_tolerance` and `y_tolerance` explicitly at 3 would not change these results.
+- **Word-line versus `extract_text` agreement (AC-OD1-25, synthetic):** the 3.2 grouping (tolerance 3) gave lines equal to `extract_text` on six layouts: aligned rows, a 2 pt offset, a 5 pt offset, a blank cell, an R1-type wrapped label tail and an R2-type wrapped label number. (Real pages: §14.)
+- **Tokenisation:** a currency symbol within about 3 pt of its figure merged into one word (`$1,234`); a 4 pt gap made `$` a separate word. Nil dashes (`-`, `–`) and a detached minus were separate words; `-1,234` and `(4,901)` were single words. So "attached" versus "separate" depends on the gap (Q10, U-10).
+- **Determinism:** `extract_words` output was identical when repeated in one process and in a fresh process, and words came back ordered by (top, x0).
+- **Page access:** an out-of-range page index raises `IndexError`; page slicing works. How duplicate, unsorted or empty page lists are handled is the new interface's own decision and remains open.
+- **Narrow tokens, synthetic sweep (U-13):** with a header centred a distance d to the left of the column's right edge (Helvetica 9, region = header extent ±3 pt), a right-aligned nil dash missed its region from d ≈ 20 pt, a two-digit figure from d ≈ 24 pt, and a long figure was unaffected up to d = 40 pt. This is geometry on synthetic pages, not evidence about real reports.
+- **Not covered:** a proper `UserUnit` test, scanned or unusual page boxes, real fonts and Type 3 fonts, other pdfplumber versions, and any real-report claim.
