@@ -168,3 +168,44 @@ def test_letter_spacing_over_3pt_splits_a_figure_known_limitation(tmp_path):
     pdf.save()
 
     assert PdfplumberExtractor().extract_pages(path)[0].text == "Borrowings 1 , 2 3 , 4 5 6 . 7 0"
+
+
+# --- Wrapped labels (D-01 LABEL-WRAP; input to OD-1) ---------------------------
+# These pin the extracted text only. They test no column-mapping method.
+
+
+def test_wrapped_label_tail_sits_on_its_own_line_known_limitation(tmp_path):
+    text = statement_page(
+        tmp_path / "wrap_tail.pdf",
+        [
+            HEADER,
+            ("Total outstanding dues of micro enterprises and small", None, "12", "34"),
+            ("enterprises", None, None, None),
+        ],
+    )
+
+    assert text.splitlines() == [
+        "Particulars Note As at 31 March 2025 As at 31 March 2024",
+        "Total outstanding dues of micro enterprises and small 12 34",
+        "enterprises",
+    ]
+
+
+def test_wrapped_label_number_shares_a_line_with_the_figures_known_limitation(tmp_path):
+    # Three numbers for two period columns: a method that pairs numbers with
+    # headers by their order in the text would assign the label's own 1,234 to
+    # the first column.
+    text = statement_page(
+        tmp_path / "wrap_number.pdf",
+        [
+            ("Particulars", None, "2025", "2024"),
+            ("Equity share capital – shares authorized 5,000; outstanding 1,234 and 1,234", None, None, None),
+            ("and 1,234", None, "4,321.00", "3,210.00"),
+        ],
+    )
+
+    assert text.splitlines() == [
+        "Particulars 2025 2024",
+        "Equity share capital – shares authorized 5,000; outstanding 1,234 and 1,234",
+        "and 1,234 4,321.00 3,210.00",
+    ]

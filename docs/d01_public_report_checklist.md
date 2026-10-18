@@ -110,7 +110,7 @@ For each row, record in the private log:
 - [ ] Every statement page in §4 is inspected, with all §4 fields recorded.
 - [ ] Every row in §5 is classified, with a word-position result for each non-`OK` row.
 - [ ] The §6 questions are answered in a findings summary in `PROGRESS.md`. The summary gives counts per category and failure examples using short figure strings only, and states what the two-document sample cannot show.
-- [ ] Any reproducible failure is added as a synthetic test, without the real PDF.
+- [ ] Any reproducible failure is added as a synthetic test, without the real PDF. *[not ticked: the SPLIT mechanism is covered by B-132, and the LABEL-WRAP extraction layout is pinned by B-136 (two synthetic characterisation tests of extracted text, added 2026-10-18); neither tests a column-mapping method, and the box is left for the owner review]*
 - [ ] `tests/BEHAVIOURS.md` B-133 is updated to reflect what was actually evaluated.
 - [ ] The project owner reviews the findings. **Only then** is D-01 marked met or not met, and OD-1 put forward for decision.
 
