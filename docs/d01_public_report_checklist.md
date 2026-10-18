@@ -2,7 +2,7 @@
 
 **Purpose:** complete the public-report half of decision D-01 (PRD L.2.1), record the evidence needed to decide OD-1 (how values are matched to period columns), and collect tuning evidence for OD-3 and OD-7.
 
-**Status:** prepared 2026-10-13. Evidence was collected on 2026-10-13 and the findings summary is in `PROGRESS.md` (B-133 entry). Checklist verification and owner review are **outstanding** (see §7 and "Known gaps" below). D-01 is **not** marked met or not met, B-133 is not closed, OD-1 is open, and the Phase 1 exit remains incomplete.
+**Status:** prepared 2026-10-13. Evidence was collected on 2026-10-13 and the findings summary is in `PROGRESS.md` (B-133 entry). The owner accepted the findings with the provenance limitation on 2026-10-18; checklist verification items and the closure decision are **outstanding** (see §7 and "Known gaps" below). D-01 is **not** marked met or not met, B-133 is not closed, OD-1 is open, and the Phase 1 exit remains incomplete.
 
 **This is an observation exercise.** It does not change extraction logic, dependencies, or locator settings, and it does not decide OD-1.
 
@@ -112,7 +112,7 @@ For each row, record in the private log:
 - [ ] The §6 questions are answered in a findings summary in `PROGRESS.md`. The summary gives counts per category and failure examples using short figure strings only, and states what the two-document sample cannot show. *[not ticked: the physical-to-printed mapping is confirmed for all ten inspected pages, but whether pipeline citations use physical page numbers is unverified, so the §6 question is only partly answered (see Known gaps)]*
 - [ ] Any reproducible failure is added as a synthetic test, without the real PDF. *[not ticked: the SPLIT mechanism is covered by B-132, and the LABEL-WRAP extraction layout is pinned by B-136 (two synthetic characterisation tests of extracted text, added 2026-10-18); neither tests a column-mapping method, and the box is left for the owner review]*
 - [x] `tests/BEHAVIOURS.md` B-133 is updated to reflect what was actually evaluated. *[ticked: the B-133 row records the evaluation and its open status]*
-- [ ] The project owner reviews the findings. **Only then** is D-01 marked met or not met, and OD-1 put forward for decision. *[not ticked: owner review has not been recorded; on 2026-10-18 the owner deferred the D-01 outcome for now, no reason stated, and no outcome is recorded]*
+- [ ] The project owner reviews the findings. **Only then** is D-01 marked met or not met, and OD-1 put forward for decision. *[not ticked: on 2026-10-18 the owner accepted the findings with the provenance limitation and deferred the D-01 outcome for now (no reason stated, no outcome recorded); the box is left for the owner to tick]*
 
 ### Known gaps (recorded in the latest documentation review)
 
