@@ -1,6 +1,8 @@
 # OD-1 Proposal — Period-Column Mapping (FR-005.7)
 
 > **Status pointer, 2026-10-19:** B-133 was closed 2026-10-18 and D-14a recorded the same day, so OD-1 may now be put forward for decision. Nothing else in this note is changed or approved.
+>
+> **Approval pointer, 2026-10-19 (later):** the owner approved the FR-005.7 text in §4.1. It is applied in PRD v0.4.14 and **OD-1 is decided**. §3 is the supporting detailed design. The items deferred in §0.3 stay open, and nothing is implemented.
 
 | Item | Value |
 |---|---|
@@ -131,7 +133,7 @@ The owner answered **yes to all** twelve positions below. These are owner decisi
 | 10 | U-3 / U-4, grouping validity and three-year statements | Outside OD-1 and scheduled for Phase 2 |
 | 11 | U-7, reason code for a field blocked by a non-`extracted` document-level attribute (H.1.2) | A separate decision, not part of OD-1 |
 | 12 | H1 / Q9 | The residual risk is accepted as documented (not observed in 34 rows); the label-contiguity guard stays deferred |
-| 13 | Formal OD-1 | The owner asked for the proposed FR-005.7 replacement text to be drafted for approval. It is saved as §4.1. Nothing is applied and OD-1 is **not** decided |
+| 13 | Formal OD-1 | The owner asked for the proposed FR-005.7 replacement text to be drafted for approval. It is saved as §4.1, **approved on 2026-10-19 and applied in PRD v0.4.14; OD-1 is decided** |
 
 ---
 
@@ -248,13 +250,13 @@ This is narrower than the **current** FR-005.7 text, which lets a headerless con
 
 > **7. Period column (OD-1) — draft, not applied, incomplete until the §0 open items are resolved.** Period columns are located from word positions and page metadata (width, height, rotation) as follows: each period anchor in the column-header block defines a column region, and the column's period is the period-end validated for that anchor under criterion 9. A numeric or nil token is the value of a period column only if its horizontal extent overlaps that column's region and no other, it lies right of the label limit on a line whose row label passes criterion 10 (unchanged), it parses under FR-004.3, and it is the only such token in that region on that line. Words wholly left of the label limit are never values. Words in the note region are note references. Distance, "nearest column" and text order never establish an assignment. Label-only lines are not joined to a figure line. A page with a non-zero rotation, an invalid column structure, or no header block of its own (a continuation page) is unverifiable, and its fields are `requires_review`. If any condition fails the reason is `period_not_verified`, except that a failing row-label check gives `label_not_recognised` and an unvalidated period gives `period_mismatch`, in the order of criterion 3. A page with no usable anchor, or a claimed period with no column on the page, is `requires_review` (reason code unresolved, U-14). A blank cell with nothing proposed is `not_found`. The method is deterministic and is tested on fixtures that include a note-reference column (Appendix B, Example 1).
 
-### 4.1 Updated draft after the 2026-10-19 decisions (not applied, not approved)
+### 4.1 Updated draft after the 2026-10-19 decisions (approved 2026-10-19; applied in PRD v0.4.14)
 
-This draft supersedes the text above. It builds in the owner's decisions of 2026-10-19 (§0.2, §0.3): the note span (U-15), the derived comparative in FR-005.9 (U-9, already in PRD v0.4.13), the figure-line-only row label, the headerless-continuation fail-safe and the separate `WordExtractor`. **Nothing here is applied: `docs/PRD.md` FR-005.7 is unchanged, OD-1 is not decided, and the algorithm in §3 is not approved.**
+This draft supersedes the text above. It builds in the owner's decisions of 2026-10-19 (§0.2, §0.3): the note span (U-15), the derived comparative in FR-005.9 (U-9, already in PRD v0.4.13), the figure-line-only row label, the headerless-continuation fail-safe and the separate `WordExtractor`. **The owner approved this text on 2026-10-19 and it is applied as FR-005.7 in PRD v0.4.14. OD-1 is decided. Nothing is implemented.**
 
 > **7. Period column (OD-1).** Period columns are located from word positions and page rotation. Each period anchor in the column-header block, a year, financial-year token or full date whose period-end is validated under criterion 9, defines a column region: its horizontal extent ± `column_margin_pt`. A header word "Note" or "Notes" defines the note span, from its left edge − `column_margin_pt` to the left edge of the first period region. The label limit is the leftmost left edge among the note span and the period regions. A word is the value of a period column only if (B) its horizontal extent overlaps that column's region and no other; (R) it lies right of the label limit on a line whose row label passes criterion 10 (unchanged); (N) it is a numeric or nil token that parses under FR-004.3; and (U) it is the only numeric or nil token in that region on that line, any other word there being only a separate currency symbol. Words wholly left of the label limit are never values, and a numeric token in the note span is a note reference, never a value. Distance, "nearest column" and text order never establish an assignment. Label-only lines are not joined to a figure line, and the row label is taken from the figure line only. A page with a non-zero rotation, an invalid column structure (overlapping regions, two columns for one validated period-end, an anchor with no validated period-end), no usable anchor, or no header block of its own (a headerless continuation page) is unverifiable, and its fields are `requires_review`. If a condition fails, the reason is `period_not_verified`, except that a failing row-label check gives `label_not_recognised` and an unvalidated period gives `period_mismatch`, in the order of criterion 3. A claimed period with no column on the page is `requires_review` (`period_not_verified`), or `not_found` if nothing was proposed. A blank cell with nothing proposed is `not_found`. An attached currency symbol, a split figure or a detached minus makes the token not assignable, and the period is `requires_review` (`period_not_verified`). `column_margin_pt` is initially 3 pt (provisional, tuned only on tuning-set documents). The method is deterministic, reads words through a separate `WordExtractor` interface, and is tested on fixtures that include a note-reference column (Appendix B, Example 1).
 
-**What approving this text would change in the PRD (a list, not a change):**
+**What the approval changed in the PRD (applied in v0.4.14):**
 - FR-005.7 replaced, with its clause about the first page of the statement run removed.
 - FR-002 and L.2.1: the word-position output and the `WordExtractor` interface (the replaceability line currently names only `TextExtractor`).
 - Appendix A.3 and the OD-1 row: OD-1 marked decided. Section Q: the Phase 2 gate "OD-1 decided" becomes satisfied.
