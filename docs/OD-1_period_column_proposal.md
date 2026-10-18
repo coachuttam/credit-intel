@@ -57,7 +57,7 @@
 
 ### 0.1 Provisional owner preferences (recorded 2026-10-17; proposal only)
 
-These five preferences are **provisional**. None is a formal approval. None changes `docs/PRD.md`, and none implements or tests anything. They are recorded so the design can be refined; the formal OD-1 decision is a separate step (Q8). The 3 pt margin and tolerance (P-2) remain unvalidated on real reports.
+These five preferences are **provisional**. None is a formal approval. **Update 2026-10-19: the owner confirmed Q2, Q10, Q11, the separate `WordExtractor` form and the Q7/P-2 settings (still provisional) in §0.3; the algorithm in §3 is still not approved.** None changes `docs/PRD.md`, and none implements or tests anything. They are recorded so the design can be refined; the formal OD-1 decision is a separate step (Q8). The 3 pt margin and tolerance (P-2) remain unvalidated on real reports.
 
 #### Q2: anchor extent
 - **Question:** "Anchor extent. Is a column's region built from the period-carrying tokens only (the year or date words, as 3.3 assumes), or from the whole header phrase (for example "As at 31 March 2025")?"
@@ -112,6 +112,26 @@ These five preferences are **provisional**. None is a formal approval. None chan
 - **U-9 (FR-005.9, year-only comparative header): option B chosen.** A year-only or financial-year header is valid as the comparative period when the current period is validated by a full date and the header's year (the later year, for `2024-25`) is exactly one year before the current year. Its period-end is the same month and day one year earlier (D-11). Both the raw header text and the derived ISO date are stored. **Status:** owner decision, **applied in PRD v0.4.13 (2026-10-19)**: FR-005.9 gains the derived-comparative bullet. The owner chose to fail safe on the 29 February case; the PRD wording extends this to a current period ending on 28 or 29 February, because H.1.1 counts the two as the same day and the comparative's own period-end then cannot be derived (the owner may narrow it). The fixtures for AC-OD1-4 and AC-OD1-5 are updated below.
 - **U-15 (note region): option C chosen.** The note region becomes a **span** from the "Note" header word's left edge minus `column_margin_pt` to just before the first period region. A numeric token in the span is a note reference and never a value, and it does not fail condition B. With no "Note" header there is no span (U-8 is unchanged). **Status:** owner decision, **applied to §3.3, §3.6/§3.7 and AC-OD1-1 on 2026-10-19**. The algorithm in §3 remains unapproved.
 - **What these decisions do not do:** they do not decide OD-1, do not approve the algorithm and change no PRD text.
+
+### 0.3 Owner decisions of 2026-10-19: the remaining question-sheet rows (recorded)
+
+The owner answered **yes to all** twelve positions below. These are owner decisions about the design; they are not an approval of the algorithm and they change no PRD text.
+
+| # | Item | Decision recorded |
+|---|---|---|
+| 1 | Q2, anchor extent | Confirmed: a column region is built from the period tokens only |
+| 2 | Q10, attached currency symbols | Confirmed: defer; an attached symbol is not assignable and fails safe. G.0 and FR-004.3 are unchanged |
+| 3 | Q11, headerless continuation pages | Confirmed: every field on such a page is `requires_review`; the FR-005.7 clause about the first page of the run is to be changed at adoption |
+| 4 | Interface form | Confirmed: a separate `WordExtractor` protocol; `TextExtractor` is unchanged (still subject to the compatibility review and tests) |
+| 5 | Q7 / P-2, settings | Confirmed: `column_margin_pt` = 3 and `line_tolerance_pt` = 3, still provisional and not validated beyond two documents |
+| 6 | U-8 / Q12, note reference without a "Note" header | Deferred: no rule now; with no "Note" header there is no note span |
+| 7 | U-14 | `period_not_verified` for a page with no usable anchor and for a claimed period with no column |
+| 8 | U-12, multi-line quotes | The row label is taken from the figure line only (no joining) |
+| 9 | U-1 / U-2, split figures and the unparsable-token reason | Deferred and scheduled for Phase 2 (DEC-A); until then they fail safe |
+| 10 | U-3 / U-4, grouping validity and three-year statements | Outside OD-1 and scheduled for Phase 2 |
+| 11 | U-7, reason code for a field blocked by a non-`extracted` document-level attribute (H.1.2) | A separate decision, not part of OD-1 |
+| 12 | H1 / Q9 | The residual risk is accepted as documented (not observed in 34 rows); the label-contiguity guard stays deferred |
+| 13 | Formal OD-1 | The owner asked for the proposed FR-005.7 replacement text to be drafted for approval. Nothing is applied and OD-1 is **not** decided |
 
 ---
 
