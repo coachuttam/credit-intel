@@ -8,10 +8,10 @@
 |---|---|
 | Project name | AI Credit Intelligence Platform |
 | Document | Product Requirements Document (PRD) |
-| Version | 0.3 |
-| Status | Approved v0.3 — **specification only** (2026-10-13). Approval covers what is to be built, not what exists. |
-| Implementation status | Only FR-001 and FR-002 are implemented (Phase 1 commits 1–3); FR-002.3's fresh-process test is still planned. Everything else is specified but not implemented. The authoritative status is `PROGRESS.md` and `tests/BEHAVIOURS.md`. |
-| Date | 2026-10-13 |
+| Version | 0.4.6 |
+| Status | v0.4.6 — **specification only** (2026-10-17). Stage A, the first approved stage of amendments to this PRD, was approved by the project owner with conditions on 2026-10-17 and applied in v0.4 on the same date; v0.4.1 to v0.4.6 make documentation and terminology corrections (see Revision History). v0.3 was approved on 2026-10-13. Proposal items that were not applied in v0.4 (for example the period-column mapping, split figures, period dates, three-year statements, borrowings, statement-evidenced zero borrowings, relative-change conditions, the OD-10 basis handling and the D-01 acceptance conditions) are **not approved** and are not part of this PRD; they remain in `docs/PRD_v0.4_proposal.md`. Where that file describes Stage A material that conflicts with this PRD (the locator rules, the assignment record), this PRD supersedes it. Approval covers what is to be built, not what exists. **Owner approval (2026-10-17):** the project owner approved v0.4.6 as the requirements baseline, specification only, with the open decisions and limitations documented in this PRD (Appendix A.3, Section L.2.1 and Section Q). The approval covers what is to be built, not what exists. It does **not**: close B-133 or decide D-01's acceptance outcome (the pdfplumber / MIT choice was already decided and is not reopened); record D-14a; complete Phase 1; approve OD-1 (apart from the existing in-principle approval of adding `extract_words`, recorded in Appendix A.3); validate the proposed 3 pt column margin (which is not part of this PRD); verify pipeline citation page-number behaviour (FR-002 rule 2 states the requirement, and no pipeline output has been verified); or approve any waiver. |
+| Implementation status | FR-001 and FR-002 are implemented (Phase 1 commits 1–3). The FR-013 locator and the H.4.6 basis check are implemented to the **v0.3** text (commit 4; B-121 to B-130 are recorded as passing in `tests/BEHAVIOURS.md`). The Stage A amendments to FR-013 and H.4.6 in v0.4 are **specified only**: the implemented locator does not yet conform to them. B-120 (the FR-002.3 fresh-process test) is implemented and passing but **uncommitted** (2 tests in `tests/unit/test_fresh_process_golden.py`, golden file in `tests/fixtures/`; verified 2026-10-17, see O.1). B-133 is open: evidence was collected on two tuning documents and the project-owner review is pending. The choice of pdfplumber under the MIT licence (D-01) is decided; the outcome of the public-report review is not, so D-01's acceptance is neither marked met nor not met, and OD-1 is open. D-14a is not recorded. Phase 1 is not complete. Everything else is specified but not implemented. The authoritative status is `PROGRESS.md` and `tests/BEHAVIOURS.md`. |
+| Date | 2026-10-17 |
 | Owner | Project owner (repository maintainer) |
 | Location | `docs/PRD.md` |
 
@@ -22,7 +22,7 @@ This PRD defines what Release 1 of the AI Credit Intelligence Platform must do, 
 ### A.2 Intended audience
 
 - **Developer(s)** implementing the platform, including AI coding assistants operating under `CLAUDE.md`.
-- **Reviewers** assessing engineering quality: hiring managers and technical interviewers at banking and financial-services software companies (for example, Azentio). The project is an independent portfolio prototype and is **not affiliated with, endorsed by, or integrated with** any such company.
+- **Reviewers** assessing engineering quality, such as technical reviewers at banking and financial-services software companies. The project is an independent portfolio prototype and is **not affiliated with, endorsed by, or integrated with** any such company.
 - **Domain reviewers** (credit analysts or risk practitioners) who may assess whether outputs are sensible.
 
 ### A.3 Definitions and abbreviations
@@ -242,6 +242,34 @@ Requirements in Sections G–K apply to **Release 1 only** unless marked otherwi
 
 Priority: **Must** = required for Release 1; **Should** = expected unless descoped by explicit decision.
 
+### G.0 — Terms used by FR-013 (added in v0.4, Stage A)
+
+**G.0 (terms used by FR-013).** For FR-013, only `PageText.text` is used; no word positions.
+- **Line:** a line of the page text as defined in FR-013 rule 1(a), which also defines the line separators, the within-line whitespace handling and the trimming. Line *k* is the same line in the figure view (rule 1(b)) and the matching view (rule 1(c)).
+- **Word:** as defined in FR-013 rule 1(b).
+- **Numeric token, nil token, figure word, figure line, title line, prefix sequence, split title line:** as in the rows and paragraphs below, applied to these words and lines. Numeric tokens, nil tokens, figure words and figure lines are determined on the figure view (FR-013 rule 1(b)), which keeps the minus and dash characters as printed. Title lines, prefix words and phrases are matched on the matching view (rule 1(c)). A currency symbol that is a separate word is not part of a numeric token.
+
+The table rows below apply to the words and lines defined above: numeric token, nil token, figure word, figure line and title line. Every definition is based only on extracted words and lines, so none depends on another rule's output.
+
+| Term | Definition |
+|---|---|
+| **Numeric token** | A word matching `^[(]?[-−–]?[0-9][0-9,]*([.][0-9]+)?[)]?$`, or a lone `)`. A currency symbol (`$`, `₹`) is a separate word and is not a numeric token. |
+| **Nil token** | A word that is exactly `-`, `–`, `—`, or `nil` (case-insensitive) |
+| **Figure word** | A numeric token containing a thousands separator followed by digits, a decimal point, or enclosing brackets. **Not** figure words: four-digit years, day-month fragments such as `31,`, and plain integers. |
+| **Figure line** | A line containing at least one figure word |
+| **Title line** | A line whose matching-view text (FR-013 rule 1(c)) **begins with** a *prefix sequence* (zero or more configured title-prefix words, joined as defined in LOC-4 below), followed immediately by a configured title phrase, and which appears **above the page's first figure line**. A line that itself contains a figure word is never a title line. It may span two lines only as defined in LOC-3 below. Any text may follow the phrase, e.g. "(contd.)" or "as at March 31, 2025". |
+
+Initial title-prefix words (configurable): "consolidated", "standalone", "separate". "Consolidated" and "standalone" were observed in R1; "standalone" and "separate" also come from the existing basis phrases. **"comprehensive" is not a title prefix (P1-5)**: a statement of comprehensive income is a different statement from the income statement, so a line beginning "Comprehensive income statement(s)" is not an income-statement title line.
+
+**Prefix sequence (LOC-4).** Zero or more title-prefix words. Any two adjacent prefix words may be joined by one connector ("and" or "&"), and this may repeat, so a sequence alternates prefix word and connector, e.g. "Consolidated and Standalone" or "Consolidated and Standalone and Separate". A sequence can't start or end with a connector, and two connectors can't be adjacent. Only configured prefix words and connectors can appear; both lists are closed. For H.4.6, every basis named in the sequence counts, so naming more than one distinct basis gives `unknown`. A title line begins with a prefix sequence followed by a title phrase.
+
+**Split title line (LOC-3).** A title line may span **two consecutive lines** (P1-1 line source) when a configured title phrase is split across the line break **between words**:
+- the first line consists only of a prefix sequence (possibly empty) followed by the opening word(s) of the phrase, with nothing after them;
+- the next line begins with the remaining words of the phrase;
+- both lines lie above the first figure line, so neither contains a figure word.
+
+The pair is treated as one title line, located at the first line. It never spans more than two lines. Other-statement title lines (rule 3c) follow the same rule.
+
 ### FR-001 — PDF upload and validation (Must)
 
 **Behaviour:** ingestion accepts a local file path (supplied by the CLI, FR-014, or by a direct call), validates it before any processing, and rejects invalid input with a specific error code (G.1).
@@ -318,7 +346,7 @@ Priority: **Must** = required for Release 1; **Should** = expected unless descop
 
 1. The quote must occur on the cited page's text after whitespace normalisation (collapse runs of whitespace; normalise Unicode NFKC). No other fuzzy matching is used.
 2. The raw value string returned by the model must occur within the verified quote.
-3. A field may have status `extracted` only if criteria 1, 2, and 6–10 all pass. Otherwise its status is `requires_review`, with the reason of the first failing check, in this order: `evidence_not_verified` (1), `value_not_in_evidence` (2), `label_not_recognised` (10), `period_mismatch` (9), `period_not_verified` (7), `sign_mismatch` (6), `scale_not_verified` / `scale_ambiguous` / `currency_not_verified` (8).
+3. A field may have status `extracted` only if criteria 1, 2, and 6–10 all pass. Otherwise its status is `requires_review`, with the reason of the first failing check, in this order: `evidence_not_verified` (1), `value_not_in_evidence` (2), `label_not_recognised` (10), `period_mismatch` (9), `period_not_verified` (7), `sign_mismatch` (6), then the two parts of criterion 8 in this order: `scale_not_verified` or `scale_ambiguous`, then `currency_not_verified`.
 4. Evidence is never edited, summarised, or regenerated after verification. The memo reproduces it verbatim (truncated with an ellipsis only for display, with the full text in the JSON sidecar).
 5. Every value shown in the memo carries a reference to its field ID, which resolves to document, page, and quote — or, for a derived value, to its input field IDs (H.5).
 6. **Sign.** The occurrence of the raw value inside the quote that is used for criterion 7 is checked for a negative marker. A marker is either enclosing parentheses `( … )` or a minus or dash (`-`, `−` U+2212, `–` U+2013) directly attached to the digits. It counts whether it is part of the returned raw value (e.g. `(245.10)`) or surrounds that occurrence in the quote. If a marker is present, the parsed value must be negative; if absent, it must not be negative. Otherwise the reason is `sign_mismatch`. A dash standing alone is the nil convention (FR-004.3), never a sign, and a reported nil passes this check. (Example: Appendix B, Example 2.)
@@ -439,11 +467,32 @@ Priority: **Must** = required for Release 1; **Should** = expected unless descop
 - `page_range` (optional): a string such as `"110-115,120"`.
 
 **Processing rules:**
-1. **Matching text.** For matching only, each page's text is normalised: Unicode NFKC, case-folded, and runs of whitespace collapsed to one space. The stored page text is never changed.
-2. **Phrase counting.** A phrase is *present* on a page if its normalised form occurs in the normalised page text with no letter or digit immediately before or after it. So "total equity" is present in "total equity and liabilities", but "total assets" is not present in "total current assets". For each page and statement type, the locator counts the **distinct** title phrases and the **distinct** line-item phrases present. Repeated occurrences of the same phrase do not add to the count.
-3. **Qualification.** A page qualifies for a statement type if it has (a) at least one title phrase **and** at least `min_line_items_with_title` line-item phrases, or (b) at least `min_line_items_without_title` line-item phrases. Rule (a) rejects contents pages, which name statements but list no line items. Rule (b) admits continuation pages without a title.
+1. **Matching text and lines.** The stored page text (`PageText.text`) is never changed, and it is the only source of evidence quotes. For FR-013, the lines (a) are computed first, and two views, the figure view (b) and the matching view (c), are derived from them:
+   - **(a) Lines.** Apply Unicode NFKC. A whitespace run containing any of U+000A, U+000B, U+000C, U+000D, U+001C, U+001D, U+001E, U+0085, U+2028 or U+2029 is one *line separator*, and the text between separators is a *line*. Within a line, every whitespace run becomes one space, and leading and trailing spaces are removed. No line is empty. "Whitespace" means a character matched by `\s` in a Python 3 Unicode string pattern.
+   - **(b) Figure view.** The lines from (a), with no further change. A *word* is a space-separated token of a line. Numeric tokens, nil tokens, figure words and figure lines (G.0) are determined on this view, so the characters `-`, `−` (U+2212) and `–` (U+2013) are those present after NFKC (NFKC changes some compatibility characters, such as the fullwidth hyphen-minus U+FF0D, to `-`). `nil` is compared case-insensitively.
+   - **(c) Matching view.** The same lines, each case-folded, with typographic apostrophes (U+2018, U+2019, U+02BC) folded to `'` and dash characters (U+2010–U+2015, U+2212) folded to `-`. Phrase presence (rule 2), title lines, prefix words, other-statement title phrases, basis phrases and label matching use this view. Configured phrases go through the same steps (a) to (c) before comparison.
+   - Line *k* is the same line in both views. For rule 2, a line separator between two words counts as the single space between them, so a phrase may continue across a line break, as in v0.3 (where line breaks were collapsed to spaces).
+   - The folding in (c) is for phrase and label matching only. Figure detection in FR-013 uses the figure view (b). FR-004.3 and FR-005.6 are unchanged: they operate on the raw value and its quote as those rules define, and the folding in (c) is never applied to them.
+2. **Phrase counting.** A phrase is *present* on a page if its normalised form (rule 1(a) to (c) applied to the phrase) occurs in the matching view of the page text with no letter or digit immediately before or after it. So "total equity" is present in "total equity and liabilities", but "total assets" is not present in "total current assets". For each page and statement type, the locator counts the **distinct** title phrases and the **distinct** line-item phrases present. Repeated occurrences of the same phrase do not add to the count.
+3. **Qualification (replaced in v0.4), two sub-rules evaluated in ascending page order.**
+   - **3a. Statement title page.** A page has a statement title for a type if it contains a **title line** (G.0) for that type. It qualifies if it also has at least `min_line_items_with_title` line-item phrases of that type.
+   - **3b. Continuation page.** A page that **immediately follows** a page qualifying for a type, and has **no title line for a different statement type and no other-statement title line (rule 3c)**, qualifies as a continuation if either:
+     - it has a title line for the same type (any number of line items, e.g. "… (contd.)"); or
+     - it has at least `min_line_items_without_title` line-item phrases.
+
+     Continuations chain: a qualifying continuation can be followed by another.
+   - **Untitled pages.** A page with no title line that does not follow a qualifying page **never** qualifies.
+
+   **Rule 3c. Other-statement title lines (LOC-1).**
+   - `other_statement_title_phrases` is configurable. It initially holds only phrases observed in tuning documents: "comprehensive income statements" (R2 page 37, recorded under AC-E-7). "statement of cash flows" and "statement of changes in equity" are candidates until observed.
+   - An *other-statement title line* is a line (P1-1 line source; LOC-3 split rule applies) that begins with a prefix sequence (LOC-4) followed by one of these phrases, and lies above the first figure line. P1-4 applies.
+   - A page with an other-statement title line **never** qualifies under 3b, and a continuation chain ends before it.
+   - It may still qualify under 3a if it also has a title line of a located type.
+   - Other-statement phrases that are not at the start of a line, or that are below the first figure line, have no effect.
 4. **Score.** A qualifying page's score is the sum, over the statement types it qualifies for, of `title_weight × title phrases + line-item phrases`.
-5. **Selection.** Qualifying pages are ranked by score (highest first), with ties broken by the lower page number. At most `max_candidates` pages are kept, and the result is returned in ascending page order.
+
+   **Rule 4 title scoring (provisional: unchanged pending measurement).** Rule 4 still scores `title_weight` × the distinct title phrases present **anywhere** on a page, including phrases that are not in a qualifying title line (e.g. a prose mention of "balance sheet"). This affects only ranking under the cap (rule 5). **Revisit under OD-3 if, on any tuning document or in the held-out evaluation, the cap removes any qualifying page.** The tuning observation records, for each tuning document, the number of qualifying pages before the cap.
+5. **Selection.** Qualifying pages are ranked by score (highest first), with ties broken by the lower page number. At most `max_candidates` pages are kept, and the result is returned in ascending page order. In v0.4, rules 3a, 3b and 3c are evaluated over all pages before this rule, and the order of the cap relative to continuation chains is fixed by P1-2 below.
 6. **Statement runs.** Consecutive selected pages that share a statement type form one *statement run*. The first page of the run is "the first page of the statement" used by FR-005.8.
 7. **Page range override.** If `page_range` is supplied, the locator's ranking is not used. The candidates are exactly the pages in the range, in ascending order.
    - **Syntax:** comma-separated items, each `N` or `N-M`, where N and M are 1-based physical page numbers, `N ≤ M`, and whitespace is ignored. Overlapping items are merged.
@@ -452,11 +501,12 @@ Priority: **Must** = required for Release 1; **Should** = expected unless descop
 
 **Output:** `LocatorResult` with:
 - `method`: `keywords` or `page_range`;
-- `candidates`: a tuple of `CandidatePage`, each with `page_number`, `statement_types`, `score` (null for a page range), and `matched_phrases` (empty for a page range).
+- `candidates`: a tuple of `CandidatePage`, each with `page_number`, `statement_types`, `score` (null for a page range), and `matched_phrases` (empty for a page range);
+- `excluded_candidates` (added in v0.4, P1-2): a tuple, default empty, recording each (page, statement type) pair excluded by the cap or by a chain cut.
 
 **Failure behaviour:** an empty keyword result is **not** an error at this stage. Extraction then stops with `E-EXTRACT-NO-STATEMENT-PAGES` (FR-003.7, D-04).
 
-**Initial settings:** these are configurable, with initial values chosen to separate contents pages, statement pages, continuation pages, and notes pages in the synthetic fixtures (Appendix B, Example 5). **They are not validated on real documents**; validating them is OD-3.
+**Initial settings:** these are configurable, with initial values chosen to separate contents pages, statement pages, continuation pages, and notes pages in the synthetic fixtures (Appendix B, Example 5). **They are not validated on real documents**; validating them is OD-3. The phrases and settings added in v0.4 come from two tuning documents (R1 and R2) and are not validated on any other document.
 
 | Setting | Initial value | Basis |
 |---|---|---|
@@ -464,10 +514,106 @@ Priority: **Must** = required for Release 1; **Should** = expected unless descop
 | `min_line_items_without_title` | 4 | Admits untitled continuation pages; rejects notes pages that mention one line item |
 | `title_weight` | 3 | Ranks titled statement pages above continuation pages |
 | `max_candidates` | 15 | Matches the SC-10 cost/latency assumption |
-| Title phrases — income statement | "statement of profit and loss", "statement of profit or loss", "profit and loss statement", "income statement", "statement of comprehensive income" | Common IFRS / Ind AS / US titles |
-| Title phrases — balance sheet | "balance sheet", "statement of financial position" | as above |
-| Line-item phrases — income statement | "revenue from operations", "total income", "total expenses", "finance costs", "profit before tax", "tax expense", "profit for the year" | Lines from the H.3 field set and statement totals |
-| Line-item phrases — balance sheet | "total non-current assets", "total current assets", "total assets", "total equity", "total non-current liabilities", "total current liabilities", "total equity and liabilities", "borrowings" | as above |
+| Title phrases — income statement | "statement of profit and loss", "statement of profit or loss", "profit and loss statement", "income statement", "statement of comprehensive income"; added in v0.4: "income statements" | Common IFRS / Ind AS / US titles; the v0.4 addition was observed in R2 |
+| Title phrases — balance sheet | "balance sheet", "statement of financial position"; added in v0.4: "balance sheets" | as above; the v0.4 addition was observed in R2 |
+| Line-item phrases — income statement | "revenue from operations", "total income", "total expenses", "finance costs", "profit before tax", "tax expense", "profit for the year"; added in v0.4: "finance cost", "total revenue", "operating income", "income before income taxes", "net income" | Lines from the H.3 field set and statement totals; the v0.4 additions were observed in R1 and R2 |
+| Line-item phrases — balance sheet | "total non-current assets", "total current assets", "total assets", "total equity", "total non-current liabilities", "total current liabilities", "total equity and liabilities", "borrowings"; added in v0.4: "total liabilities", "total stockholders' equity", "total liabilities and stockholders' equity", "long-term debt", "short-term debt" | as above; the v0.4 additions were observed in R2 |
+| `title_prefix_words` (v0.4) | "consolidated", "standalone", "separate" | Observed in R1 ("consolidated", "standalone"); "standalone" and "separate" also come from the existing basis phrases. "comprehensive" is not a prefix (P1-5) |
+| `prefix_connectors` (v0.4) | "and", "&" | Joins two adjacent prefix words (G.0, prefix sequence) |
+| `other_statement_title_phrases` (v0.4) | "comprehensive income statements" | Observed in R2 page 37 (recorded under AC-E-7); rule 3c |
+
+**v0.4 amendments to FR-013 (Stage A, DEC-E).** The labels P1-1 to P1-5, LOC-1 to LOC-4, DEC-E and F3 are identifiers used within this PRD and do not refer to another document. P1-1 to P1-5 are defined where they are used. LOC-1 to LOC-4 name four locator design items: LOC-1, other-statement title lines (rule 3c); LOC-2, the recording of excluded candidates (P1-2); LOC-3, split title lines (G.0); LOC-4, prefix sequences (G.0). DEC-E names the group of FR-013 amendments in this section. F3 names the held-out assignment procedure in O.2. The title-line, split-title and prefix-sequence definitions are in G.0, and the basis rule is in H.4.6.
+
+**P1-1. Line source for FR-013.** FR-013 uses only `PageText.text`. Lines, words, figure words, figure lines and title lines are as defined in G.0. Phrase presence (rule 2) and rule 4 scoring are unchanged and still search the whole matching view of the page text. **Residual risk, accepted for Phase 1:** the extractor's line order can differ from the visual order, which can cause a missed, wrongly selected or wrongly typed page, or a missed or misread basis. Phase 1 has no downstream extraction, so no value can be wrongly attributed in this phase. The controls start in Phase 2: the FR-005 checks.
+
+**P1-2. Qualification before the cap; continuation chains after it.**
+- **Order:** rules 3a, 3b and 3c are evaluated first, over all pages in ascending page order, before any cap. Rules 4–5 (scoring, ranking, `max_candidates`) then apply to the qualifying pages, unchanged.
+- **Chains:** for each statement type, a *chain* is a 3a page followed by the consecutive later pages that qualify for that type as 3b continuations. A later page that qualifies for that type under 3b belongs to the preceding chain **for exclusion-chain bookkeeping**, even if it would also qualify under 3a (AC-E-30). A page that qualifies for that type only under 3a starts a new chain.
+- **After the cap:**
+  - **`cap`:** every page removed **directly by the cap** (rule 5) receives a `cap` entry for each statement type it qualified for.
+  - **`chain_cut`:** applies only to a continuation page that otherwise qualifies for that type under 3b, that the cap **kept**, and that is excluded because an **earlier page of its chain** was removed (by the cap, or itself by `chain_cut`).
+  - Each chain is walked in ascending page order. Once a chain page is removed, every later chain page the cap kept is `chain_cut`, and every later chain page the cap removed stays `cap`. Pages before the first removed page are kept.
+  - **Never both:** a page never receives both reasons for the same statement type; `cap` takes precedence.
+  - Pages that don't qualify for that type, and pages of other chains, are **never** recorded for it.
+- **No refill:** pages excluded by the chain rule do not free cap places, and no other page is added in their place. The kept set is therefore deterministic and never larger than `max_candidates`.
+- **Recording (LOC-2 schema):**
+    - **Where (implemented with the locator, Phase 1):** `LocatorResult.excluded_candidates`, a tuple, default empty. It is empty when nothing is excluded, and empty for `--pages` runs, where rules 3a, 3b, 3c and 5 don't apply.
+  - **Entry:** one per excluded (page, statement type) pair, with members in this order:
+    1. `page_number`: int, 1-based physical page;
+    2. `statement_type`: string, the **existing** statement-type identifier used by `CandidatePage.statement_types` and the locator configuration (e.g. `balance_sheet`, `income_statement`), never renamed;
+    3. `reason`: `"cap"` or `"chain_cut"`;
+    4. `score`: int, the page's **existing rule-4 score**, exactly as computed for ranking, never recalculated;
+    5. `chain_start_page`: int, the **original** 3a page that began the chain for that type. It is kept unchanged even when that page was itself removed by the cap.
+  - **Semantics:**
+    - A page removed directly by the cap gets one `cap` entry per type it qualified for.
+    - `chain_cut` entries follow the chain rule above, only for pages the cap kept. No page has both reasons for one type.
+    - A kept page's `statement_types` lists only the types it was not excluded for, and its `score` is unchanged. A page excluded for every type is not a candidate.
+    - A page that qualified for no type is never recorded.
+  - **Order:** ascending `page_number`, then ascending code-point `statement_type`. Each pair appears at most once. The output is deterministic.
+- **Several types:** a page qualifying for several types belongs to a chain for each type. It is excluded from the candidates only if it is excluded for every type it qualified for.
+
+**P1-3. Basis read only from title lines.** H.4 rule 6 (How a statement's basis is established) is replaced; see H.4.6.
+
+**P1-4. Pages with no figure line.** If a page has no figure line, no line on it is a title line. Such a page can qualify only as a 3b continuation.
+
+**Risks of P1-1 to P1-4 (stated, not mitigated by the locator itself).** The locator is not a correctness guarantee:
+- an extractor line order that differs from the visual order can cause a statement page to be **missed**, a non-statement page to be **wrongly selected**, a page to be given the **wrong statement type**, or a basis to be **missed or misread**;
+- a missed page leads to `not_found`, `requires_review` or `E-EXTRACT-NO-STATEMENT-PAGES`, with `--pages` as the fallback;
+- a wrongly selected or wrongly typed page is caught only by downstream checks: the FR-005 label, period-column and period-date checks, and H.4.6 and OD-10 basis evidence.
+
+The FR-005 checks are the controls; v0.4 claims no locator accuracy.
+
+**Rule 2 unchanged** (word boundaries, distinct phrases). **Rules 4 and 6–8 unchanged.** That covers scoring, ranking, tie-breaking, statement runs, the page-range override and text in a range. Rule 5 (`max_candidates`) is unchanged in itself, but its order relative to 3b is fixed by P1-2.
+
+**FR-013 settings (amended).** In addition to the v0.3 settings, FR-013 takes `title_prefix_words` (initially "consolidated", "standalone", "separate"), `prefix_connectors` (initially "and", "&") and `other_statement_title_phrases` (initially "comprehensive income statements"). The title and line-item phrase lists gain the phrases listed below.
+
+**Phrase lists.** The phrases added in v0.4 are listed in the settings table above. Unobserved terms ("statements of operations", "shareholders' equity", "statement of financial condition") are **candidates only**, until they appear in tuning documents.
+
+**Page range.** It remains the **explicit fallback** for layouts these rules don't cover.
+
+**Rationale.**
+- **Why not a fixed line count:** the title-line rule is structural. A title is a line that *starts* with an optional configured prefix and a title phrase, and sits above the first figure line.
+- **What it excludes:**
+  - numbered notes such as "2.28 Function-wise classification of Statement of Profit and Loss", because "2.28 …" doesn't start with a prefix or title phrase;
+  - prose mentioning a statement ("recognised in the Statement of Profit and Loss");
+  - a title appearing below a page's figures.
+- **Summary pages:** untitled summary pages (R1 p30) qualify only as continuations, so they're excluded unless they directly follow a statement.
+- **Every element is configurable:** prefix words, title phrases and thresholds.
+
+**Targets for the tuning documents.** These are not achieved results:
+- **R1:** pages 194–197 and 274–277 selected; pages 30, 263 and 346 not selected.
+- **R2:** pages 36 and 38 selected; page 37 is not a 3b continuation (rule 3c). Recorded as a tuning observation, not an acceptance criterion.
+
+**Regression tests:**
+- **Title lines:**
+  - plural titles qualify;
+  - "Consolidated Balance Sheet" and "Statement of Profit and Loss (contd.)" are title lines; "Comprehensive income statements" is not (P1-5);
+  - "2.28 Function-wise classification of Statement of Profit and Loss" is not;
+  - a prose sentence containing a title phrase is not;
+  - a title phrase below the first figure line is not;
+  - a line that itself contains a figure word is not a title line (it is not above the first figure line);
+  - "Consolidated and Standalone and Separate Balance Sheet" is a title line, and its basis is `unknown`;
+  - `"Balance Sheet 1,000.00"` is not a title line (the line itself holds a figure word);
+  - `"Consolidated Balance"` followed by `"Sheet 1,000.00"` is not a title line.
+- **Lines and normalisation (rule 1):**
+  - `"Balance Sheet\r\nTotal assets 1,000.00"` gives two lines with no CR, and "Balance Sheet" is a title line;
+  - `"Consolidated Balance\u2028Sheet as at 31 March 2025"` followed by a figure line is one split title line (LOC-3), and a phrase may continue across a line break;
+  - a line with leading non-breaking spaces before "Balance Sheet" still begins with its title phrase;
+  - each of U+000B, U+000C, U+0085, U+001C, U+001D, U+001E and U+2029 separates lines, and U+001F does not (it becomes a space);
+  - the stored page text is unchanged after location (criterion 6).
+- **Figure view and nil tokens (rule 1(b)):**
+  - `Total assets −1,234.50` (U+2212) and `Total assets –1,234.50` (U+2013) are figure lines;
+  - `Net income –` and `NIL` hold nil tokens, and a lone U+2010 hyphen is not a nil token;
+  - the fullwidth `１,０００.００` is a figure word (NFKC).
+- **Continuations:**
+  - an untitled summary page with 5 line items, not following a statement → rejected;
+  - a titled continuation with no line items → selected;
+  - an untitled continuation with 4 or more items → selected;
+  - a continuation chain of three pages → all selected;
+  - a following page titled as a different statement type → not a continuation of the first.
+- **Matching:** curly-apostrophe phrases match; "total stockholders’ equity" (U+2019) matches the configured phrase written with `'`; dash variants (U+2010–U+2015, U+2212) in a phrase fold to `-`.
+- **Unchanged:** ties and `max_candidates`; PRD Appendix B Example 5 still selects 112–114.
+- **Intentional change (O.1):** `test_page_qualifying_for_both_types_scores_both`. Its profit-and-loss title lies below the balance-sheet figure lines.
 
 **Acceptance criteria:**
 1. On a fixture with a contents page naming both statements, a titled balance-sheet page, an untitled continuation page, a titled income-statement page, and a notes page mentioning one line item, exactly the three statement pages are selected (Appendix B, Example 5).
@@ -477,6 +623,42 @@ Priority: **Must** = required for Release 1; **Should** = expected unless descop
 5. A document with no qualifying page returns an empty `LocatorResult` without raising an error.
 6. Page texts are unchanged after location, and repeated calls on the same input give identical results.
 7. On the evaluation set, statement-page recall (SC-12) is measured and reported as counts.
+8. (v0.4, Stage A) AC-E-1 to AC-E-6 and AC-E-9 to AC-E-31, below, hold on synthetic fixtures. AC-E-7 is a process control, not a synthetic-fixture test. **AC-E-8 is not part of v0.4** (it belongs to a later stage, which is not approved).
+
+**Acceptance criteria (AC-E).** AC-E-1 to AC-E-6 and AC-E-9 to AC-E-31 are on synthetic fixtures. AC-E-7 is a process control. Results on R1 and R2 are **recorded as tuning observations, not acceptance criteria**, and imply nothing about general performance.
+
+| AC | Requirement |
+|---|---|
+| AC-E-1 | Title-line, line and normalisation rules: each case listed under Regression tests (title lines, lines and normalisation, figure view and nil tokens, matching; positive and negative) behaves as specified |
+| AC-E-2 | Rule 3a and rule 3b are tested separately. A titled page never needs 3b. An untitled page qualifies **only** through 3b. |
+| AC-E-3 | A 3b continuation needs an immediately preceding qualifying page of the same type; a gap of one page breaks the chain |
+| AC-E-4 | A page titled as a different statement type is never a continuation |
+| AC-E-5 | Ranking, ties, `max_candidates`, and statement runs are unchanged (existing FR-013 tests pass, except the six test functions named in O.1) |
+| AC-E-6 | **Page-range override:** with `--pages`, rules 3a, 3b and 3c are not applied; the candidates are exactly the requested pages (FR-013 rule 7), and rule 8 (text in a range) applies. The basis is established as in H.4.6 as amended by P1-3. |
+| AC-E-7 | **Process control, not an automated test:** every phrase-list change records the tuning-set document and page that motivated it (in `PROGRESS.md` or the commit message). Held-out document IDs never appear in configuration or its change records. |
+| AC-E-9 (P1-2) | 3a page plus two 3b continuations where the cap removes the second continuation: the first continuation is kept, the second is excluded (`cap`). Where the cap removes the first continuation: it is excluded (`cap`), and the second is excluded (`chain_cut`). Where the cap removes the 3a page: the whole chain is excluded. No refill in any case. Each exclusion is recorded in `LocatorResult.excluded_candidates` |
+| AC-E-10 (P1-2) | A page qualifying for two types, excluded by `chain_cut` for one type only, remains a candidate for the other type |
+| AC-E-11 (P1-3) | A selected page whose only basis word is in prose ("…recognised in the Consolidated Statement of Profit and Loss") or below the first figure line gives basis `unknown`; a title line "Consolidated Balance Sheet" gives `consolidated`; a basis-only line directly above a title line still counts |
+| AC-E-12 (P1-4) | A page whose numbers are all plain integers, with a title phrase at the start of a line, has no title line. It is selected only as a 3b continuation |
+| AC-E-13 (P1-5) | "Comprehensive income statements" is not a title line; "Consolidated income statements" is |
+| AC-E-14 (LOC-1) | Income-statement page; next page's first line "Comprehensive income statements" with 5 income-statement items; third untitled page with 5 items → pages 2 and 3 not selected (the chain ends at page 2) |
+| AC-E-15 (LOC-1) | One page with both an "Income statements" title line and a "Comprehensive income statements" title line → qualifies under 3a as an income statement |
+| AC-E-16 (LOC-1) | Prose "…as presented in the comprehensive income statements" on a page following an income statement, with 4 or more items → qualifies under 3b |
+| AC-E-17 (LOC-1) | Other-statement phrase below the first figure line → no effect |
+| AC-E-18 (LOC-2) | Example 5 with `max_candidates = 2` → candidates [112, 114]; `excluded_candidates` = [{page_number 113, statement_type `balance_sheet`, reason `cap`, score 5, chain_start_page 112}] |
+| AC-E-19 (LOC-2) | A page qualifying for two types whose chain is cut for one type only → remains a candidate with only the other type; exactly one `chain_cut` entry, for the cut type |
+| AC-E-20 (LOC-2) | `--pages` run → `excluded_candidates == ()` |
+| AC-E-21 (LOC-2) | Same input twice → identical `excluded_candidates`, in the specified order; `statement_type` values are existing identifiers and `score` equals the candidate's rule-4 score |
+| AC-E-22 (LOC-3) | "Consolidated Balance" / "Sheet as at 31 March 2025" → one title line; basis `consolidated` |
+| AC-E-23 (LOC-3) | "Our balance" / "sheet is strong" → not a title line |
+| AC-E-24 (LOC-3) | "Consolidated Balance Sheet" spread over three lines → not a title line |
+| AC-E-25 (LOC-3) | "Consolidated Balance" / "Sheet" where the second line is below the first figure line → not a title line |
+| AC-E-26 (LOC-4) | "Consolidated & Separate Balance Sheet" → title line; basis `unknown`. "Consolidated and Standalone and Separate Balance Sheet" → title line; basis `unknown` |
+| AC-E-27 (LOC-4) | "Consolidated and audited Balance Sheet" → not a title line |
+| AC-E-28 (LOC-4) | "And Balance Sheet", "Consolidated and Balance Sheet", "Consolidated and and Standalone Balance Sheet", "Consolidated and Standalone and Balance Sheet" → not title lines |
+| AC-E-29 (LOC-2) | Chain: 3a page 10, 3b continuations 11 and 12; page 13 untitled with fewer than 4 items. Cap removes only page 11 → page 11 `cap`, page 12 `chain_cut`, both with chain_start_page 10; page 13 not recorded. Cap removes only page 10 → page 10 `cap`, 11 and 12 `chain_cut`, chain_start_page 10 for all three |
+| AC-E-30 (3a/3b overlap) | `max_candidates = 2`; all item lines carry figure words (e.g. `1,000.00`); no page contains any other title phrase. **Page 10:** line 1 "Balance Sheet as at 31 March 2025" + total non-current assets, total current assets, total assets → 3a (title line, 3 items ≥ 2); score 3 + 3 = **6**. **Page 11:** line 1 "Balance Sheet (contd.)" + total non-current liabilities, total current liabilities, total equity and liabilities, borrowings → qualifies under 3a (title line, 5 matched line-item phrases ≥ 2, because "total equity" also matches inside "total equity and liabilities") **and** 3b (immediately follows page 10; no title line for another type; no other-statement title line; same-type title line); score 3 + 5 = **8**. **Page 12:** untitled + total non-current assets, total current assets, total assets, total non-current liabilities, total current liabilities, total equity and liabilities, borrowings → 3b (follows page 11; 8 matched line-item phrases ≥ 4, including "total equity" inside "total equity and liabilities"); score **8**. (a) Default cap (15) → candidates 10, 11, 12; one run (10, 11, 12); no exclusions. (b) Cap 2 → ranking 11 (8), 12 (8), 10 (6); page 10 `cap`; pages 11 and 12 `chain_cut` (kept by the cap, earlier chain page removed), both `chain_start_page` 10; page 11 does not start a new chain; no candidates remain. The text "(contd.)" plays no part in eligibility |
+| AC-E-31 (cap versus chain_cut) | `max_candidates = 2`; all item lines carry figure words; no page contains any other title phrase. **Page 10:** line 1 "Balance Sheet as at 31 March 2025" + total non-current assets, total current assets → 3a; score 3 + 2 = **5**. **Pages 11 and 12:** untitled; each total non-current assets, total current assets, total assets, borrowings → 3b (follow 10 and 11 respectively; 4 items ≥ 4); score **4** each. **Page 13:** untitled; total non-current assets, total current assets, total assets, total non-current liabilities, total current liabilities → 3b (follows page 12, which qualified before the cap; 5 items); score **5**. Ranking by (−score, page): 10, 13, 11, 12 → the cap keeps 10 and 13. Expected: 11 `cap`, 12 `cap` (**not** `chain_cut`), 13 `chain_cut`; `chain_start_page` 10 for all three; no page has two entries for `balance_sheet`; candidates [10] |
 
 ### FR-014 — Command-line interface (Must; Phase 5)
 
@@ -547,7 +729,7 @@ Proposed schema. This is a Pydantic model, because it is validated from LLM outp
 | `period_role` | enum | Always | `current` or `comparative`. |
 | `statement_basis` | enum | Always | `consolidated`, `standalone`, or `unknown`. |
 | `status` | enum | Always | See H.2. |
-| `status_reason` | enum or null | When status ≠ `extracted` | e.g. `evidence_not_verified`, `value_not_in_evidence`, `sign_mismatch`, `period_not_verified`, `scale_not_verified`, `scale_ambiguous`, `currency_not_verified`, `label_not_recognised`, `scale_unknown`, `period_mismatch`, `basis_unknown`, `implausible_value`, `missing_input`, `currency_mismatch`, `borrowings_classification_unresolved`. |
+| `status_reason` | enum or null | When status ≠ `extracted` | e.g. `evidence_not_verified`, `value_not_in_evidence`, `sign_mismatch`, `period_not_verified`, `scale_not_verified`, `scale_ambiguous`, `currency_not_verified`, `label_not_recognised`, `period_mismatch`, `basis_unknown`, `implausible_value`, `missing_input`, `currency_mismatch`, `borrowings_classification_unresolved`. |
 | `value` | Decimal or null | Extracted | Normalised value in base currency units (scale applied). Null unless status is `extracted`. |
 | `currency` | ISO 4217 code | Extracted | e.g. `INR`, `USD`, `AED`. |
 | `raw_value` | string | Source | The value exactly as printed, e.g. `(1,234.5)` or `–`. |
@@ -597,7 +779,7 @@ A field may not be `extracted` if a document-level attribute it depends on (its 
 | `extracted` | For a source value: found, and passed every check in FR-005 and FR-006.5. For a derived value: every input is `extracted` (H.5). | Yes |
 | `not_found` | No value was found in the provided pages (or, for a derived value, an input is `not_found`). | No — dependent metrics undefined |
 | `conflicting` | Two or more verified occurrences disagree beyond tolerance (H.4). | No — dependent metrics undefined |
-| `requires_review` | A value was proposed but failed a verification, normalisation, or plausibility check, or is ambiguous (e.g. unknown scale or basis). | No — dependent metrics undefined |
+| `requires_review` | A value was proposed but failed a verification, normalisation, or plausibility check, or is ambiguous (e.g. an unverified or ambiguous scale, or an unknown basis). | No — dependent metrics undefined |
 
 No further statuses are added:
 - **Validated:** "verified" is already what `extracted` requires.
@@ -635,12 +817,17 @@ Label phrases are configurable. They are compared after normalisation (FR-005.10
    - After converting both to base units, they are consistent if |*a* − *b*| ≤ 0.5 × 10^(−*p*) × *s*. That is, they may differ by at most half a unit in *b*'s last printed digit.
    - Values printed with the same precision and scale must be exactly equal.
    - When consistent, the more precise value is used, and the other occurrence is kept as corroborating evidence.
-3. **Inconsistent units/scale.** Every value is normalised to base units using the scale declared on its page (e.g. "₹ in crore", "USD '000"). If the scale cannot be determined for a value, its status is `requires_review` (`scale_unknown`). Lakh = 10^5 and crore = 10^7.
+3. **Inconsistent units/scale.** Every value is normalised to base units using the scale declared on its page (e.g. "₹ in crore", "USD '000"). If the scale cannot be determined for a value, its status is `requires_review`, with reason `scale_not_verified` (no supporting scale declaration) or `scale_ambiguous` (two different declarations), as defined in FR-005.8. (`scale_unknown`, used for this case in v0.2 to v0.4.3, is retired; it was never a separate state.) Lakh = 10^5 and crore = 10^7.
 4. **Currency.** If fields needed for a single metric are in different currencies, the metric is undefined (`currency_mismatch`). Release 1 performs **no** currency conversion.
 5. **Different reporting periods.** Only 12-month periods are supported. A field whose period cannot be matched to the document's current or comparative period end is `requires_review` (`period_mismatch`). Metrics never combine fields from mismatched periods.
 6. **Conflicting statements.**
    - **Statement basis (D-06).** Consolidated and standalone figures are **different facts, not conflicts**, and are **never mixed**. Every field, derived value, and metric in a run uses one basis.
-   - **How a statement's basis is established:** from its title, by configured phrases (e.g. "consolidated", "standalone", "separate"), quoted as evidence (H.1.2). A title that names no basis gives basis `unknown`, and that statement's fields are `requires_review` (`basis_unknown`). Treating an untitled statement as standalone is open decision OD-10.
+   - **How a statement's basis is established (replaced in v0.4, P1-3).** This also writes into the PRD the title-block clarification that the project owner approved on 2026-10-13.
+     - A statement's basis is read from the **title block** of a **title line** (G.0) on a selected page, by configured basis phrases, quoted as evidence (H.1.2).
+     - The title block is the title line itself, plus the line directly above or directly below it only if that line holds nothing but one basis phrase, e.g. "(Consolidated)". For a split title line (LOC-3) the block is both lines, plus a basis-only line directly above the first or directly below the second.
+     - Exactly one basis named in the block gives that basis; none or both gives `unknown`, and that statement's fields are `requires_review` (`basis_unknown`). A prefix sequence naming both bases (LOC-4) gives `unknown`.
+     - Basis words elsewhere on the page, and title phrases that are not title lines, never establish a basis.
+     - Treating a statement with no basis wording as standalone remains open decision OD-10, **unchanged by v0.4**.
    - **Which basis a run uses:** the configured basis (default `consolidated`), or the basis given with `--basis` for that run (FR-014). Fields of other bases are ignored, and the memo notes which other bases were present.
    - **Configured basis absent:** if no candidate page has a statement title of the configured basis, the run stops **before any LLM call** with `E-EXTRACT-BASIS-UNAVAILABLE`, which lists the bases found. The system **never switches basis automatically**. The analyst reviews the document and may re-run with `--basis`. Any future automatic fallback must be opt-in, recorded in the manifest, and prominently disclosed (F.2).
    - Genuine disagreements within one basis and period, beyond rounding tolerance, are `conflicting`, and every candidate is listed with evidence.
@@ -916,7 +1103,17 @@ Release 1 is a **single-process, modular Python 3.12 package with a CLI** (FR-01
   - Page labels come only from the PDF's page-label metadata, read through pdfminer where defined (implemented in Phase 1). Numbers printed in page footers are not detected. Physical page numbers are always recorded.
 - **Replaceability:** all PDF access goes through the `TextExtractor` interface in the `ingestion` module. No other module imports pdfplumber, so the library can be swapped without changing downstream code or tests beyond the extractor's own.
 - **Verification required:** financial **table extraction must be tested against representative PDFs**, both synthetic fixtures and selected public annual reports. Those PDFs should include multi-column statements, current and comparative columns, bracketed negatives, and Indian digit grouping. Text order and column alignment are known weak points of PDF text extraction. If testing shows unacceptable results, layout-aware options (e.g. pdfplumber table APIs or word-position extraction) are evaluated before considering a different library.
+- **Status of this decision (clarified in v0.4.3; no change of substance).** The choice, pdfplumber under the MIT licence, is decided and is not reopened here. What is **not** decided is the outcome of the verification above: the public-report table-extraction check (B-133) has evidence collected on two tuning documents and remains open pending project-owner review. D-01's acceptance is therefore neither marked met nor not met, OD-1 is open, and the Phase 1 exit is incomplete. D-14a (below) is separate, unrecorded and unapproved.
 - **At install time (Phase 1):** confirm the installed version, and confirm the licences of its transitive dependencies (e.g. `pdfminer.six`, `pypdfium2`), recording them in `PROGRESS.md`.
+
+**D-14a — keep pdfplumber, provisionally (NOT RECORDED: no owner decision and no date exist)**
+
+- **Status:** this text is **not a decision**. v0.4 and v0.4.1 do not record, approve or imply D-14a, and D-01 above is unchanged. D-14a requires its own dated owner decision. The Stage A approval of 2026-10-17 did not record it, and it remains unrecorded until a separate, explicit owner entry of the form in the first bullet under *Recording mechanism* below is made. Nothing in this PRD approves keeping pdfplumber provisionally.
+- **Proposed text, for the owner to decide:** "D-14a — keep pdfplumber, provisionally." Revisit if the extraction-pipeline acceptance fails for a reason the library cannot address. ("Extraction-pipeline acceptance" is **not defined** in this PRD; defining it is an open item that is not yet assigned to any approved amendment.)
+- **Recording mechanism (P1-6).** D-14a is recorded by its own dated owner entry, not by the Stage A approval:
+  - the owner adds a dated entry "D-14a: keep pdfplumber provisionally, approved by owner (<date>)" to this section (Decision records), beside D-01, and `PROGRESS.md` records the same date and the revisit trigger (extraction-pipeline acceptance not met for a reason attributable to the library);
+  - that entry alone satisfies "D-14a decided" for the Phase 1 exit (Section Q);
+  - "accepted in principle" alone does **not** satisfy the Phase 1 exit.
 
 **D-02 — LLM provider: OpenAI API; proposed baseline model `gpt-4o-mini` (decided 2026-10-12)**
 
@@ -1066,6 +1263,32 @@ Only the `llm` module makes network calls, and only during field extraction. Eve
 
 Every behaviour is recorded in `tests/BEHAVIOURS.md` with its test and status, per `CLAUDE.md`.
 
+#### Existing tests changed or checked by the Stage A rules (v0.4)
+
+- **Test count:** 145 was the count recorded before B-120. **Verified 2026-10-17**, on a scratch copy of the working tree in a Linux environment (not the owner's macOS environment): `uv run --locked pytest --collect-only -q` collected **147** tests (the 145, plus the 2 B-120 tests), and `uv run --locked pytest tests/ -q` gave **147 passed**. That run covers the code as implemented (the v0.3 locator), not the Stage A rules. Collection must be re-verified immediately before implementation, and any difference explained. (A collection-only check on 2026-10-16 found 145 tests; the tests were not run.)
+- **Must pass unchanged:** every collected test except the **six test functions** below. That includes the 4 B-132 `known_limitation` tests.
+- **One intentional rule change:** `tests/unit/test_locator.py::test_page_qualifying_for_both_types_scores_both`. Under the G.0 title-line definition, its profit-and-loss title lies below the balance-sheet figure lines, so the page qualifies only as a balance sheet.
+- **Five fixture-only changes (P1-4).** Their fixtures contain only plain integers, so their pages have no figure line. Each plain integer used as a figure becomes a decimal (e.g. `1` → `1.00`), and **no assertion changes**:
+  - `test_matching_ignores_case_whitespace_and_compatibility_forms`;
+  - `test_fullwidth_characters_are_normalised_before_matching`;
+  - `test_ligature_is_normalised_before_matching`;
+  - `test_phrase_presence_respects_word_boundaries`: one function with **eight parameterised cases**, all changed through its shared base text. Without the change, its 4 `True` cases fail and its 4 `False` cases pass vacuously;
+  - `test_repeating_a_phrase_does_not_change_the_score` (the score stays 3 + 2).
+- **Process:** all six changes are made in the same commit as the rule, named in the commit message, and reviewed. **No other existing test may be edited to pass.**
+- **Re-checked against the v0.4 rules (including LOC-1 to LOC-4), and unaffected:**
+  - PRD Appendix B Example 5 (selection, scores, runs);
+  - `test_locator_works_on_ingested_synthetic_pdf`;
+  - `test_continuation_pages_without_titles_do_not_count_as_a_basis` (page 113 doesn't follow a qualifying page, so "bases found: none" still holds);
+  - `test_basis_word_on_a_split_title_line_is_found` (LOC-3);
+  - `test_title_naming_both_bases_is_unknown` (LOC-4);
+  - the tie, cap and boundary tests (`test_max_candidates_keeps_the_highest_scores_in_page_order` still gives [112, 114]);
+  - the B-130 basis tests;
+  - the page-extraction, validation and table-extraction tests.
+- **Also checked:**
+  - rule-1 folding changes no score asserted by an existing test;
+  - the phrases added in v0.4 change no asserted score. "total liabilities" occurs contiguously in the base text of `test_phrase_presence_respects_word_boundaries`, so that fixture matches one more phrase (its score rises by one), but the test asserts only on the phrase under test. "finance cost" does not match "Finance costs" at a word boundary. Example 5 still scores 9, 5 and 10 (checked by scoring its fixture texts with the extended phrase lists);
+  - `LocatorResult` gains a defaulted field, and no test constructs one.
+
 **Test data:**
 - **Synthetic PDFs** are generated at test time with reportlab (dev-only) into pytest's temporary directories, with byte-identical output enabled. They are not committed.
 - **Recorded LLM responses and golden outputs** are committed under `tests/fixtures/`.
@@ -1085,14 +1308,62 @@ Every behaviour is recorded in `tests/BEHAVIOURS.md` with its test and status, p
 
   Ground truth is known by construction.
 - **Public documents (planned: ~5):** publicly available annual reports of non-financial companies, with varied layouts and currencies (including INR with lakh/crore scales). Ground truth (value, page, quote, statement pages) is **labelled manually and double-checked** by the developer. Public PDFs are **not committed** (licensing and repository size). The dataset stores source URL, retrieval date, SHA-256, and the labels.
-- **Format:** one ground-truth JSON per document under `tests/eval/` (labels only), validated by Pydantic models (L.1).
+- **Format:** one ground-truth JSON per document (labels only), validated by Pydantic models (L.1), kept in `private/eval/` (git-ignored, never committed).
 - **Tuning versus held-out split:**
-  - Each document is assigned to the **tuning set** or the **held-out set** *before* it is used for any adjustment, and the assignment is recorded in `tests/eval/` with the date.
+  - Each document is assigned to the **tuning set** or the **held-out set** *before* it is used for any adjustment, and the dated assignment (document ID, SHA-256, set) is recorded in `tests/eval/assignments.jsonl`.
   - Prompts, locator phrase lists, locator settings, and verification phrase lists are adjusted **only** using tuning-set documents.
   - Held-out documents are run only to produce release evaluation reports.
-  - If a held-out document is inspected to debug a failure, it moves to the tuning set, and the next report says so.
+  - If a held-out document is inspected to debug a failure, it moves to the tuning set, and the next report says so. It is never used as held-out again.
   - Where available, the held-out set includes at least one INR report with lakh/crore scales and at least one report in another currency.
   - The exact split is recorded when OQ-3 is resolved; with ~5 public documents, both sets will be small, and results are reported as counts.
+
+**Held-out procedure and assignment record (added in v0.4, Stage A; F3).** OQ-3 stays open: the choice of documents, their number and their coverage are not part of v0.4.
+
+**OQ-3 held-out procedure (F3).**
+- **Selection:** before any inspection of statement pages or pipeline output, the owner selects the held-out reports from companies not in the tuning set, using public metadata only (below).
+- **Assignment record (committed):** `tests/eval/assignments.jsonl`, append-only JSON Lines, one object per line, members in this order: `document_id` (neutral, e.g. `R1`, `H1`), `sha256`, `set` (`tuning` or `held_out`), `assigned_on` (ISO date), `event` (`assigned` or `moved`), `moved_from` (`null` or the previous set), `reason` (`null` or text). Existing lines are never edited or deleted; a change of set appends a `moved` line. **Serialisation:** the file is UTF-8 without a byte-order mark. Each line is valid JSON (RFC 8259): one object with the seven members in the order above, equal to its own **compact re-serialisation**, i.e. no whitespace outside string values, and non-ASCII characters written as-is rather than as `\uXXXX` escapes. The newline convention is LF (U+000A) only: every line, including the last, ends with exactly one LF; there is no CR and there are no blank lines. The file is split on LF only, never on other line-break characters. The file is therefore byte-stable. The record holds no figures, company names or labels.
+- **Initial entries (SHA-256 values supplied by the owner and verified from the owner's local terminal, 2026-10-16):** `R1` and `R2`, set `tuning`, `assigned_on` 2026-10-13 (the date recorded in `PROGRESS.md`), event `assigned`. The two lines are:
+  ```json
+  {"document_id":"R1","sha256":"a2b9acdfbe79586ffdbe1780c4f14e5b2630743a4c81ee626f812f4c2fff1b44","set":"tuning","assigned_on":"2026-10-13","event":"assigned","moved_from":null,"reason":null}
+  {"document_id":"R2","sha256":"dfc1ed6c9bcd879a3cfedc06b8f6123d1d7caaf81340f7a437afe395f9b00ea6","set":"tuning","assigned_on":"2026-10-13","event":"assigned","moved_from":null,"reason":null}
+  ```
+  The file itself is created when this amendment is implemented in Phase 1. Until it exists and the validator test passes, this Phase 1 work is not complete.
+- **Private (git-ignored `private/`):** the PDFs, source URLs, retrieval dates, company names and the ground-truth label files (labels only).
+- **Order of events:** (1) the assignment line is committed; (2) the owner labels the expected values from the rendered pages; (3) the pipeline is run once over every document that `tests/eval/assignments.jsonl` records as held-out at the start of that run (**the held-out evaluation run**). The evaluation report cites the assignment commit.
+- **Frozen configuration:** at the start of the held-out evaluation run (step 3 of the order of events above), the report records the held-out document IDs included in the run, the code version, `uv.lock`, locator settings and phrase lists, prompts, verification phrase lists, cached LLM responses, and the provider, model ID and `config/settings.toml`. None of them changes, and no held-out document is added to or removed from the run, between that point and the end of that run.
+- **Isolation:** held-out IDs, SHA-256 values and labels never appear in configuration, prompts, phrase lists or their change records (AC-E-7). No setting changes in response to held-out results.
+- **Held-out to tuning:** a held-out document inspected to debug a failure moves to the tuning set (a `moved` line). It is never used as held-out again. The next report states the move, its date and reason. Results already reported for it stay, labelled as obtained before the move. Lost coverage is restored only by assigning a new document, recorded before it is inspected.
+- **Tests that need private files** are opt-in (marked, skipped when absent). The default suite never needs them.
+- **Claims:** no accuracy rate is claimed from the held-out set; results are reported as counts.
+
+**Assignment-record integrity (five steps, no hash chain).**
+1. **Append-only:** the file is only ever appended to. A correction or change of set is a new line.
+2. **Validator test (standard library only, in the default suite),** `tests/unit/test_eval_assignments.py`:
+   - the file is valid UTF-8 with no byte-order mark and no CR, and is split on LF only;
+   - each line is valid JSON: an object with exactly the seven members above, in order, with the specified types;
+   - `document_id` matches `^[A-Z][0-9]+$`; `sha256` is 64 lowercase hex characters; `assigned_on` is an ISO date;
+   - the first line for an ID has `event = assigned` and null `moved_from` and `reason`;
+   - every later line for it has `event = moved`, `moved_from` equal to its current set, a different `set`, and a non-empty `reason`;
+   - the only permitted move is `held_out` to `tuning`;
+   - a SHA-256 appears under one `document_id` only, and every line for a `document_id` carries the same `sha256` as that ID's first (`assigned`) line; `assigned_on` never decreases down the file;
+   - each line equals its own compact re-serialisation (see Serialisation above);
+   - every line, including the last, ends with exactly one LF, and there are no blank lines;
+   - every failure is reported with its 1-based line number and the name of the violated check. For the prefix check, the line is the first line at which the working file differs from the `HEAD` version or, if the working file is a strict prefix of it, the first `HEAD` line that is missing or incomplete. A failure that belongs to no line (bytes that are not valid UTF-8) is reported with its byte offset and the check name.
+3. **Prefix check:** when the file is tracked at `HEAD` in a git checkout, the working file must begin with the exact bytes of `git show HEAD:tests/eval/assignments.jsonl`. It is skipped, with a stated reason, outside a git checkout.
+4. **Review rule:** a commit touching the file shows only added lines.
+5. **Report binding:** every evaluation report records the SHA-256 of `assignments.jsonl` and the commit that added the held-out assignments.
+
+**Limits:** this catches accidental or careless edits. It cannot stop a deliberate rewrite of both the file and git history, and it cannot prove that an assignment preceded inspection. Commit order is the only evidence. The validator checks that each SHA-256 is well formed and that the file is consistent within itself; it does not check a SHA-256 against the PDF, because the private PDFs are not in the repository.
+
+| AC | Case | Expected |
+|---|---|---|
+| AC-EVAL-1 | Valid lines: a tuning assignment, a held-out assignment, and a held-out to tuning move (the moved line carries the same `sha256` as its `assigned` line) | Validator passes |
+| AC-EVAL-2 | Members out of order; a missing or extra member; a 63-character or uppercase SHA-256; a non-ISO date; an unknown `set` or `event`; a `document_id` not matching the pattern; a line that is not valid JSON | Fails, naming the line and the violated check |
+| AC-EVAL-3 | First line for an ID is `moved`; a second `assigned` for one ID; `moved_from` not equal to the current set; a move to the same set; a move from `tuning` to `held_out`; a move with an empty `reason` | Fails, naming the line and the violated check |
+| AC-EVAL-4 | One SHA-256 under two IDs; a `moved` line whose `sha256` differs from its ID's `assigned` line; `assigned_on` decreasing down the file; a line that is not in compact form; a non-ASCII character written as a `\uXXXX` escape; no trailing newline; a blank line | Fails, naming the line and the violated check |
+| AC-EVAL-5 | Prefix check on bytes: HEAD content plus an appended line passes; an earlier line edited, deleted or reordered fails; no HEAD version (untracked file, or no git) skips with a stated reason | As stated; each failure names its line and check |
+| AC-EVAL-6 | The committed `tests/eval/assignments.jsonl` | Validator passes (the file holds the R1 and R2 tuning lines with the owner-supplied SHA-256 values) |
+| AC-EVAL-7 | Encoding and newline convention: a CR (CRLF line endings); a byte-order mark; bytes that are not valid UTF-8; a raw non-ASCII character in `reason`; a raw U+2028 inside `reason` | The first three fail, naming the line or byte offset and the violated check. A raw non-ASCII character passes. A raw U+2028 does not split the line, because the file is split on LF only |
 
 > **Uncertainty:** the specific public documents are not yet selected, and dataset sizes are planning estimates. Small datasets give wide uncertainty on percentage metrics, so results will be reported with counts (e.g. "43/46 fields"), not just percentages.
 
@@ -1131,7 +1402,7 @@ Three kinds of evidence are kept separate, and none substitutes for another:
 
 ## P. Repository Structure
 
-Proposed structure. Items that exist as of PRD v0.3 are marked ✓. Nothing else is created until its phase.
+Proposed structure. ✓ marks items that exist in the working tree as of v0.4.6 (the B-120 test and its golden file are not yet committed). Nothing else is created until its phase.
 
 ```
 ai-credit-intelligence/
@@ -1156,7 +1427,7 @@ ai-credit-intelligence/
 │       ├── config.py         ✓ Settings dataclasses (ingestion limits so far)
 │       ├── pipeline.py
 │       ├── models.py
-│       ├── ingestion/        ✓ validation, extraction, errors, models (FR-001, FR-002); locator (FR-013) next
+│       ├── ingestion/        ✓ validation, extraction, errors, models (FR-001, FR-002); locator and basis check (FR-013, H.4.6) to the v0.3 text; the Stage A amendments, as corrected in v0.4.1 and v0.4.2, are not implemented
 │       ├── llm/
 │       ├── extraction/
 │       ├── evidence/
@@ -1169,10 +1440,11 @@ ai-credit-intelligence/
 │   ├── conftest.py           ✓ Synthetic-PDF builders (reportlab, generated at test time)
 │   ├── test_package.py       ✓ Package and Python-version checks
 │   ├── unit/                 ✓ Unit tests
-│   ├── integration/
-│   ├── regression/             Golden outputs
-│   ├── fixtures/               Recorded LLM responses and golden outputs (committed; no PDFs)
-│   └── eval/                   Ground-truth labels, tuning/held-out assignment, evaluation harness
+│   ├── integration/          ✓ Integration tests (so far: table-extraction characterisation, B-131 and B-132)
+│   ├── regression/             Golden outputs for later phases (the FR-002.3 golden test is in unit/, its golden file in fixtures/)
+│   ├── fixtures/             ✓ Recorded LLM responses and golden outputs (no PDFs). Holds the B-120 golden file (not yet committed)
+│   └── eval/                   Committed tuning/held-out assignment record (assignments.jsonl) and evaluation harness; no ground-truth labels
+├── private/                  ✓ Git-ignored: public PDFs, source details and ground-truth labels (private/eval/)
 └── runs/                       Run outputs (git-ignored; added to .gitignore with the export step, Phase 5)
 ```
 
@@ -1192,7 +1464,7 @@ Each phase ends with a review by the project owner before the next begins (Secti
 | Phase | Goal | Entry conditions | Acceptance criteria (exit) |
 |---|---|---|---|
 | **0 — Setup and specification** | Repository, tooling, PRD | — | Git, uv, Python 3.12, and pytest in place. `CLAUDE.md`, `PROGRESS.md`, and `BEHAVIOURS.md` exist. PRD reviewed and approved. |
-| **1 — PDF ingestion and extraction** | FR-001, FR-002, FR-013 | Phase 0 approved (including D-01). | pdfplumber is wrapped by the `TextExtractor` interface. Validation rejects every invalid case with the correct code. Page text extraction is deterministic and preserves page numbers. The statement locator meets FR-013's acceptance criteria 1–6 on synthetic fixtures. Statement-table text extraction has been checked against representative PDFs (D-01), with findings recorded, including how column order, note references, and parenthesised negatives survive extraction (input to OD-1). All tests pass. Behaviours recorded. |
+| **1 — PDF ingestion and extraction** | FR-001, FR-002, FR-013 | Phase 0 approved (including D-01). | pdfplumber is wrapped by the `TextExtractor` interface. Validation rejects every invalid case with the correct code. Page text extraction is deterministic and preserves page numbers. The statement locator meets FR-013's acceptance criteria 1–6 on synthetic fixtures (and, from v0.4, criterion 8: AC-E). Statement-table text extraction has been checked against representative PDFs (D-01), with findings recorded, including how column order, note references, and parenthesised negatives survive extraction (input to OD-1). All tests pass. Behaviours recorded. |
 | **2 — Structured financial extraction** | FR-003 to FR-006 | Phase 1 approved. OD-1 decided. OD-8 decided before the first live call. D-02 model availability and pricing verified. API data terms reviewed (SEC-10). `OPENAI_API_KEY` set in the local environment (not in Git). | Pydantic schema implemented. The fake provider supports offline tests. Evidence verification (FR-004.3, FR-005.1–.10, H.1.2), the basis check (H.4.6), plausibility checks (FR-006.5), and reconciliation are fully unit-tested, including Appendix B examples 1–3 and the relevant B.6 rows. The response cache follows FR-003.5. Statuses are correct on synthetic fixtures. Response caching works. Tuning/held-out assignment recorded. First small evaluation run on the tuning set recorded (counts, not claims). |
 | **3 — Deterministic calculations** | H.5, FR-007 | Phase 2 approved (or the schema is stable enough to build calculations against fixtures). | Derived values (H.5) and all five metrics are implemented as pure functions. Every edge case in H.5 (including the four borrowing classifications) and Section I is tested and passing. `Decimal` is used throughout. |
 | **4 — Risk indicators** | FR-008 | Phase 3 approved. | Rules load from TOML. All seven rules are tested at, below, and above thresholds, per condition, including the J.3 partial-evaluability examples. No scoring or decision output exists. |
@@ -1200,6 +1472,15 @@ Each phase ends with a review by the project owner before the next begins (Secti
 | **6 — Interface and API** | FastAPI service and simple web UI | Release 1 complete. SEC-12 parsing limits implemented. | API exposes run submission and status/results. The same pipeline is reused. API tests pass. No new behaviour bypasses the evidence and labelling rules. |
 | **7 — Evaluation, security, deployment** | Hardening and deployment | Phase 6 approved (or Release 1, if Phase 6 is deferred). | Expanded evaluation. Security review against Section M. Docker image builds and runs. Optional cloud demo deployed with secrets managed securely. |
 | **8 — Optional extensions** | RAG assistant, LangGraph, AML support, authorised integrations | Phase 7 approved. A written justification exists for each extension. | Each extension has its own mini-PRD, acceptance criteria, and tests before implementation. |
+
+**Phase 1 steps added in v0.4 (Stage A).** "Stage A" is the first approved stage of amendments to this PRD (approved by the project owner with conditions on 2026-10-17). Proposal items not applied in v0.4 are not approved; their material remains in `docs/PRD_v0.4_proposal.md`. Where that file describes Stage A material that conflicts with this PRD (the locator rules, the assignment record), this PRD supersedes it. These steps add to the Phase 1 exit criteria above and do not replace them. **Phase 1 is not complete.** Status as of 2026-10-17: B-120 (step 2) is implemented and passing but uncommitted; the test collection is verified at 147 tests (O.1); the locator amendments (step 1) are not implemented; the assignment record and its validator (step 2a) do not exist; D-14a is not recorded; and B-133 is open pending project-owner review.
+
+| Step | Phase | Content | Exit evidence |
+|---|---|---|---|
+| 1 | 1 | FR-013 amendments (DEC-E): rule 1 lines, figure view and matching view (with folding), the G.0 title-line definition with the P1-1 line source, prefix sequences (LOC-4) and split title lines (LOC-3), rules 3a, 3b and 3c (LOC-1), P1-2 cap and chain order with `LocatorResult.excluded_candidates` (LOC-2), P1-3 basis from title lines, P1-4, phrase lists with the P1-5 prefixes | Test collection re-verified; FR-013 tests and AC-E-1 to AC-E-6 and AC-E-9 to AC-E-31 pass; AC-E-7 (a process control) is recorded in `PROGRESS.md` or the commit message for each phrase-list change; the six O.1 test changes (one intentional, five fixture-only) named and reviewed; no other existing test edited |
+| 2 | 1 | B-120: fresh-process golden-output test (FR-002.3) | Test passes |
+| 2a | 1 | Assignment record (F3): `tests/eval/assignments.jsonl` and `tests/unit/test_eval_assignments.py`; the R1 and R2 entries use the SHA-256 values supplied by the owner (2026-10-16) | AC-EVAL-1 to AC-EVAL-7 pass |
+| 3 | 1 | **Phase 1 exit review:** every v0.3 Phase 1 exit criterion verified, B-120 passing, D-14a decided (P1-6: its own dated owner entry; the Stage A approval of 2026-10-17 did not record it), B-133 recorded | Owner approval |
 
 ---
 
@@ -1229,7 +1510,7 @@ Each phase ends with a review by the project owner before the next begins (Secti
 
 - Autonomous credit decisions, including approval, rejection, credit scores, ratings, grades, or pricing.
 - Real customer, borrower, or confidential data.
-- Integration with proprietary Azentio products or any other enterprise system without explicit authorisation.
+- Integration with any vendor's proprietary products or any other enterprise system without explicit authorisation.
 - Regulatory certification or compliance claims (e.g. for model risk management or lending regulations).
 - Automatic AML detection, filing, or reporting (e.g. suspicious activity reports).
 - Training or fine-tuning machine-learning models.
@@ -1296,6 +1577,25 @@ These cannot be responsibly settled without evidence the project does not yet ha
 | OD-9 | Borrowings when no separate current-maturities row is presented (H.5 rule 5, `not_presented`) | (a) Sum the presented borrowing lines, and disclose the absence in the derivation and the memo. (b) Mark `total_borrowings` as `requires_review`. **Neither is adopted.** | (a) gives D/E for the common Ind AS presentation, where maturities sit inside current borrowings, but cannot detect maturities placed under another caption. (b) is strictest, but would leave D/E undefined for most reports without a total line. | Before Phase 3. Public-report evidence on how maturities are presented. |
 | OD-10 | A statement whose title names no basis (common for companies without subsidiaries) | (a) Keep basis `unknown` → `requires_review` (current specification). (b) Treat it as standalone **only** when the analyst passes `--basis standalone` explicitly and no statement is titled consolidated; record this in the manifest and disclose it in the memo header. | (a) makes such companies unprocessable. (b) relies on an explicit analyst assertion, never automatic. | Before Phase 2. |
 
+### Appendix A.3 — Open items by dependency (added in v0.4.3)
+
+This table gathers dates and dependencies that are stated elsewhere in this PRD (and, for the specification-gaps row, in `PROGRESS.md`). It adds no requirement and applies no resolution; recommended resolutions are not recorded here.
+
+| Item | Status | Needed by (as stated in this PRD) | Blocks the Phase 1 exit? | Effect while unresolved |
+|---|---|---|---|---|
+| D-14a | Not recorded, not approved | Phase 1 exit review (Section Q step 3, P1-6) | **Yes** | The Phase 1 exit review cannot pass. The pdfplumber / MIT choice (D-01) is unaffected. |
+| B-133 and the D-01 acceptance outcome | Open; evidence collected on two tuning documents, owner review pending | Phase 1 exit review (Section Q step 3: "B-133 recorded") | **Yes** | Phase 1 cannot be declared complete, and OD-1 is not put forward for decision (`docs/d01_public_report_checklist.md`). |
+| OD-1 | Open | Before Phase 2 starts (Appendix A.2; Section Q, Phase 2 entry) | No | FR-005.7 cannot be implemented or tested. A design proposal is in `docs/OD-1_period_column_proposal.md`. On 2026-10-17 the owner approved in principle one part of it, adding word-position extraction (`extract_words`) to the PDF extractor interface, subject to a compatibility review and tests. That interface change is not implemented, no test exists for it, and the rest of the proposal is not approved. OD-1 is not decided and stays open. |
+| OD-10 | Open | Before Phase 2 (Appendix A.2) | No | A statement whose title names no basis stays `unknown` (H.4.6). |
+| OQ-3 | Open | Phase 2 (Appendix A.1) | No | No held-out set exists, so Definition of Done item 8 (Section T) cannot be met. |
+| OD-8 | Open | Before the first live LLM call (Appendix A.2; Phase 2 entry) | No | No live LLM call may be made. |
+| OD-9 | Open | Before Phase 3 (Appendix A.2) | No | The `not_presented` case of `BORR-SUM` (H.5 rule 5) has no specified treatment. |
+| OD-3 | Open | Before the first evaluation report (Appendix A.2) | No | No SC-12 target; SC-12 is reported as counts only. |
+| OD-6 | Open | Mandatory by Phase 6 (SEC-12); earlier is optional | No | Parse limits remain a documented limitation of Release 1. |
+| OD-7 | Open | After the public-report check; no phase stated (Appendix A.2) | No | The strict `%PDF-` rule stands. |
+| OQ-6 | Open | Phase 5 planning (Appendix A.1) | No | The analyst override file is not in Release 1. |
+| Specification gaps found in the B-133 evidence (four) | Recorded in `PROGRESS.md` (B-133 entry, "Specification gaps found"); the PRD text is unchanged; no resolution and no owner decision are recorded | Not stated in this PRD; `PROGRESS.md` calls them later-phase inputs | No (as recorded in `PROGRESS.md`) | FR-005.9, F.1 and D-12 apply as written. The four gaps, as recorded there: (1) FR-005.9 year-only rule against the common header "As at March 31," over "2025 2024" (the comparative year does not equal the full date's year); (2) "a full date elsewhere on the page" could match a signature date; (3) a third period column on one statement, where F.1 specifies two periods; (4) a separately presented current portion of long-term debt with no inclusion or exclusion phrase (D-12, OD-9). Proposed resolutions are in `docs/PRD_v0.4_proposal.md` and are not approved. |
+
 ## Appendix B — Worked Examples
 
 All data is synthetic.
@@ -1336,7 +1636,7 @@ Total current assets              14          1,482.30              1,356.75
 
 | Page | Content | Matched phrases | Result |
 |---|---|---|---|
-| 3 | Contents: "Balance Sheet … 112", "Statement of Profit and Loss … 114" | 2 titles, 0 line items | Rejected (rule 3a needs ≥ 2 line items; rule 3b needs ≥ 4) |
+| 3 | Contents: "Balance Sheet … 112", "Statement of Profit and Loss … 114" | 2 titles, 0 line items | Rejected (rule 3a needs ≥ 2 line items; rule 3b needs an immediately preceding qualifying page) |
 | 112 | "Balance Sheet" with total non-current assets, total current assets, total assets, total equity, borrowings, total current liabilities | 1 title, 6 line items | Selected (score 3 × 1 + 6 = 9) |
 | 113 | Untitled continuation: total non-current liabilities, total current liabilities, total equity and liabilities, borrowings | 0 titles, 5 line items ("total equity" is also present inside "total equity and liabilities") | Selected by rule 3b (score 5) |
 | 114 | "Statement of Profit and Loss" with revenue from operations, total income, total expenses, finance costs, profit before tax, tax expense, profit for the year | 1 title, 7 line items | Selected (score 10) |
@@ -1420,3 +1720,13 @@ These were identified in the v0.3 review. They are **not requirements** unless a
 - RI-007 renamed "Conflicting or unverified source values" (same ID);
 - open decisions OD-8 to OD-10 added, with no defaults adopted; OQ-5 closed for Release 1;
 - the identifier change-log appendix removed (this entry replaces it). |
+
+| Version | Date | Change |
+|---|---|---|
+| 0.4 | 2026-10-17 | Stage A of the real-report proposal applied: statement-locator amendments (FR-013 rules 1, 3 and 5; H.4 rule 6), shared definitions G.0, the held-out assignment record and O.2 amendment, existing-test changes, B-120 and the Phase 1 exit text. Later items (period mapping, split figures, borrowings, relative change) remain proposals in docs/PRD_v0.4_proposal.md and are not part of v0.4. Approved by the project owner with conditions (2026-10-17): "Keep all existing safeguards and open items explicit. Do not treat Stage A approval as completion of Phase 1. Keep docs/PRD.md v0.3 authoritative until the approved changes are applied." Applied to this document on 2026-10-17. Specification only: nothing in Stage A is implemented, D-14a is not recorded, A4 and A11 Part 2 are deferred, A23 and Stages B, C and D are not approved, and Phase 1 is not complete. |
+| 0.4.1 | 2026-10-17 | Post-application documentation corrections to the Stage A amendments applied in v0.4, authorised by the project owner on 2026-10-17. Specification only; no new stage is approved. (1) FR-013 rule 1 now defines the stored text and two derived views (lines and figure view; matching view), and G.0, rule 2 and P1-1 refer to them. (2) A title line cannot contain a figure word, and prefix sequences may repeat (more than one distinct basis gives `unknown`); the related AC-E cases are folded into AC-E-1 and AC-E-26 with no new identifiers. (3) The P1, D, DEC-E and F3 labels are stated to be identifiers within this PRD, and the pointers that implied they are defined in `docs/PRD_v0.4_proposal.md` are removed. (4) The undefined "C5" in O.2 is replaced by "the held-out evaluation run". (5) The assignment-record validator requires one `sha256` per `document_id` and line-specific failure reports (AC-EVAL-1 to -4 extended; no new identifiers; limitation stated). (6) The implementation-status line, the Section P tree, criterion 8, the AC-E preface, Q step 1 and the D-14a wording (L.2.1, Q step 3) are clarified. Not changed: the Stage A conditional approval and its application, both dated 2026-10-17 (see the 0.4 row); A4, A11 Part 2, A23, OQ-3, AC-E-8, Stages B, C and D; D-14a (still not recorded); the 145-test count (still unverified); the extraction-pipeline acceptance criterion. Nothing is implemented, no tests were run, and Phase 1 is not complete. |
+| 0.4.2 | 2026-10-17 | Documentation corrections to the Stage A text, authorised by the project owner on 2026-10-17. Specification only; no new stage is approved. (1) FR-013 rule 1 states that the lines are computed first and the figure and matching views are derived from them; the figure-view dash characters are those present after NFKC; FR-013 figure detection uses the figure view; FR-004.3 and FR-005.6 are unchanged and the matching-view folding is never applied to them. (2) Regression lists and AC-E-28 gain negative title-line, line-separator and prefix cases, with no new identifiers. (3) The assignment-record validator specifies how failures are located (line number or byte offset, and the violated check; AC-EVAL-5 and AC-EVAL-7 updated). (4) O.2 defines the held-out evaluation run as one pipeline run over every held-out document recorded at its start, adds the provider, model ID and `config/settings.toml` to the frozen configuration, records the held-out IDs in the run and forbids adding or removing held-out documents during it; crash and retry policy is not specified. (5) The locator design labels D1 to D4 are renamed LOC-1 to LOC-4 (descriptive labels only; acceptance-criterion IDs, the D-xx decision IDs and the historical v0.3 D2/D4/D5 references are unchanged); DEC-E and F3 are defined; the undefined "Option A" and "Option C" labels are removed. (6) The Section P tree distinguishes the locator and basis check implemented to the v0.3 text from the unimplemented amendments; the G.0 duplicate "Word" definition refers to rule 1(b); the header and Q introduction state that this PRD supersedes conflicting Stage A material in `docs/PRD_v0.4_proposal.md`. Not changed: the Stage A conditional approval and its application, both dated 2026-10-17 (see the 0.4 row), and the 0.4 and 0.4.1 rows; A4, A11 Part 2, A23, OQ-3, AC-E-8, Stages B, C and D; D-14a (still not recorded); the 145-test count (still unverified); B-120 (planned); B-133 (awaiting owner review); the extraction-pipeline acceptance criterion; F8, F11, F12(d) and F13 (deferred). Nothing is implemented, no tests were run, and Phase 1 is not complete. |
+| 0.4.3 | 2026-10-17 | Editorial and consistency corrections only, authorised by the project owner on 2026-10-17 (Option A: editorial consistency first). No requirement, acceptance criterion, release boundary, risk policy or architectural decision is changed. (1) **Undefined stage labels.** "Stages B, C and D" (Status cell, D-14a note, rows 0.4 to 0.4.2) is not defined in any repository file: the proposal has no such headings, and the approval record is outside the repository. The Status cell, the D-14a note and the Section Q introduction now describe the actual position (proposal items not applied in v0.4 are not approved and stay in `docs/PRD_v0.4_proposal.md`; the "extraction-pipeline acceptance" definition is an open item not assigned to any approved amendment). "Stage A" is kept; the 0.4 row describes it. Rows 0.4 to 0.4.2, and the review labels they cite (A4, A11, A23, F8, F11, F12(d), F13, C5, "Option A"), are historical and unchanged; those labels refer to review notes outside the repository, and "A4" also has a different meaning in the proposal. (2) **Status.** The Status and Implementation status cells and the Section Q introduction no longer say that B-120 is planned: it is implemented and passing but uncommitted. The O.1 test count is verified: 147 tests collected (145 + 2) and 147 passed on a Linux scratch copy of the working tree, covering the v0.3 locator only. (3) **D-01 and D-14a.** L.2.1 and the Implementation status cell state that the pdfplumber / MIT choice is decided and not reopened, and that the outcome of the public-report review (B-133) is not decided; D-14a stays unrecorded and unapproved, and no waiver exists. (4) **Neutral wording.** The reviewer bullet in A.2 and the first out-of-scope bullet in Section S no longer name a specific company; no recorded decision mentioned it. (5) **Section P** legend and tree now match the working tree (`tests/integration/` and `tests/fixtures/` exist; the planned `tests/regression/` is annotated), and the Appendix B Example 5 reason for rejecting the contents page is corrected to match rule 3b. (6) **New Appendix A.3** gathers existing dependencies of the open items, without resolving any. **Not changed:** OD-1, OD-3, OD-6 to OD-10, OQ-3 and OQ-6 stay open; D-14a is not recorded; B-133 is open; D-01's acceptance outcome is undecided; Phase 1 is not complete; Stage A's locator and assignment-record work is not implemented. The reason codes `scale_unknown` (H.1, H.4.3) and `scale_not_verified` (FR-005.3, FR-005.8, Appendix B) are left as written, because their intended distinction is not unambiguous; no code or test uses either. No test covers these documentation edits. |
+| 0.4.4 | 2026-10-17 | Terminology correction only, authorised by the project owner on 2026-10-17: the reason code `scale_unknown` is retired and `scale_not_verified` / `scale_ambiguous` (FR-005.8) are the only scale reasons. **Evidence:** `scale_unknown` first appears in v0.2 (commit `1b83722`), when the only scale check was the LLM's own scale; v0.3 (commit `5d9a18e`) added FR-005.8, `scale_not_verified` and `scale_ambiguous`, and left H.1 and H.4.3 unchanged. H.4.3 defines `scale_unknown` as "the scale cannot be determined for a value", which FR-005.8 already splits into "no supporting declaration" and "two different declarations". No other definition distinguishes them, and neither code is used in `src/`, `tests/`, `PROGRESS.md`, `tests/BEHAVIOURS.md` or the checklist, so no code or test migration is needed. **Changes:** (1) the H.1 `status_reason` list no longer includes `scale_unknown`; (2) H.4.3 names the FR-005.8 reasons and notes the retirement; (3) the H.2 `requires_review` example says "an unverified or ambiguous scale" instead of "unknown scale"; (4) the FR-005.3 failure-order list states the order inside criterion 8 (scale before currency), which the list already implied; (5) the Status cell, the Section P legend and the A.3 OD-1 row are updated (the A.3 row points to a design proposal that is **not approved**). **Not changed:** any requirement, acceptance semantics or application code; OD-1 stays open; B-133, D-01's acceptance outcome and D-14a are unchanged; Phase 1 is not complete. Left open: the reason code for a field blocked because a document-level scale or currency attribute (H.1.2) is not `extracted` is still unspecified. Rows 0.1 to 0.4.3, including the 0.4.3 note that left the codes as written, are historical and unchanged. No test covers these documentation edits. |
+| 0.4.5 | 2026-10-17 | Factual status correction only, authorised by the project owner on 2026-10-17. Appendix A.3 (OD-1 row) now records that the owner approved in principle, on 2026-10-17, adding `extract_words` to the PDF extractor interface, subject to a compatibility review and tests; it previously said the whole proposal was unapproved. **Not changed:** OD-1 is not decided and stays open; the `extract_words` interface is not implemented and has no test; FR-005.7 and every acceptance criterion are unchanged; no requirement, release boundary, risk policy or architectural decision is changed. B-133 stays open, D-01 stays undecided (the pdfplumber / MIT licence choice is not reopened), D-14a is unrecorded, no waiver is approved, and Phase 1 is incomplete. Rows 0.1 to 0.4.4 are historical and unchanged. No test covers this edit. |
+| 0.4.6 | 2026-10-17 | Visibility correction only, made in the PRD finalisation task of 2026-10-17 (requested by the project owner; no requirement decided). Appendix A.3 gains one row listing the four specification gaps recorded in `PROGRESS.md` (B-133 entry) as unresolved and not blocking the Phase 1 exit, and its introduction notes that this row draws on `PROGRESS.md`. The Version and Status cells and the "as of" note in Section P are updated to v0.4.6. **Not changed:** every requirement, acceptance criterion, release boundary, risk policy and architectural decision, including FR-005.7, FR-005.9, FR-005.10 and F.1; OD-1 is not decided and stays open and unapproved; the 3 pt column margin is unvalidated; D-01 is undecided (the pdfplumber / MIT licence choice is not reopened); D-14a is unrecorded; B-133 stays open; no waiver is approved; Phase 1 is incomplete. At the time of this edit the PRD was not marked approved. **Owner approval (2026-10-17):** the project owner approved v0.4.6 as the requirements baseline, specification only, with the open decisions and limitations documented; recorded in the Status cell. No version bump records the approval, because no requirement changed (Section U.5 requires a bump for requirement changes). The approval does **not**: close B-133 or decide D-01's acceptance outcome (the pdfplumber / MIT choice was already decided and is not reopened); record D-14a; complete Phase 1; approve OD-1 (apart from the existing in-principle approval of adding `extract_words`, recorded in Appendix A.3); validate the proposed 3 pt column margin (which is not part of this PRD); verify pipeline citation page-number behaviour (FR-002 rule 2 states the requirement, and no pipeline output has been verified); or approve any waiver. Rows 0.1 to 0.4.5 are historical and unchanged. No test covers this edit. |
