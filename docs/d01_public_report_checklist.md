@@ -112,7 +112,7 @@ For each row, record in the private log:
 - [ ] The §6 questions are answered in a findings summary in `PROGRESS.md`. The summary gives counts per category and failure examples using short figure strings only, and states what the two-document sample cannot show. *[not ticked: the physical-to-printed mapping is confirmed for all ten inspected pages, but whether pipeline citations use physical page numbers is unverified, so the §6 question is only partly answered (see Known gaps)]*
 - [ ] Any reproducible failure is added as a synthetic test, without the real PDF. *[not ticked: the SPLIT mechanism is covered by B-132, and the LABEL-WRAP extraction layout is pinned by B-136 (two synthetic characterisation tests of extracted text, added 2026-10-18); neither tests a column-mapping method, and the box is left for the owner review]*
 - [x] `tests/BEHAVIOURS.md` B-133 is updated to reflect what was actually evaluated. *[ticked: the B-133 row records the evaluation and its open status]*
-- [ ] The project owner reviews the findings. **Only then** is D-01 marked met or not met, and OD-1 put forward for decision. *[not ticked: owner review has not been recorded]*
+- [ ] The project owner reviews the findings. **Only then** is D-01 marked met or not met, and OD-1 put forward for decision. *[not ticked: owner review has not been recorded; on 2026-10-18 the owner deferred the D-01 outcome for now, no reason stated, and no outcome is recorded]*
 
 ### Known gaps (recorded in the latest documentation review)
 
