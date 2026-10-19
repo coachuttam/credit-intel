@@ -8,8 +8,13 @@ left out. Python still validates every reply (FR-004), so dropping a keyword suc
 version is part of the structured-output mode in the response-cache key (FR-003.5), so a
 change here can never replay a reply that was made under the old form.
 
-The rules follow the provider's documented strict mode as I know it; they are confirmed
-against its documentation at D-02 verification and by the first live call.
+The rules were checked against the provider's Structured Outputs guide on 2026-10-19
+(PROGRESS.md, G1): all properties required, objects closed with ``additionalProperties:
+false``, optional values as a union with null, ``anyOf`` allowed below the root, ``$defs``
+and ``$ref`` allowed, and the documented size limits. The guide lists some validation
+keywords (``pattern``, ``format``, numeric bounds, ``minItems``) as supported for base
+models; removing them is safe either way. They are untested against the live API until the
+first live call.
 """
 
 from collections.abc import Mapping, Sequence
