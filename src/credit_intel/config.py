@@ -121,27 +121,31 @@ class LocatorSettings:
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.toml")
 LLM_PROVIDERS = ("openai", "fake")
-LLM_SETTING_NAMES = ("provider", "model_id", "token_ceiling")
+LLM_SETTING_NAMES = ("provider", "model_id", "token_ceiling", "max_output_tokens")
 
 # Environment overrides (D-02: "overridable by environment variable"). The names
 # are this implementation's choice; an empty value counts as set, and is invalid.
 ENV_LLM_PROVIDER = "CREDIT_INTEL_LLM_PROVIDER"
 ENV_LLM_MODEL_ID = "CREDIT_INTEL_LLM_MODEL_ID"
 ENV_TOKEN_CEILING = "CREDIT_INTEL_TOKEN_CEILING"
+ENV_MAX_OUTPUT_TOKENS = "CREDIT_INTEL_MAX_OUTPUT_TOKENS"
 
 
 @dataclass(frozen=True)
 class LLMSettings:
-    """Provider, model and per-run token ceiling.
+    """Provider, model, per-run token ceiling and per-call output limit.
 
     There are no defaults: the token ceiling is a required setting (OD-8,
     NFR-09), and provider and model ID are configuration values, never
-    hard-coded in modules (D-02).
+    hard-coded in modules (D-02). The maximum output tokens is the per-call limit
+    sent to the provider, reserved against the ceiling (NFR-09) and part of the
+    response-cache key (FR-003.5).
     """
 
     provider: str
     model_id: str
     token_ceiling: int
+    max_output_tokens: int
 
 
 def _invalid(setting: str) -> IngestionError:
@@ -155,7 +159,7 @@ def _text(value: object, setting: str) -> str:
     return value.strip()
 
 
-def _ceiling(file_value: object, env_value: str | None, setting: str) -> int:
+def _positive_int(file_value: object, env_value: str | None, setting: str) -> int:
     """A positive integer: ASCII digits from the environment, or a TOML integer."""
     if env_value is not None:
         if not re.fullmatch(r"[0-9]+", env_value):
@@ -192,7 +196,17 @@ def load_llm_settings(
     if provider not in LLM_PROVIDERS:
         raise _invalid("llm.provider")
     model_id = _text(env.get(ENV_LLM_MODEL_ID, table.get("model_id")), "llm.model_id")
-    token_ceiling = _ceiling(
+    token_ceiling = _positive_int(
         table.get("token_ceiling"), env.get(ENV_TOKEN_CEILING), "llm.token_ceiling"
     )
-    return LLMSettings(provider=provider, model_id=model_id, token_ceiling=token_ceiling)
+    max_output_tokens = _positive_int(
+        table.get("max_output_tokens"),
+        env.get(ENV_MAX_OUTPUT_TOKENS),
+        "llm.max_output_tokens",
+    )
+    return LLMSettings(
+        provider=provider,
+        model_id=model_id,
+        token_ceiling=token_ceiling,
+        max_output_tokens=max_output_tokens,
+    )

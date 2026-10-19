@@ -19,6 +19,7 @@ class ErrorCode(StrEnum):
     PAGE_RANGE = "E-INPUT-PAGE-RANGE"
     BASIS_UNAVAILABLE = "E-EXTRACT-BASIS-UNAVAILABLE"
     CONFIG_INVALID = "E-CONFIG-INVALID"
+    LLM_BUDGET_EXCEEDED = "E-LLM-BUDGET-EXCEEDED"
 
 
 MESSAGES: dict[ErrorCode, str] = {
@@ -42,6 +43,10 @@ MESSAGES: dict[ErrorCode, str] = {
     ),
     ErrorCode.CONFIG_INVALID: (
         "The settings file is missing, unparsable, or fails validation. Fix the named setting."
+    ),
+    ErrorCode.LLM_BUDGET_EXCEEDED: (
+        "The per-run token ceiling would be exceeded, so the LLM call was not made. "
+        "Narrow --pages, or raise the ceiling deliberately."
     ),
 }
 

@@ -41,3 +41,6 @@ uploads/
 .DS_Store
 .idea/
 .vscode/
+
+# --- Local LLM response cache (FR-003.5) ---
+.cache/

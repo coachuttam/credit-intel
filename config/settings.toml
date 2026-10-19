@@ -5,6 +5,8 @@
 provider = "openai"          # CREDIT_INTEL_LLM_PROVIDER ("openai" or "fake")
 model_id = "gpt-4o-mini"     # CREDIT_INTEL_LLM_MODEL_ID; the PRD's proposed baseline (D-02)
 
+max_output_tokens = 4096     # CREDIT_INTEL_MAX_OUTPUT_TOKENS; per-call output limit, reserved against the ceiling
+
 # token_ceiling is REQUIRED and deliberately has no default (OD-8, NFR-09).
 # Set it here, or with CREDIT_INTEL_TOKEN_CEILING. A missing, non-integer, zero
 # or negative value fails with E-CONFIG-INVALID.

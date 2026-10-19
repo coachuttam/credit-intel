@@ -12,6 +12,7 @@ import pytest
 from credit_intel.config import (
     ENV_LLM_MODEL_ID,
     ENV_LLM_PROVIDER,
+    ENV_MAX_OUTPUT_TOKENS,
     ENV_TOKEN_CEILING,
     LLMSettings,
     load_llm_settings,
@@ -20,7 +21,7 @@ from credit_intel.ingestion.errors import ErrorCode, IngestionError
 
 REPO_SETTINGS = Path(__file__).resolve().parent.parent.parent / "config" / "settings.toml"
 
-VALID = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\ntoken_ceiling = 50000\n'
+VALID = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\ntoken_ceiling = 50000\nmax_output_tokens = 4096\n'
 
 
 def write(tmp_path, text: str) -> Path:
@@ -42,7 +43,7 @@ def fails(path, env=None) -> str:
 def test_valid_file_loads(tmp_path):
     settings = load_llm_settings(write(tmp_path, VALID), {})
 
-    assert settings == LLMSettings(provider="openai", model_id="gpt-4o-mini", token_ceiling=50000)
+    assert settings == LLMSettings(provider="openai", model_id="gpt-4o-mini", token_ceiling=50000, max_output_tokens=4096)
 
 
 def test_environment_overrides_the_file(tmp_path):
@@ -50,11 +51,11 @@ def test_environment_overrides_the_file(tmp_path):
 
     settings = load_llm_settings(write(tmp_path, VALID), env)
 
-    assert settings == LLMSettings(provider="fake", model_id="other-model", token_ceiling=1200)
+    assert settings == LLMSettings(provider="fake", model_id="other-model", token_ceiling=1200, max_output_tokens=4096)
 
 
 def test_environment_can_supply_the_ceiling_missing_from_the_file(tmp_path):
-    text = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\n'
+    text = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\nmax_output_tokens = 9\n'
 
     settings = load_llm_settings(write(tmp_path, text), {ENV_TOKEN_CEILING: "7"})
 
@@ -71,7 +72,7 @@ def test_other_tables_in_the_file_are_ignored(tmp_path):
 
 
 def test_missing_ceiling_fails_and_names_the_setting(tmp_path):
-    text = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\n'
+    text = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\nmax_output_tokens = 9\n'
 
     assert fails(write(tmp_path, text)) == "llm.token_ceiling"
 
@@ -82,7 +83,7 @@ def test_missing_ceiling_fails_and_names_the_setting(tmp_path):
     ids=["zero", "negative", "float", "quoted string", "true", "false", "list"],
 )
 def test_invalid_ceiling_in_the_file_fails(tmp_path, value):
-    text = f'[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\ntoken_ceiling = {value}\n'
+    text = f'[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\ntoken_ceiling = {value}\nmax_output_tokens = 9\n'
 
     assert fails(write(tmp_path, text)) == "llm.token_ceiling"
 
@@ -97,7 +98,7 @@ def test_invalid_ceiling_in_the_environment_fails(tmp_path, value):
 
 
 def test_the_error_never_echoes_the_value(tmp_path):
-    text = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\ntoken_ceiling = -987654\n'
+    text = '[llm]\nprovider = "openai"\nmodel_id = "gpt-4o-mini"\ntoken_ceiling = -987654\nmax_output_tokens = 9\n'
 
     with pytest.raises(IngestionError) as excinfo:
         load_llm_settings(write(tmp_path, text), {})
@@ -110,21 +111,21 @@ def test_the_error_never_echoes_the_value(tmp_path):
 
 @pytest.mark.parametrize("provider", ['"anthropic"', '""', '"  "', "3"])
 def test_unknown_or_empty_provider_fails(tmp_path, provider):
-    text = f'[llm]\nprovider = {provider}\nmodel_id = "m"\ntoken_ceiling = 5\n'
+    text = f'[llm]\nprovider = {provider}\nmodel_id = "m"\ntoken_ceiling = 5\nmax_output_tokens = 9\n'
 
     assert fails(write(tmp_path, text)) == "llm.provider"
 
 
 @pytest.mark.parametrize("model_id", ['""', '"   "', "3"])
 def test_empty_or_non_string_model_fails(tmp_path, model_id):
-    text = f'[llm]\nprovider = "openai"\nmodel_id = {model_id}\ntoken_ceiling = 5\n'
+    text = f'[llm]\nprovider = "openai"\nmodel_id = {model_id}\ntoken_ceiling = 5\nmax_output_tokens = 9\n'
 
     assert fails(write(tmp_path, text)) == "llm.model_id"
 
 
 def test_missing_provider_or_model_fails(tmp_path):
-    assert fails(write(tmp_path, '[llm]\nmodel_id = "m"\ntoken_ceiling = 5\n')) == "llm.provider"
-    assert fails(write(tmp_path, '[llm]\nprovider = "openai"\ntoken_ceiling = 5\n')) == "llm.model_id"
+    assert fails(write(tmp_path, '[llm]\nmodel_id = "m"\ntoken_ceiling = 5\nmax_output_tokens = 9\n')) == "llm.provider"
+    assert fails(write(tmp_path, '[llm]\nprovider = "openai"\ntoken_ceiling = 5\nmax_output_tokens = 9\n')) == "llm.model_id"
 
 
 def test_empty_environment_override_counts_as_set_and_is_invalid(tmp_path):
@@ -175,4 +176,33 @@ def test_shipped_settings_file_leaves_the_ceiling_unset():
 def test_shipped_settings_file_works_once_a_ceiling_is_supplied():
     settings = load_llm_settings(REPO_SETTINGS, {ENV_TOKEN_CEILING: "1000"})
 
-    assert settings == LLMSettings(provider="openai", model_id="gpt-4o-mini", token_ceiling=1000)
+    assert settings == LLMSettings(provider="openai", model_id="gpt-4o-mini", token_ceiling=1000, max_output_tokens=4096)
+
+
+# --- maximum output tokens: required, no default, same rules as the ceiling ------
+
+
+def test_missing_max_output_tokens_fails_and_names_the_setting(tmp_path):
+    text = '[llm]\nprovider = "openai"\nmodel_id = "m"\ntoken_ceiling = 5\n'
+
+    assert fails(write(tmp_path, text)) == "llm.max_output_tokens"
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "1.5", '"4096"', "true"])
+def test_invalid_max_output_tokens_in_the_file_fails(tmp_path, value):
+    text = f'[llm]\nprovider = "openai"\nmodel_id = "m"\ntoken_ceiling = 5\nmax_output_tokens = {value}\n'
+
+    assert fails(write(tmp_path, text)) == "llm.max_output_tokens"
+
+
+@pytest.mark.parametrize("value", ["", "0", "-1", "1.5", " 12", "abc"])
+def test_invalid_max_output_tokens_in_the_environment_fails(tmp_path, value):
+    env = {ENV_MAX_OUTPUT_TOKENS: value}
+
+    assert fails(write(tmp_path, VALID), env) == "llm.max_output_tokens"
+
+
+def test_environment_overrides_max_output_tokens(tmp_path):
+    settings = load_llm_settings(write(tmp_path, VALID), {ENV_MAX_OUTPUT_TOKENS: "256"})
+
+    assert settings.max_output_tokens == 256
