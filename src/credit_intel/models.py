@@ -230,8 +230,8 @@ class ExtractedField(_Model):
     """One field for one period and basis (H.1).
 
     Conditional requirements follow H.1's "Required" column:
-    - source values carry the evidence attributes; derived values carry a
-      derivation and none of them;
+    - source values carry the evidence attributes (a ``not_found`` one only needs its
+      source document); derived values carry a derivation and none of them;
     - ``value`` and ``currency`` are required when ``status`` is ``extracted``,
       and ``value`` is null otherwise;
     - a ``status_reason`` is null when extracted and required for
@@ -295,7 +295,14 @@ class ExtractedField(_Model):
             "validation": self.validation,
         }
         if self.origin is Origin.SOURCE:
-            missing = [name for name, value in source_attributes.items() if value is None]
+            # A field that was not found has no evidence to carry, but still says which
+            # document was searched.
+            required = (
+                {"source_document": self.source_document}
+                if self.status is Status.NOT_FOUND
+                else source_attributes
+            )
+            missing = [name for name, value in required.items() if value is None]
             if missing:
                 raise ValueError(f"a source field requires {', '.join(missing)}")
             if self.derivation is not None:

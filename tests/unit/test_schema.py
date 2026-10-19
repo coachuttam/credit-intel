@@ -226,6 +226,33 @@ def test_not_found_has_no_value_and_may_omit_a_reason():
     assert record.status is Status.NOT_FOUND and record.value is None
 
 
+def not_found_record(**overrides) -> dict:
+    return source_field(
+        status="not_found", value=None, currency=None, raw_value=None, value_interpretation=None, scale=None,
+        page_number=None, evidence_quote=None, line_item_label=None, validation=None,
+    ) | overrides  # fmt: skip
+
+
+def test_a_not_found_source_field_carries_no_evidence_but_names_the_document():
+    record = ExtractedField.model_validate(not_found_record())
+
+    assert record.status is Status.NOT_FOUND and record.value is None and record.raw_value is None
+    assert record.source_document is not None and record.validation is None
+    assert "source_document" in rejected(**not_found_record(source_document=None))
+
+
+def test_every_other_source_status_still_needs_its_evidence():
+    for status, extra in (("requires_review", {"status_reason": "sign_mismatch"}), ("conflicting", {})):
+        blank = not_found_record(status=status, **extra)
+        message = rejected(**blank)
+        assert "a source field requires" in message and "raw_value" in message and "evidence_quote" in message
+
+
+def test_a_not_found_field_is_still_checked_for_value_and_id():
+    assert "value is null unless the status is extracted" in rejected(**not_found_record(value="0"))
+    assert "field_id must be" in rejected(**not_found_record(field_id="revenue.2025-03-31.standalone"))
+
+
 def test_conflicting_needs_two_candidates_and_no_value():
     candidate = {
         "page_number": 3, "evidence_quote": "Revenue 1,000", "line_item_label": "Revenue",
