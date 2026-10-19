@@ -10,7 +10,8 @@ order of FR-005.3:
     scale_ambiguous, currency_not_verified
 
 ``basis_unknown`` is not in the PRD's list; it sits next to ``period_mismatch``, the
-other reason that comes from a document-level attribute. Evidence is never edited:
+other reason that comes from metadata rather than the row; a field takes the basis of its
+own statement (H.4.6), not the document's. Evidence is never edited:
 the quote, label and raw value are stored exactly as proposed. The value is the
 parsed raw value (with its sign) scaled exactly, in ``Decimal``.
 
@@ -31,6 +32,7 @@ from credit_intel.config import (
 )
 from credit_intel.extraction.assignment import ColumnCheck, ColumnClaim, Outcome, check_column, link_quote
 from credit_intel.extraction.attributes import VerifiedAttributes, blocking_reasons
+from credit_intel.extraction.bases import field_basis
 from credit_intel.extraction.columns import PageStructure, analyse_structure
 from credit_intel.extraction.declarations import check_currency, check_scale, check_sign
 from credit_intel.extraction.labels import LabelCheck, check_label
@@ -156,6 +158,10 @@ class FieldVerifier:
         # Document-level attributes the field depends on (H.1.2)
         failing.update(blockers)
 
+        basis_info = field_basis(name.value, proposed.page_number, ctx.pages, ctx.located, ctx.locator_settings)
+        if basis_info[0] is StatementBasis.UNKNOWN:
+            failing.add(R.BASIS_UNKNOWN)
+
         # Link the quote to a figure line, then FR-005.10 on that line
         structure = self._structure(proposed.page_number)
         line = None
@@ -215,12 +221,8 @@ class FieldVerifier:
         if period_end is None:
             return FieldVerification(proposed, None, reasons)  # reasons holds period_mismatch
 
-        basis = (
-            StatementBasis(attributes.statement_basis.normalised_value)
-            if attributes.statement_basis.status is Status.EXTRACTED
-            and attributes.statement_basis.normalised_value in ("consolidated", "standalone")
-            else StatementBasis.UNKNOWN
-        )
+        # Each field has the basis of its own statement (H.4.6), not the document's one.
+        basis = basis_info[0]
         extracted = not reasons
         validation = Validation(
             evidence_verified=presence.evidence_verified,
@@ -231,7 +233,7 @@ class FieldVerifier:
             sign_verified=sign.ok if sign is not None else None,
             scale_verified=scale.ok if scale is not None else None,
             currency_verified=currency.ok if currency is not None else None,
-            details=self._details(role, label, column, sign, scale, currency, blockers),
+            details=self._details(role, label, column, sign, scale, currency, blockers, basis_info),
         )
         record = ExtractedField(
             field_id=make_field_id(name, period_end, basis),
@@ -258,7 +260,7 @@ class FieldVerifier:
         )
         return FieldVerification(proposed, record, reasons)
 
-    def _details(self, role, label, column, sign, scale, currency, blockers) -> dict:
+    def _details(self, role, label, column, sign, scale, currency, blockers, basis_info) -> dict:
         evidence = self._ctx.attributes.period_evidence.get(role)
         details: dict = {
             "period": {
@@ -272,6 +274,7 @@ class FieldVerifier:
                 },
             },
             "blocked_by": [reason.value for reason in blockers],
+            "basis": {"value": basis_info[0].value, "read_from": basis_info[1]},
             "label": None
             if label is None
             else {

@@ -51,7 +51,7 @@ ROWS = [
 ]
 
 
-def statement_pdf(path: Path, rows=ROWS, scale_line="(Rs. in crore)", extra_lines=(), header=True, pages=1, first_label=None, header_cells=None) -> Path:
+def statement_pdf(path: Path, rows=ROWS, scale_line="(Rs. in crore)", extra_lines=(), header=True, pages=1, first_label=None, header_cells=None, titles=None) -> Path:
     pdf = canvas.Canvas(str(path), invariant=1)
     if first_label:
         pdf.addPageLabel(0, style="ARABIC", start=first_label)
@@ -61,8 +61,10 @@ def statement_pdf(path: Path, rows=ROWS, scale_line="(Rs. in crore)", extra_line
         if page == 0:
             pdf.drawString(72, y, "Acme Industries Limited")
             y -= 15
-        pdf.drawString(72, y, "Consolidated Balance Sheet")
-        y -= 15
+        title = (titles or {}).get(page, "Consolidated Balance Sheet")
+        if title:
+            pdf.drawString(72, y, title)
+            y -= 15
         if scale_line and page == 0:
             pdf.drawString(72, y, scale_line)
             y -= 15
@@ -444,13 +446,13 @@ def test_a_missing_scale_attribute_blocks_every_field(tmp_path):
     assert verify(env, F.TOTAL_EQUITY, CUR, "600.00", "Total equity").field.status_reason is R.SCALE_NOT_VERIFIED
 
 
-def test_an_unknown_basis_gives_the_field_the_unknown_basis_and_blocks_it(tmp_path):
+def test_a_missing_basis_attribute_blocks_the_field_but_its_own_page_still_gives_it_a_basis(tmp_path):
     env = build(tmp_path / "b.pdf", attribute_changes={"basis": None})
 
     result = verify(env, F.TOTAL_EQUITY, CUR, "600.00", "Total equity")
 
     assert result.field.status_reason is R.BASIS_UNKNOWN
-    assert result.field.field_id == "total_equity.2025-03-31.unknown"
+    assert result.field.field_id == "total_equity.2025-03-31.consolidated"
 
 
 def test_an_unknown_basis_is_reported_before_a_failed_period_column(tmp_path):
@@ -518,6 +520,75 @@ def test_without_a_run_the_second_page_has_no_declaration(tmp_path):
     result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2))
 
     assert result.field.status_reason is R.SCALE_NOT_VERIFIED
+
+
+# --- the basis of each field (H.4.6, step 8a) -----------------------------------------------------------------------------------
+
+
+def two_pages(tmp_path, titles, name="bases.pdf", **kw):
+    located = LocatorResult("keywords", (CandidatePage(1, ("balance_sheet",), 9, ()), CandidatePage(2, ("balance_sheet",), 5, ())))
+    return build(tmp_path / name, candidates=(1, 2), located=located, pages=2, titles=titles, **kw)
+
+
+def test_each_field_takes_the_basis_of_its_own_statement(tmp_path):
+    env = two_pages(tmp_path, {0: "Consolidated Balance Sheet", 1: "Standalone Balance Sheet"})
+    verifier, line, _ = env
+
+    first = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=1)).field
+    second = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2)).field
+
+    assert first.field_id == "total_equity.2025-03-31.consolidated" and first.status is Status.EXTRACTED
+    assert second.field_id == "total_equity.2025-03-31.standalone"
+    assert second.validation.details["basis"] == {"value": "standalone", "read_from": "cited_page"}
+
+
+def test_a_continuation_page_without_a_title_takes_the_basis_of_its_runs_first_page(tmp_path):
+    env = two_pages(tmp_path, {0: "Consolidated Balance Sheet", 1: None})
+    verifier, line, _ = env
+
+    record = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2)).field
+
+    assert record.field_id.endswith(".consolidated") and record.status is Status.EXTRACTED
+    assert record.validation.details["basis"] == {"value": "consolidated", "read_from": "run_start"}
+
+
+def test_a_statement_with_no_basis_wording_is_unknown_not_standalone(tmp_path):
+    env = build(tmp_path / "nb.pdf", titles={0: "Balance Sheet"}, attribute_changes={"basis": None})
+    verifier, line, _ = env
+
+    result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity"))
+
+    assert result.field.field_id.endswith(".unknown") and result.field.status_reason is R.BASIS_UNKNOWN
+
+
+def test_a_page_without_basis_wording_is_unknown_even_when_the_documents_basis_is_verified(tmp_path):
+    env = two_pages(tmp_path, {0: "Consolidated Balance Sheet", 1: "Balance Sheet"})
+    verifier, line, attributes = env
+
+    result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2))
+
+    assert attributes.statement_basis.status is Status.EXTRACTED
+    assert result.field.field_id.endswith(".unknown") and result.field.status_reason is R.BASIS_UNKNOWN
+
+
+def test_a_title_naming_both_bases_is_unknown(tmp_path):
+    env = build(tmp_path / "both.pdf", titles={0: "Consolidated and Standalone Balance Sheet"},
+                attribute_changes={"basis": None})
+    verifier, line, _ = env
+
+    result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity"))
+
+    assert result.field.field_id.endswith(".unknown") and R.BASIS_UNKNOWN in result.reasons
+
+
+def test_with_no_title_anywhere_and_no_run_the_basis_is_unknown(tmp_path):
+    located = LocatorResult("page_range", (CandidatePage(1, (), None, ()),))
+    env = build(tmp_path / "nt.pdf", titles={0: None}, located=located, attribute_changes={"basis": None})
+    verifier, line, _ = env
+
+    result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity"))
+
+    assert result.field.field_id.endswith(".unknown") and result.field.validation.details["basis"]["read_from"] is None
 
 
 # --- the whole response ----------------------------------------------------------------------------------------------------------
