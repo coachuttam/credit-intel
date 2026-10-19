@@ -20,6 +20,8 @@ class ErrorCode(StrEnum):
     BASIS_UNAVAILABLE = "E-EXTRACT-BASIS-UNAVAILABLE"
     CONFIG_INVALID = "E-CONFIG-INVALID"
     LLM_BUDGET_EXCEEDED = "E-LLM-BUDGET-EXCEEDED"
+    NO_STATEMENT_PAGES = "E-EXTRACT-NO-STATEMENT-PAGES"
+    LLM_INVALID_OUTPUT = "E-LLM-INVALID-OUTPUT"
 
 
 MESSAGES: dict[ErrorCode, str] = {
@@ -48,6 +50,14 @@ MESSAGES: dict[ErrorCode, str] = {
         "The per-run token ceiling would be exceeded, so the LLM call was not made. "
         "Narrow --pages, or raise the ceiling deliberately."
     ),
+    ErrorCode.NO_STATEMENT_PAGES: (
+        "No candidate statement pages were found and no page range was supplied. "
+        "Supply the statement pages with --pages."
+    ),
+    ErrorCode.LLM_INVALID_OUTPUT: (
+        "The model's output was still invalid after one corrective retry. "
+        "Re-run; report if it persists."
+    ),
 }
 
 
@@ -61,3 +71,15 @@ class IngestionError(Exception):
         if detail:
             message = f"{message} ({detail})"
         super().__init__(f"{code}: {message}")
+
+
+class InvalidOutputError(IngestionError):
+    """The model's output failed validation twice (FR-004.1).
+
+    ``raw_response`` is the last raw response, kept for diagnosis. It is not part of
+    the message, which never includes document or model text.
+    """
+
+    def __init__(self, raw_response: str) -> None:
+        super().__init__(ErrorCode.LLM_INVALID_OUTPUT)
+        self.raw_response = raw_response

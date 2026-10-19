@@ -357,3 +357,17 @@ def test_a_corrective_retry_is_a_separate_call_with_its_own_key(tmp_path):
 
     assert (first.text, retry.text) == ("bad", "good")
     assert budget.used > 0 and len(provider.calls) == 2
+
+
+def test_an_invalid_response_is_returned_and_counted_but_never_cached(tmp_path):
+    provider = FakeProvider(script=[FakeReply("bad", 20, 5), FakeReply("good", 20, 5)])
+    gw, cache, budget = gateway(tmp_path, provider)
+
+    first = gw.complete(request(), inputs(), is_valid=lambda text: text == "good")
+    second = gw.complete(request(), inputs(), is_valid=lambda text: text == "good")
+
+    assert (first.text, second.text) == ("bad", "good")
+    assert budget.used == 50
+    assert (cache.hits, cache.misses) == (0, 2)
+    assert len(provider.calls) == 2
+    assert gw.complete(request(), inputs()).text == "good"

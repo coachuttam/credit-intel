@@ -1,5 +1,7 @@
 """Cache and budget around a provider (PRD FR-003.5, NFR-09, OD-8)."""
 
+from collections.abc import Callable
+
 from credit_intel.llm.budget import TokenBudget, estimate_tokens
 from credit_intel.llm.cache import CacheKeyInputs, ResponseCache
 from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
@@ -12,6 +14,9 @@ class LLMGateway:
     miss checks the budget (estimate plus reservation) before calling, records the
     provider's reported usage afterwards, and stores the response. A corrective
     retry (FR-004.1) is simply another ``complete`` call with its own key inputs.
+
+    Only a response that ``is_valid`` accepts is written to the cache, so a response
+    that fails validation is never replayed on a later run. Its tokens still count.
     """
 
     def __init__(self, provider: LLMProvider, cache: ResponseCache, budget: TokenBudget) -> None:
@@ -19,12 +24,18 @@ class LLMGateway:
         self._cache = cache
         self._budget = budget
 
-    def complete(self, request: LLMRequest, inputs: CacheKeyInputs) -> LLMResponse:
+    def complete(
+        self,
+        request: LLMRequest,
+        inputs: CacheKeyInputs,
+        is_valid: Callable[[str], bool] = lambda text: True,
+    ) -> LLMResponse:
         cached = self._cache.get(inputs)
         if cached is not None:
             return cached
         self._budget.check(estimate_tokens(request.prompt_text), request.max_output_tokens)
         response = self._provider.complete(request)
         self._budget.record(response.usage.total)
-        self._cache.put(inputs, response)
+        if is_valid(response.text):
+            self._cache.put(inputs, response)
         return response
