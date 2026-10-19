@@ -112,7 +112,7 @@ class PageStructure:
 PeriodResolver = Callable[[PeriodAnchor], date | None]
 
 
-def _clean(text: str) -> str:
+def clean_text(text: str) -> str:
     # NFKC, then single spaces, so a word never carries a line separator.
     return " ".join(unicodedata.normalize("NFKC", text).split())
 
@@ -124,7 +124,7 @@ def group_lines(words: Iterable[Word], line_tolerance_pt: float = 3) -> tuple[Li
     centre exceeds the previous word's by more than the tolerance. Within a line
     the order is ``(x0, text)``. Words that are empty after NFKC are dropped.
     """
-    cleaned = [replace(w, text=_clean(w.text)) for w in words]
+    cleaned = [replace(w, text=clean_text(w.text)) for w in words]
     cleaned = [w for w in cleaned if w.text]
     ordered = sorted(cleaned, key=lambda w: ((w.top + w.bottom) / 2, w.x0, w.text))
     groups: list[list[Word]] = []

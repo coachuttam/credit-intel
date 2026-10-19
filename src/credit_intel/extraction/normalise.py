@@ -37,6 +37,7 @@ MAX_LENGTH = 64
 _MINUS = "-−–"  # FR-005.6: hyphen-minus, U+2212, U+2013
 _NIL_DASHES = {"-", "–", "—"}  # FR-004.3: -, – or —
 _SYMBOLS = "$₹€£¥"  # $ ₹ € £ ¥
+CURRENCY_SYMBOLS = frozenset(_SYMBOLS)
 
 _WESTERN = r"[0-9]{1,3}(?:,[0-9]{3})+"
 _INDIAN = r"[0-9]{1,2}(?:,[0-9]{2})*,[0-9]{3}"
