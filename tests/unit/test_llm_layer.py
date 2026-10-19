@@ -371,3 +371,16 @@ def test_an_invalid_response_is_returned_and_counted_but_never_cached(tmp_path):
     assert (cache.hits, cache.misses) == (0, 2)
     assert len(provider.calls) == 2
     assert gw.complete(request(), inputs()).text == "good"
+
+
+def test_the_gateway_counts_only_the_provider_calls_it_makes(tmp_path):
+    provider = FakeProvider(script=[FakeReply("answer", 20, 5)])
+    gw, _, _ = gateway(tmp_path, provider, ceiling=300)
+    assert gw.calls == 0
+
+    gw.complete(request(), inputs())  # a miss: one call
+    gw.complete(request(), inputs())  # a hit: none
+    with pytest.raises(IngestionError):
+        gw.complete(request(user="x" * 500), inputs(candidate_pages=(9,)))  # refused: none
+
+    assert gw.calls == 1

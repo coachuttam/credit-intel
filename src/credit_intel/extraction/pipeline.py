@@ -1,0 +1,198 @@
+"""The offline extraction pipeline, from a PDF to the run's field set (Phase 2 step 9).
+
+``run_extraction`` chains the committed stages in the FR-011 order: the PDF is validated
+and its text read (FR-001, FR-002); the statement pages are located, or the supplied page
+range is used (FR-013); the model is asked once for the fields (FR-003, FR-004: gates,
+cache, token ceiling, one corrective retry); word positions are read for the candidate pages
+only; the document-level attributes and then every proposed field are verified (FR-005); and
+the field set is built (FR-006, H.4).
+
+It stops at the field set. The run directory, manifest, ``results.json``, the error
+catalogue's exit codes and the command line (FR-009 to FR-012, FR-014) are Phase 5, so a
+catalogued failure simply propagates as ``IngestionError``. Logging uses the standard
+library only. At INFO a line holds a stage name, counts, durations and a short document
+hash, never document text, quotes, file names or values (FR-012.3).
+"""
+
+import logging
+import time
+from dataclasses import dataclass
+from pathlib import Path
+
+from credit_intel.config import (
+    ColumnSettings,
+    DeclarationSettings,
+    IngestionSettings,
+    LabelSettings,
+    LLMSettings,
+    LocatorSettings,
+)
+from credit_intel.extraction.attributes import VerifiedAttributes, verify_attributes
+from credit_intel.extraction.extract import ExtractionResult, extract_fields
+from credit_intel.extraction.field_set import FieldSet, build_field_set
+from credit_intel.extraction.prompt import Prompt, load_prompt
+from credit_intel.extraction.verify import FieldVerification, FieldVerifier, VerificationContext
+from credit_intel.ingestion.errors import IngestionError
+from credit_intel.ingestion.extractor import TextExtractor, WordExtractor
+from credit_intel.ingestion.ingest import ingest
+from credit_intel.ingestion.locator import check_statement_basis, locate_statements
+from credit_intel.ingestion.models import LocatorResult
+from credit_intel.llm.budget import TokenBudget
+from credit_intel.llm.cache import DEFAULT_CACHE_DIR, ResponseCache
+from credit_intel.llm.gateway import LLMGateway
+from credit_intel.llm.provider import LLMProvider
+from credit_intel.models import SourceDocument, StatementBasis, Status
+
+logger = logging.getLogger("credit_intel.pipeline")
+
+# FR-011 states, in order, for the stages this pipeline runs.
+RECEIVED = "received"
+VALIDATED = "validated"
+TEXT_EXTRACTED = "text_extracted"
+STATEMENTS_LOCATED = "statements_located"
+FIELDS_EXTRACTED = "fields_extracted"
+VALIDATED_FIELDS = "validated_fields"
+FAILED = "failed"
+
+
+@dataclass(frozen=True)
+class RunStats:
+    llm_calls: int  # provider calls made; a cache hit or a refused call makes none
+    tokens_used: int  # counted against the per-run ceiling (NFR-09)
+    cache_hits: int
+    cache_misses: int
+
+
+@dataclass(frozen=True)
+class ExtractionRun:
+    source_document: SourceDocument
+    page_count: int
+    configured_basis: StatementBasis
+    located: LocatorResult
+    extraction: ExtractionResult
+    attributes: VerifiedAttributes
+    verifications: tuple[FieldVerification, ...]
+    field_set: FieldSet
+    stats: RunStats
+    # The model's verified basis attribute names another basis than the configured one.
+    # Nothing is blocked (each field carries its own page's basis); the analyst can see it.
+    attribute_basis_differs: bool
+
+
+def run_extraction(
+    path: Path,
+    provider: LLMProvider,
+    llm: LLMSettings,
+    *,
+    basis: StatementBasis = StatementBasis.CONSOLIDATED,
+    page_range: str | None = None,
+    cache_dir: Path = DEFAULT_CACHE_DIR,
+    prompt: Prompt | None = None,
+    extractor: TextExtractor | WordExtractor | None = None,
+    ingestion_settings: IngestionSettings | None = None,
+    locator_settings: LocatorSettings | None = None,
+    label_settings: LabelSettings | None = None,
+    declaration_settings: DeclarationSettings | None = None,
+    column_settings: ColumnSettings | None = None,
+) -> ExtractionRun:
+    """Run the pipeline on one PDF and return its field set and statistics.
+
+    Raises ``IngestionError`` for a catalogued failure (the input, no candidate pages, a
+    missing configured basis, invalid model output twice, or the token ceiling).
+    """
+    if basis not in (StatementBasis.CONSOLIDATED, StatementBasis.STANDALONE):
+        raise ValueError("the configured basis is consolidated or standalone")
+    prompt = prompt or load_prompt()
+    if extractor is None:
+        from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
+
+        extractor = PdfplumberExtractor()
+    cache = ResponseCache(cache_dir)
+    budget = TokenBudget(llm.token_ceiling)
+    gateway = LLMGateway(provider, cache, budget)
+
+    started = time.perf_counter()
+    stage = RECEIVED
+    document_tag = "-"
+
+    def log(state: str, **counts: object) -> None:
+        elapsed = int((time.perf_counter() - started) * 1000)
+        detail = " ".join(f"{key}={value}" for key, value in counts.items())
+        logger.info("stage=%s doc=%s ms=%d %s", state, document_tag, elapsed, detail)
+
+    try:
+        log(RECEIVED)
+        stage = VALIDATED
+        document = ingest(path, ingestion_settings, extractor)  # type: ignore[arg-type]
+        document_tag = document.file_info.sha256[:12]
+        log(VALIDATED, pages=document.file_info.page_count)
+        stage = TEXT_EXTRACTED
+        log(TEXT_EXTRACTED, pages_with_text=sum(1 for p in document.pages if p.has_text))
+
+        stage = STATEMENTS_LOCATED
+        located = locate_statements(document.pages, locator_settings, page_range)
+        if located.candidates:  # a missing basis is a statements_located failure (G.1); no pages is fields_extracted
+            check_statement_basis(document.pages, located, basis.value, locator_settings)
+        log(STATEMENTS_LOCATED, method=located.method, candidates=len(located.candidates))
+
+        stage = FIELDS_EXTRACTED
+        extraction = extract_fields(
+            document, located, gateway, llm, prompt, basis.value, locator_settings
+        )
+        log(
+            FIELDS_EXTRACTED,
+            fields=len(extraction.response.fields),
+            attributes=len(extraction.response.attributes),
+            attempts=extraction.attempts,
+            llm_calls=gateway.calls,
+            tokens=budget.used,
+            cache_hits=cache.hits,
+        )
+
+        stage = VALIDATED_FIELDS
+        candidates = sorted(c.page_number for c in located.candidates)
+        by_number = {p.page_number: p for p in document.pages}
+        pages = {n: by_number[n] for n in candidates}
+        words = {w.page_number: w for w in extractor.extract_words(document.file_info.path, candidates)}  # type: ignore[union-attr]
+        source = SourceDocument(file_name=document.file_info.file_name, sha256=document.file_info.sha256)
+        attributes = verify_attributes(
+            list(extraction.response.attributes),
+            {n: p.text for n, p in pages.items()},
+            locator_settings,
+            declaration_settings,
+        )
+        verifier = FieldVerifier(
+            VerificationContext(
+                source_document=source,
+                pages=pages,
+                page_words=words,
+                located=located,
+                attributes=attributes,
+                label_settings=label_settings,
+                declaration_settings=declaration_settings,
+                column_settings=column_settings,
+                locator_settings=locator_settings,
+            )
+        )
+        verifications = verifier.verify_all(extraction.response)
+        field_set = build_field_set(verifications, attributes, located, basis, source)
+        log(VALIDATED_FIELDS, **field_set.counts, ignored=len(field_set.ignored), unplaced=len(field_set.unplaced))
+    except IngestionError as error:
+        logger.info("stage=%s doc=%s after=%s code=%s", FAILED, document_tag, stage, error.code.value)
+        raise
+
+    basis_attribute = attributes.statement_basis
+    return ExtractionRun(
+        source_document=source,
+        page_count=document.file_info.page_count,
+        configured_basis=basis,
+        located=located,
+        extraction=extraction,
+        attributes=attributes,
+        verifications=verifications,
+        field_set=field_set,
+        stats=RunStats(gateway.calls, budget.used, cache.hits, cache.misses),
+        attribute_basis_differs=(
+            basis_attribute.status is Status.EXTRACTED and basis_attribute.normalised_value != basis.value
+        ),
+    )

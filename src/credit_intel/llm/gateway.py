@@ -23,6 +23,7 @@ class LLMGateway:
         self._provider = provider
         self._cache = cache
         self._budget = budget
+        self.calls = 0  # provider calls made (a cache hit or a refused call makes none)
 
     def complete(
         self,
@@ -35,6 +36,7 @@ class LLMGateway:
             return cached
         self._budget.check(estimate_tokens(request.prompt_text), request.max_output_tokens)
         response = self._provider.complete(request)
+        self.calls += 1
         self._budget.record(response.usage.total)
         if is_valid(response.text):
             self._cache.put(inputs, response)
