@@ -4,7 +4,9 @@ PDFs are written to pytest's per-test ``tmp_path`` and never into the
 repository. ``invariant=1`` makes reportlab output byte-identical across runs.
 """
 
-from collections.abc import Callable
+import os
+import socket
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
@@ -47,3 +49,34 @@ def make_pdf(tmp_path: Path) -> Callable[..., Path]:
         return write_pdf(tmp_path / name, page_texts, **options)
 
     return _make
+
+
+# --- No network by default; live tests are opt-in (PRD O.1, D-02, SEC-10) -----------------------
+
+
+def live_enabled(env: Mapping[str, str] | None = None) -> bool:
+    """Live tests run only with CREDIT_INTEL_LIVE=1 and an OPENAI_API_KEY set."""
+    env = os.environ if env is None else env
+    return env.get("CREDIT_INTEL_LIVE") == "1" and bool(env.get("OPENAI_API_KEY", "").strip())
+
+
+def pytest_collection_modifyitems(config, items):
+    if live_enabled():
+        return
+    skip = pytest.mark.skip(reason="live tests need CREDIT_INTEL_LIVE=1 and OPENAI_API_KEY (they cost money)")
+    for item in items:
+        if "live" in item.keywords:
+            item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def no_network(request, monkeypatch):
+    """Every test except a live one fails if it tries to open a network connection."""
+    if request.node.get_closest_marker("live"):
+        return
+
+    def blocked(self, *args, **kwargs):
+        raise RuntimeError("network access is blocked in the default test suite")
+
+    monkeypatch.setattr(socket.socket, "connect", blocked)
+    monkeypatch.setattr(socket.socket, "connect_ex", blocked)

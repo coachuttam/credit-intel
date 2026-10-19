@@ -12,6 +12,7 @@ import pytest
 import pipeline_fixture as fx
 from credit_intel.extraction.pipeline import ExtractionRun, run_extraction
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
+from credit_intel.config import PricingSettings
 from credit_intel.llm.provider import FakeProvider
 from credit_intel.models import FieldName, PeriodRole, StatementBasis, Status
 
@@ -216,3 +217,60 @@ def test_a_missing_file_is_logged_as_failed_after_validation(tmp_path, caplog):
         run_extraction(tmp_path / "absent.pdf", FakeProvider(), fx.LLM, cache_dir=tmp_path / "c")
 
     assert "after=validated" in stage_records(caplog)[-1].getMessage()
+
+
+# --- token split and estimated cost (D-02, NFR-09) ------------------------------------------------------------------
+
+
+PRICES = PricingSettings(Decimal("0.15"), Decimal("0.6"))
+
+
+def test_the_statistics_split_the_provider_reported_tokens_and_total_them(pdf, tmp_path):
+    result, _ = run(pdf, tmp_path)
+
+    stats = result.stats
+    assert stats.input_tokens > 0 and stats.output_tokens > 0
+    assert stats.input_tokens + stats.output_tokens == stats.tokens_used
+
+
+def test_no_cost_is_estimated_without_prices(pdf, tmp_path):
+    result, _ = run(pdf, tmp_path)
+
+    assert result.stats.estimated_cost is None
+
+
+def test_the_cost_is_exact_from_the_reported_tokens_and_the_configured_prices(pdf, tmp_path):
+    result, _ = run(pdf, tmp_path, pricing=PRICES)
+
+    stats = result.stats
+    assert stats.estimated_cost == (stats.input_tokens * Decimal("0.15") + stats.output_tokens * Decimal("0.6")) / 1_000_000
+    assert stats.estimated_cost > 0
+
+
+def test_a_cache_hit_costs_nothing(pdf, tmp_path):
+    run(pdf, tmp_path)
+    again, _ = run(pdf, tmp_path, replies=[], pricing=PRICES)
+
+    assert again.stats.input_tokens == again.stats.output_tokens == 0 and again.stats.estimated_cost == 0
+
+
+def test_a_retried_run_costs_only_the_reply_that_arrived(pdf, tmp_path):
+    from credit_intel.llm.errors import LLMTransientError
+    from credit_intel.llm.retry import RetryingProvider
+
+    class Flaky:
+        def __init__(self, inner):
+            self.inner, self.fail = inner, 2
+
+        def complete(self, request):
+            if self.fail:
+                self.fail -= 1
+                raise LLMTransientError("HTTP 503")
+            return self.inner.complete(request)
+
+    fake = FakeProvider(script=[fx.good_response(pdf)])
+    clean, _ = run(pdf, tmp_path, pricing=PRICES, cache_dir=tmp_path / "a")
+    retried = run_extraction(pdf, RetryingProvider(Flaky(fake), sleep=lambda _: None), fx.LLM,
+                             cache_dir=tmp_path / "b", pricing=PRICES)  # fmt: skip
+
+    assert retried.stats.llm_retries == 2 and retried.stats.estimated_cost == clean.stats.estimated_cost

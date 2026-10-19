@@ -20,3 +20,8 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-name = "credit_intel"
+
+[tool.pytest.ini_options]
+markers = [
+    "live: calls the real OpenAI API; skipped unless CREDIT_INTEL_LIVE=1 and OPENAI_API_KEY are set",
+]

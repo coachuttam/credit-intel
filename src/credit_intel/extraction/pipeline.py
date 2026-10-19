@@ -17,6 +17,7 @@ hash, never document text, quotes, file names or values (FR-012.3).
 import logging
 import time
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from credit_intel.config import (
@@ -26,6 +27,7 @@ from credit_intel.config import (
     LabelSettings,
     LLMSettings,
     LocatorSettings,
+    PricingSettings,
 )
 from credit_intel.extraction.attributes import VerifiedAttributes, verify_attributes
 from credit_intel.extraction.extract import ExtractionResult, extract_fields
@@ -39,6 +41,7 @@ from credit_intel.ingestion.locator import check_statement_basis, locate_stateme
 from credit_intel.ingestion.models import LocatorResult
 from credit_intel.llm.budget import TokenBudget
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR, ResponseCache
+from credit_intel.llm.cost import estimate_cost
 from credit_intel.llm.gateway import LLMGateway
 from credit_intel.llm.provider import LLMProvider
 from credit_intel.models import SourceDocument, StatementBasis, Status
@@ -62,6 +65,9 @@ class RunStats:
     cache_hits: int
     cache_misses: int
     llm_retries: int = 0  # attempts made again after a transient failure (FR-011.3)
+    input_tokens: int = 0  # as reported by the provider, over the calls made
+    output_tokens: int = 0
+    estimated_cost: Decimal | None = None  # USD, only if prices are configured (D-02)
 
 
 @dataclass(frozen=True)
@@ -95,6 +101,7 @@ def run_extraction(
     label_settings: LabelSettings | None = None,
     declaration_settings: DeclarationSettings | None = None,
     column_settings: ColumnSettings | None = None,
+    pricing: PricingSettings | None = None,
 ) -> ExtractionRun:
     """Run the pipeline on one PDF and return its field set and statistics.
 
@@ -193,7 +200,16 @@ def run_extraction(
         attributes=attributes,
         verifications=verifications,
         field_set=field_set,
-        stats=RunStats(gateway.calls, budget.used, cache.hits, cache.misses, getattr(provider, "retries", 0)),
+        stats=RunStats(
+            gateway.calls,
+            budget.used,
+            cache.hits,
+            cache.misses,
+            getattr(provider, "retries", 0),
+            gateway.input_tokens,
+            gateway.output_tokens,
+            estimate_cost(gateway.input_tokens, gateway.output_tokens, pricing) if pricing else None,
+        ),
         attribute_basis_differs=(
             basis_attribute.status is Status.EXTRACTED and basis_attribute.normalised_value != basis.value
         ),

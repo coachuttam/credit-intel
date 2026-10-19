@@ -9,6 +9,7 @@ import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from decimal import Decimal
 from pathlib import Path
 
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -263,6 +264,10 @@ ENV_LLM_PROVIDER = "CREDIT_INTEL_LLM_PROVIDER"
 ENV_LLM_MODEL_ID = "CREDIT_INTEL_LLM_MODEL_ID"
 ENV_TOKEN_CEILING = "CREDIT_INTEL_TOKEN_CEILING"
 ENV_MAX_OUTPUT_TOKENS = "CREDIT_INTEL_MAX_OUTPUT_TOKENS"
+ENV_OPENAI_API_KEY = "OPENAI_API_KEY"  # SEC-02, SEC-03: read from the process environment only
+ENV_PRICE_INPUT = "CREDIT_INTEL_PRICE_INPUT_PER_MILLION"
+ENV_PRICE_OUTPUT = "CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION"
+ENV_LIVE = "CREDIT_INTEL_LIVE"  # opt in to the live tests (value "1")
 
 
 @dataclass(frozen=True)
@@ -343,4 +348,59 @@ def load_llm_settings(
         model_id=model_id,
         token_ceiling=token_ceiling,
         max_output_tokens=max_output_tokens,
+    )
+
+
+@dataclass(frozen=True)
+class PricingSettings:
+    """Price of the configured model, in USD per million tokens (PRD D-02, NFR-09).
+
+    There are no defaults: a price is a fact about the provider that is verified and then
+    entered (D-02), never assumed. Without a ``[pricing]`` table no cost is estimated.
+    """
+
+    input_per_million: Decimal
+    output_per_million: Decimal
+
+
+def _price(file_value: object, env_value: str | None, setting: str) -> Decimal:
+    """A non-negative finite decimal: a TOML integer or float, or a decimal string from the environment."""
+    if env_value is not None:
+        if not re.fullmatch(r"[0-9]+(\.[0-9]+)?", env_value):
+            raise _invalid(setting)
+        return Decimal(env_value)
+    if isinstance(file_value, bool) or not isinstance(file_value, (int, float)):
+        raise _invalid(setting)
+    value = Decimal(str(file_value))  # a float's shortest text, so 0.15 stays 0.15
+    if not value.is_finite() or value < 0:
+        raise _invalid(setting)
+    return value
+
+
+def load_pricing(
+    path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str] | None = None
+) -> PricingSettings | None:
+    """The ``[pricing]`` table of the settings file, or ``None`` if it has none.
+
+    Environment variables override the file. A table with a missing, negative, boolean or
+    otherwise invalid price fails with ``E-CONFIG-INVALID`` naming the setting.
+    """
+    env = os.environ if env is None else env
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise _invalid("settings file") from exc
+    table = data.get("pricing")
+    if table is None and ENV_PRICE_INPUT not in env and ENV_PRICE_OUTPUT not in env:
+        return None
+    if table is None:
+        table = {}
+    if not isinstance(table, dict):
+        raise _invalid("pricing")
+    for name in table:
+        if name not in ("input_per_million", "output_per_million"):
+            raise _invalid(f"pricing.{name}")
+    return PricingSettings(
+        input_per_million=_price(table.get("input_per_million"), env.get(ENV_PRICE_INPUT), "pricing.input_per_million"),
+        output_per_million=_price(table.get("output_per_million"), env.get(ENV_PRICE_OUTPUT), "pricing.output_per_million"),
     )
