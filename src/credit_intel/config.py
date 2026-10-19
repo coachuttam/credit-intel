@@ -4,7 +4,14 @@ Settings are plain frozen dataclasses so tests (and, later, a TOML loader)
 can override individual values without touching code.
 """
 
+import os
+import re
+import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
+
+from credit_intel.ingestion.errors import ErrorCode, IngestionError
 
 MEGABYTE = 1024 * 1024
 
@@ -108,3 +115,84 @@ class LocatorSettings:
             STANDALONE: ("standalone", "separate"),
         }
     )
+
+
+# --- LLM settings (PRD D-02, NFR-09, OD-8) -----------------------------------
+
+DEFAULT_SETTINGS_PATH = Path("config/settings.toml")
+LLM_PROVIDERS = ("openai", "fake")
+LLM_SETTING_NAMES = ("provider", "model_id", "token_ceiling")
+
+# Environment overrides (D-02: "overridable by environment variable"). The names
+# are this implementation's choice; an empty value counts as set, and is invalid.
+ENV_LLM_PROVIDER = "CREDIT_INTEL_LLM_PROVIDER"
+ENV_LLM_MODEL_ID = "CREDIT_INTEL_LLM_MODEL_ID"
+ENV_TOKEN_CEILING = "CREDIT_INTEL_TOKEN_CEILING"
+
+
+@dataclass(frozen=True)
+class LLMSettings:
+    """Provider, model and per-run token ceiling.
+
+    There are no defaults: the token ceiling is a required setting (OD-8,
+    NFR-09), and provider and model ID are configuration values, never
+    hard-coded in modules (D-02).
+    """
+
+    provider: str
+    model_id: str
+    token_ceiling: int
+
+
+def _invalid(setting: str) -> IngestionError:
+    # The detail names the setting only, never its value.
+    return IngestionError(ErrorCode.CONFIG_INVALID, setting)
+
+
+def _text(value: object, setting: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise _invalid(setting)
+    return value.strip()
+
+
+def _ceiling(file_value: object, env_value: str | None, setting: str) -> int:
+    """A positive integer: ASCII digits from the environment, or a TOML integer."""
+    if env_value is not None:
+        if not re.fullmatch(r"[0-9]+", env_value):
+            raise _invalid(setting)
+        file_value = int(env_value)
+    if isinstance(file_value, bool) or not isinstance(file_value, int) or file_value < 1:
+        raise _invalid(setting)
+    return file_value
+
+
+def load_llm_settings(
+    path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str] | None = None
+) -> LLMSettings:
+    """Read the ``[llm]`` table of the settings file; environment variables override it.
+
+    Raises ``IngestionError`` with ``E-CONFIG-INVALID`` (detail: the setting's
+    name) if the file is missing or unparsable, a setting is unknown, missing or
+    invalid, or the token ceiling is absent. The token ceiling must be a positive
+    integer; zero, negative, non-integer and boolean values are rejected.
+    """
+    env = os.environ if env is None else env
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise _invalid("settings file") from exc
+    table = data.get("llm", {})
+    if not isinstance(table, dict):
+        raise _invalid("llm")
+    for name in table:
+        if name not in LLM_SETTING_NAMES:
+            raise _invalid(f"llm.{name}")
+
+    provider = _text(env.get(ENV_LLM_PROVIDER, table.get("provider")), "llm.provider")
+    if provider not in LLM_PROVIDERS:
+        raise _invalid("llm.provider")
+    model_id = _text(env.get(ENV_LLM_MODEL_ID, table.get("model_id")), "llm.model_id")
+    token_ceiling = _ceiling(
+        table.get("token_ceiling"), env.get(ENV_TOKEN_CEILING), "llm.token_ceiling"
+    )
+    return LLMSettings(provider=provider, model_id=model_id, token_ceiling=token_ceiling)

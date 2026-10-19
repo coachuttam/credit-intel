@@ -18,6 +18,7 @@ class ErrorCode(StrEnum):
     NO_TEXT_LAYER = "E-INPUT-NO-TEXT-LAYER"
     PAGE_RANGE = "E-INPUT-PAGE-RANGE"
     BASIS_UNAVAILABLE = "E-EXTRACT-BASIS-UNAVAILABLE"
+    CONFIG_INVALID = "E-CONFIG-INVALID"
 
 
 MESSAGES: dict[ErrorCode, str] = {
@@ -38,6 +39,9 @@ MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.BASIS_UNAVAILABLE: (
         "No financial statement of the configured basis was found. Review the document; "
         "to analyse another basis, re-run with --basis."
+    ),
+    ErrorCode.CONFIG_INVALID: (
+        "The settings file is missing, unparsable, or fails validation. Fix the named setting."
     ),
 }
 
