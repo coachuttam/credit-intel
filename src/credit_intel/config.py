@@ -197,6 +197,60 @@ class LabelSettings:
     )
 
 
+# The statement a field is read from (H.3), for finding the first page of its statement
+# run (FR-013 rule 6, FR-005.8). The PRD does not tabulate this; it follows from the labels.
+FIELD_STATEMENT_TYPES: dict[str, str] = {
+    "revenue": INCOME_STATEMENT,
+    "net_profit": INCOME_STATEMENT,
+    "operating_profit": INCOME_STATEMENT,
+    "profit_before_tax": INCOME_STATEMENT,
+    "interest_expense": INCOME_STATEMENT,
+    "current_assets": BALANCE_SHEET,
+    "current_liabilities": BALANCE_SHEET,
+    "total_borrowings": BALANCE_SHEET,
+    "borrowings_non_current": BALANCE_SHEET,
+    "borrowings_current": BALANCE_SHEET,
+    "current_maturities_long_term_borrowings": BALANCE_SHEET,
+    "total_equity": BALANCE_SHEET,
+}
+
+
+@dataclass(frozen=True)
+class DeclarationSettings:
+    """Phrases that declare a scale or a currency (PRD FR-005.8).
+
+    FR-005.8 says the phrase lists are configurable and gives only examples
+    ("₹ in crore", "(Rs. in lakh)", "USD '000", "in millions"). These initial lists
+    are built from them, are provisional, and may be extended only from tuning-set
+    evidence (PRD O.2). A scale is declared by "in" followed by one of its words, with
+    an optional currency token between; a thousands scale may also be written '000.
+    """
+
+    scale_words: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {
+            "crore": ("crore", "crores"),
+            "lakh": ("lakh", "lakhs", "lac", "lacs"),
+            "millions": ("million", "millions", "mn"),
+            "billions": ("billion", "billions", "bn"),
+            "thousands": ("thousand", "thousands"),
+            "units": ("units", "actuals", "absolute figures", "absolute numbers", "absolute amounts"),
+        }
+    )
+    # Currency names that, after "in", declare whole units ("in rupees").
+    unit_currency_words: tuple[str, ...] = ("rupees", "dollars", "euros", "pounds", "dirhams")
+    # ISO code -> symbols and names that support it (the ISO code itself always does).
+    currency_tokens: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {
+            "INR": ("₹", "rs.", "rs", "rupee", "rupees"),
+            "USD": ("$", "us$", "dollar", "dollars", "us dollar", "us dollars"),
+            "EUR": ("€", "euro", "euros"),
+            "GBP": ("£", "pound", "pounds", "pound sterling"),
+            "AED": ("dirham", "dirhams"),
+            "JPY": ("¥", "yen"),
+        }
+    )
+
+
 # --- LLM settings (PRD D-02, NFR-09, OD-8) -----------------------------------
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.toml")
