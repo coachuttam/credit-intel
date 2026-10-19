@@ -24,9 +24,16 @@ ROWS = [
 ]
 
 
-def balance_sheet_pdf(path: Path, rows=ROWS, title="Consolidated Balance Sheet", scale="(Rs. in crore)",
-                      narrative_page=None) -> Path:  # fmt: skip
-    pdf = canvas.Canvas(str(path), invariant=1)
+STANDALONE_ROWS = [
+    ("Total non-current assets", "", "500.00", "450.00"),
+    ("Total current assets", "14", "1,000.00", "900.00"),
+    ("Total assets", "", "1,500.00", "1,350.00"),
+    ("Total equity", "", "400.00", "350.00"),
+    ("Total current liabilities", "15", "500.00", "450.00"),
+]
+
+
+def _statement_page(pdf, rows, title, scale):
     pdf.setFont("Helvetica", 10)
     y = 780
     for text in ("Acme Industries Limited", title, scale):
@@ -47,9 +54,25 @@ def balance_sheet_pdf(path: Path, rows=ROWS, title="Consolidated Balance Sheet",
             pdf.drawRightString(510, y, comparative)
         y -= 14
     pdf.showPage()
+
+
+def balance_sheet_pdf(path: Path, rows=ROWS, title="Consolidated Balance Sheet", scale="(Rs. in crore)",
+                      narrative_page=None) -> Path:  # fmt: skip
+    pdf = canvas.Canvas(str(path), invariant=1)
+    _statement_page(pdf, rows, title, scale)
     if narrative_page:  # a second page that is not a statement
+        pdf.setFont("Helvetica", 10)
         pdf.drawString(72, 700, narrative_page)
         pdf.showPage()
+    pdf.save()
+    return path
+
+
+def two_basis_pdf(path: Path) -> Path:
+    """A consolidated balance sheet on page 1 and a standalone one on page 2."""
+    pdf = canvas.Canvas(str(path), invariant=1)
+    _statement_page(pdf, ROWS, "Consolidated Balance Sheet", "(Rs. in crore)")
+    _statement_page(pdf, STANDALONE_ROWS, "Standalone Balance Sheet", "(Rs. in crore)")
     pdf.save()
     return path
 
@@ -64,8 +87,8 @@ def blank_text_pdf(path: Path) -> Path:
     return path
 
 
-def line_of(pdf: Path, needle: str) -> str:
-    text = PdfplumberExtractor().extract_pages(pdf)[0].text
+def line_of(pdf: Path, needle: str, page: int = 1) -> str:
+    text = PdfplumberExtractor().extract_pages(pdf)[page - 1].text
     return next(line for line in text.split("\n") if needle in line)
 
 
@@ -74,9 +97,36 @@ def attribute(pdf, name, raw, normalised, quote, role=None):
             "page_number": 1, "evidence_quote": quote}  # fmt: skip
 
 
-def field(pdf, name, role, raw, needle, label=None, scale="crore", currency="INR"):
+def field(pdf, name, role, raw, needle, label=None, scale="crore", currency="INR", page=1):
     return {"field_name": name, "period_role": role, "raw_value": raw, "scale": scale, "currency": currency,
-            "page_number": 1, "evidence_quote": line_of(pdf, needle), "line_item_label": label or needle}  # fmt: skip
+            "page_number": page, "evidence_quote": line_of(pdf, needle, page), "line_item_label": label or needle}  # fmt: skip
+
+
+def good_attributes(pdf: Path, drop=()) -> list[dict]:
+    header = line_of(pdf, "31 March 2025")
+    attributes = [
+        attribute(pdf, "entity_name", "Acme Industries Limited", "Acme Industries Limited", "Acme Industries Limited"),
+        attribute(pdf, "period_end", "31 March 2025", "2025-03-31", header, "current"),
+        attribute(pdf, "period_end", "31 March 2024", "2024-03-31", header, "comparative"),
+        attribute(pdf, "statement_basis", "Consolidated", "consolidated", "Consolidated Balance Sheet"),
+        attribute(pdf, "reporting_currency", "Rs.", "INR", "(Rs. in crore)"),
+        attribute(pdf, "scale", "in crore", "crore", "(Rs. in crore)"),
+    ]
+    return [a for a in attributes if a["attribute"] not in drop]
+
+
+def standalone_fields(pdf: Path) -> list[dict]:
+    """The same three fields read from the standalone statement on page 2."""
+    return [
+        field(pdf, "current_assets", "current", "1,000.00", "Total current assets", page=2),
+        field(pdf, "current_assets", "comparative", "900.00", "Total current assets", page=2),
+        field(pdf, "total_equity", "current", "400.00", "Total equity", page=2),
+        field(pdf, "total_equity", "comparative", "350.00", "Total equity", page=2),
+    ]
+
+
+def reply(attributes, fields) -> str:
+    return json.dumps({"attributes": attributes, "fields": fields})
 
 
 def good_response(pdf: Path, field_changes=None, drop_attributes=()) -> str:
