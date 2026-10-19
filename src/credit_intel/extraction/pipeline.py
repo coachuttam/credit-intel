@@ -61,6 +61,7 @@ class RunStats:
     tokens_used: int  # counted against the per-run ceiling (NFR-09)
     cache_hits: int
     cache_misses: int
+    llm_retries: int = 0  # attempts made again after a transient failure (FR-011.3)
 
 
 @dataclass(frozen=True)
@@ -145,6 +146,7 @@ def run_extraction(
             attributes=len(extraction.response.attributes),
             attempts=extraction.attempts,
             llm_calls=gateway.calls,
+            retries=getattr(provider, "retries", 0),
             tokens=budget.used,
             cache_hits=cache.hits,
         )
@@ -191,7 +193,7 @@ def run_extraction(
         attributes=attributes,
         verifications=verifications,
         field_set=field_set,
-        stats=RunStats(gateway.calls, budget.used, cache.hits, cache.misses),
+        stats=RunStats(gateway.calls, budget.used, cache.hits, cache.misses, getattr(provider, "retries", 0)),
         attribute_basis_differs=(
             basis_attribute.status is Status.EXTRACTED and basis_attribute.normalised_value != basis.value
         ),

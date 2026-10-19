@@ -18,7 +18,9 @@ from credit_intel.config import CONSOLIDATED, LocatorSettings
 from credit_intel.extraction.pipeline import ExtractionRun, run_extraction
 from credit_intel.extraction.prompt import Prompt, load_prompt
 from credit_intel.ingestion.errors import ErrorCode, IngestionError, InvalidOutputError
+from credit_intel.llm.errors import LLMTransientError
 from credit_intel.llm.provider import FakeProvider
+from credit_intel.llm.retry import RetryingProvider
 from credit_intel.models import FieldName, PeriodRole, StatementBasis, Status, StatusReason as R
 
 CUR, COMP = PeriodRole.CURRENT, PeriodRole.COMPARATIVE
@@ -379,3 +381,46 @@ def test_the_golden_result_has_extracted_and_not_found_fields_and_no_run_identif
     assert data["counts"]["extracted"] == 6 and data["counts"]["not_found"] == 18
     assert len(data["fields"]) == 24 and data["ignored"] == [] and data["bases_present"] == ["consolidated"]
     assert "run_id" not in text and "timestamp" not in text
+
+
+# --- transient provider failures (FR-011.3) -----------------------------------------------------------------------------
+
+
+class FailsThenAnswers:
+    def __init__(self, failures, inner):
+        self.failures, self.inner = failures, inner
+
+    def complete(self, request):
+        if self.failures:
+            self.failures -= 1
+            raise LLMTransientError("HTTP 503")
+        return self.inner.complete(request)
+
+
+def test_transient_failures_are_retried_and_the_run_succeeds_and_counts_them(pdf, tmp_path):
+    inner = FakeProvider(script=[fx.good_response(pdf)])
+    provider = RetryingProvider(FailsThenAnswers(2, inner), sleep=lambda _: None)
+
+    result = run_extraction(pdf, provider, fx.LLM, cache_dir=tmp_path / "c")
+
+    assert result.field_set.counts["extracted"] == 6
+    assert result.stats.llm_calls == 1 and result.stats.llm_retries == 2 and len(inner.calls) == 1
+
+
+def test_a_provider_that_stays_down_fails_the_run_with_the_catalogued_code(pdf, tmp_path, caplog):
+    inner = FakeProvider(script=[fx.good_response(pdf)])
+    provider = RetryingProvider(FailsThenAnswers(9, inner), sleep=lambda _: None)
+
+    with caplog.at_level("INFO"), pytest.raises(IngestionError) as excinfo:
+        run_extraction(pdf, provider, fx.LLM, cache_dir=tmp_path / "c")
+
+    assert excinfo.value.code is ErrorCode.LLM_UNAVAILABLE and inner.calls == []
+    last = [r.getMessage() for r in caplog.records if r.name == "credit_intel.pipeline"][-1]
+    assert "after=fields_extracted" in last and "code=E-LLM-UNAVAILABLE" in last
+    assert not list((tmp_path / "c").glob("*.json"))
+
+
+def test_a_run_without_a_retrying_provider_reports_no_retries(pdf, tmp_path):
+    result, _ = run(pdf, tmp_path, [fx.good_response(pdf)])
+
+    assert result.stats.llm_retries == 0

@@ -23,6 +23,7 @@ class ErrorCode(StrEnum):
     NO_STATEMENT_PAGES = "E-EXTRACT-NO-STATEMENT-PAGES"
     LLM_INVALID_OUTPUT = "E-LLM-INVALID-OUTPUT"
     LLM_AUTH = "E-LLM-AUTH"
+    LLM_UNAVAILABLE = "E-LLM-UNAVAILABLE"
 
 
 MESSAGES: dict[ErrorCode, str] = {
@@ -54,6 +55,9 @@ MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.NO_STATEMENT_PAGES: (
         "No candidate statement pages were found and no page range was supplied. "
         "Supply the statement pages with --pages."
+    ),
+    ErrorCode.LLM_UNAVAILABLE: (
+        "The LLM provider was unavailable after repeated attempts. Re-run later."
     ),
     ErrorCode.LLM_AUTH: (
         "Authentication with the LLM provider failed. Check OPENAI_API_KEY."
