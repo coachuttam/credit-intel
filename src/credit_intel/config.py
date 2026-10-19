@@ -130,6 +130,73 @@ class ColumnSettings:
     line_tolerance_pt: float = 3  # words whose vertical centres differ by at most this share a line
 
 
+@dataclass(frozen=True)
+class FieldLabelRule:
+    """The row labels accepted for one field (PRD H.3, FR-005.10).
+
+    ``phrases`` are accepted anywhere. ``sectioned_phrases`` (for example a bare
+    "borrowings") are accepted only under a ``section`` heading.
+    """
+
+    phrases: tuple[str, ...]
+    sectioned_phrases: tuple[str, ...] = ()
+    section: str | None = None  # a key of LabelSettings.section_headings
+
+
+NON_CURRENT = "non_current"
+CURRENT = "current"
+
+
+@dataclass(frozen=True)
+class LabelSettings:
+    """Row-label phrases per field and section headings (PRD H.3, FR-005.10).
+
+    Initial values are the H.3 table's. They may be extended only from tuning-set
+    evidence, never from held-out documents (PRD O.2).
+    """
+
+    rules: dict[str, FieldLabelRule] = field(
+        default_factory=lambda: {
+            "revenue": FieldLabelRule(("revenue from operations", "revenue", "turnover")),
+            "net_profit": FieldLabelRule(
+                (
+                    "profit/(loss) for the year",
+                    "profit for the year",
+                    "profit/(loss) for the period",
+                    "profit for the period",
+                )
+            ),
+            "operating_profit": FieldLabelRule(("operating profit", "ebit")),
+            "profit_before_tax": FieldLabelRule(
+                ("profit/(loss) before tax", "profit before tax")
+            ),
+            "interest_expense": FieldLabelRule(("finance costs", "interest expense")),
+            "current_assets": FieldLabelRule(("total current assets",)),
+            "current_liabilities": FieldLabelRule(("total current liabilities",)),
+            "total_borrowings": FieldLabelRule(("total borrowings",)),
+            "borrowings_non_current": FieldLabelRule(
+                ("non-current borrowings",), ("borrowings",), NON_CURRENT
+            ),
+            "borrowings_current": FieldLabelRule(
+                ("current borrowings",), ("borrowings",), CURRENT
+            ),
+            "current_maturities_long_term_borrowings": FieldLabelRule(
+                (
+                    "current maturities of long-term borrowings",
+                    "current maturities of long-term debt",
+                )
+            ),
+            "total_equity": FieldLabelRule(("total equity",)),
+        }
+    )
+    section_headings: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: {
+            NON_CURRENT: ("non-current liabilities",),
+            CURRENT: ("current liabilities",),
+        }
+    )
+
+
 # --- LLM settings (PRD D-02, NFR-09, OD-8) -----------------------------------
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.toml")

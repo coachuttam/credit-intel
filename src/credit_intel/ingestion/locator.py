@@ -66,6 +66,9 @@ def _fold_phrase(phrase: str) -> str:
     return " ".join(_fold(" ".join(unicodedata.normalize("NFKC", phrase).split())).split())
 
 
+fold_phrase = _fold_phrase  # public name, for the row-label check (FR-005.10)
+
+
 def is_numeric_token(word: str) -> bool:
     return word == ")" or _NUMERIC_TOKEN.fullmatch(word) is not None
 
