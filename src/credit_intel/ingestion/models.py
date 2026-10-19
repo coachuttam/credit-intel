@@ -92,3 +92,31 @@ class LocatorResult:
     candidates: tuple[CandidatePage, ...]
     range_pages_without_text: tuple[int, ...] = ()
     excluded_candidates: tuple[ExcludedCandidate, ...] = ()
+
+
+@dataclass(frozen=True)
+class Word:
+    """One word as the PDF library reports it, in PDF points, top-left origin."""
+
+    text: str
+    x0: float
+    x1: float
+    top: float
+    bottom: float
+
+
+@dataclass(frozen=True)
+class PageWords:
+    """The words of one physical page, for the period-column check (OD-1).
+
+    ``width`` and ``height`` are the page's unrotated size (pdfplumber does not
+    swap them for a rotated page); ``rotation`` is the page's ``/Rotate`` in
+    degrees. Geometry on a rotated page is not usable. ``words`` are ordered by
+    ``(top, x0, text)``.
+    """
+
+    page_number: int  # 1-based physical page number
+    width: float
+    height: float
+    rotation: int
+    words: tuple[Word, ...]

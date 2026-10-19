@@ -117,6 +117,19 @@ class LocatorSettings:
     )
 
 
+@dataclass(frozen=True)
+class ColumnSettings:
+    """Period-column check settings (PRD FR-005.7, OD-1).
+
+    Provisional: retained for the synthetic tests only, not validated against a
+    sufficient real-report sample, and adjustable only from tuning-set evidence
+    (PRD O.2).
+    """
+
+    column_margin_pt: float = 3  # added each side of a period anchor's extent
+    line_tolerance_pt: float = 3  # words whose vertical centres differ by at most this share a line
+
+
 # --- LLM settings (PRD D-02, NFR-09, OD-8) -----------------------------------
 
 DEFAULT_SETTINGS_PATH = Path("config/settings.toml")
