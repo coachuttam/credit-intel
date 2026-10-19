@@ -264,10 +264,32 @@ def test_a_token_in_the_note_span_is_a_note_reference_not_a_stray_token():
     assert check([ASSETS], "1,740.00", ASSETS_QUOTE).conditions.boundary is True
 
 
-def test_a_token_straddling_the_note_span_and_a_period_region_unverifies_the_line():
-    row = [("Total", 72), ("assets", 110), ("14", 340, 365), ("1,740.00", 360)]
+def test_a_figure_reaching_into_the_note_span_from_its_own_region_belongs_to_that_region():
+    # A right-aligned figure wider than its header: 330-380 overlaps the note span
+    # (297-357) and only 2025's region (357-383), so B is satisfied (FR-005.7).
+    row = [("Total", 72), ("assets", 110), ("1,740.00", 330, 380), ("1,600.00", 438)]
 
-    assert check([row], "1,740.00", "Total assets 14 1,740.00").failure is Failure.LINE_UNVERIFIED
+    result = passes(check([row], "1,740.00", "Total assets 1,740.00 1,600.00"))
+
+    assert result.token.text == "1,740.00" and result.conditions.boundary is True
+
+
+def test_a_wide_figure_with_a_note_reference_beside_it_still_verifies():
+    row = [("Total", 72), ("assets", 110), ("14", 305), ("1,740.00", 330, 380), ("1,600.00", 438)]
+
+    assert passes(check([row], "1,740.00", "Total assets 14 1,740.00 1,600.00")).token.text == "1,740.00"
+
+
+def test_a_token_that_reaches_into_the_note_span_and_crosses_two_period_regions_is_unverified():
+    row = [("Total", 72), ("assets", 110), ("999,999,999", 330, 450)]
+
+    assert check([row], "999,999,999", "Total assets 999,999,999").failure is Failure.LINE_UNVERIFIED
+
+
+def test_a_token_wholly_or_partly_in_the_note_span_that_reaches_no_period_region_is_a_note_reference():
+    row = [("Total", 72), ("assets", 110), ("14", 340, 355), ("1,740.00", 358)]
+
+    assert passes(check([row], "1,740.00", "Total assets 14 1,740.00")).token.text == "1,740.00"
 
 
 def test_a_token_that_only_touches_a_region_edge_does_not_overlap_it():

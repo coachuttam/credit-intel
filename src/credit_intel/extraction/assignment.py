@@ -74,7 +74,7 @@ class Conditions:
     structure: bool | None = None  # S
     linked: bool | None = None  # the quote is linked to exactly one word-line (3.5)
     column: bool | None = None  # the claimed period has a column
-    boundary: bool | None = None  # B, for every numeric or nil token on the line
+    boundary: bool | None = None  # B, for every numeric or nil token right of the label limit
     unique: bool | None = None  # U
     number: bool | None = None  # N
     value_matches: bool | None = None
@@ -160,13 +160,21 @@ def check_column(structure: PageStructure, claim: ColumnClaim) -> ColumnCheck:
     column = columns[0]
     assert line is not None and structure.label_limit is not None
 
-    # B: every numeric or nil token right of the label limit lies in exactly one region.
-    regions: list[tuple[float, float]] = [(c.x0, c.x1) for c in structure.columns]
+    # B: every numeric or nil token right of the label limit overlaps exactly one period
+    # region. One that overlaps none is a note reference if it touches the note span,
+    # and a stray token otherwise. A token reaching into the note span from its own
+    # period region (a right-aligned figure wider than its header) belongs to that
+    # region (FR-005.7: "that column's region and no other").
     note: NoteSpan | None = structure.note_span
-    if note is not None:
-        regions.append((note.x0, note.x1))
+
+    def boundary_ok(word: Word) -> bool:
+        regions = sum(_overlaps(word, c.x0, c.x1) for c in structure.columns)
+        if regions == 1:
+            return True
+        return regions == 0 and note is not None and _overlaps(word, note.x0, note.x1)
+
     boundary = all(
-        sum(_overlaps(w, x0, x1) for x0, x1 in regions) == 1
+        boundary_ok(w)
         for w in line.words
         if _is_value_like(w.text) and w.x1 > structure.label_limit
     )
