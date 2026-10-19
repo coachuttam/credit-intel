@@ -214,7 +214,7 @@ _REASONS_BY_FORM = {
 
 
 def resolve_anchor_texts(
-    anchor_texts: Iterable[str], page_text: str
+    anchor_texts: Iterable[str], page_text: str, known_current: date | None = None
 ) -> dict[str, PeriodResolution]:
     """Validate each distinct anchor text of one statement page (FR-005.9).
 
@@ -222,7 +222,8 @@ def resolve_anchor_texts(
     of that year on the page (none, or two different ones, is not guessed). Then a year
     token exactly one year before the current period (the latest validated period-end)
     is validated as the comparative, with the same month and day, unless the current
-    period ends on 28 or 29 February.
+    period ends on 28 or 29 February. ``known_current`` is a current period-end already
+    validated by a full date elsewhere (on another page); it counts as validated here.
     """
     texts = list(dict.fromkeys(anchor_texts))
     page_dates = find_full_dates(page_text)
@@ -250,7 +251,7 @@ def resolve_anchor_texts(
             results[text] = PeriodResolution(None, _REASONS_BY_FORM[form])
 
     validated = [r.evidence.period_end for r in results.values() if r.evidence is not None]
-    current = max(validated, default=None)
+    current = max([*validated, *([known_current] if known_current else [])], default=None)
     for text, year in pending.items():
         if current is None:
             results[text] = PeriodResolution(None, Reason.NO_VALIDATED_CURRENT)

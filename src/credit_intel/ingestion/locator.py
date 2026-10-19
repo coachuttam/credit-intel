@@ -419,6 +419,23 @@ def _title_blocks(text: str, matchers: _Matchers) -> list[str]:
     return blocks
 
 
+def title_block_bases(
+    text: str, settings: LocatorSettings | None = None
+) -> tuple[tuple[str, str], ...]:
+    """``(block text, basis)`` for each title block on one page (H.4.6, P1-3).
+
+    The block text is the folded text of the title block. Exactly one basis named in
+    the block gives that basis; none or both gives ``unknown``.
+    """
+    settings = settings or LocatorSettings()
+    matchers = _Matchers(settings)
+    result = []
+    for block in _title_blocks(text, matchers):
+        named = {name for name, words in settings.basis_phrases.items() if _present(words, block)}
+        result.append((block, named.pop() if len(named) == 1 else UNKNOWN_BASIS))
+    return tuple(result)
+
+
 def check_statement_basis(
     pages: Sequence[PageText],
     result: LocatorResult,
@@ -438,16 +455,11 @@ def check_statement_basis(
     if basis not in STATEMENT_BASES:
         raise ValueError(f"unknown statement basis {basis!r}")
     settings = settings or LocatorSettings()
-    matchers = _Matchers(settings)
     by_number = {page.page_number: page for page in pages}
 
     found: set[str] = set()
     for candidate in result.candidates:
-        for block in _title_blocks(by_number[candidate.page_number].text, matchers):
-            named = {
-                name for name, words in settings.basis_phrases.items() if _present(words, block)
-            }
-            found.add(named.pop() if len(named) == 1 else UNKNOWN_BASIS)
+        found.update(name for _, name in title_block_bases(by_number[candidate.page_number].text, settings))
 
     if basis not in found:
         listed = ", ".join(sorted(found)) or "none"
