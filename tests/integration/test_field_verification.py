@@ -21,6 +21,7 @@ from credit_intel.models import (
     DocumentAttributeName as Name,
     ExtractableFieldName as F,
     ExtractionResponse,
+    FieldName,
     PeriodRole,
     ProposedAttribute,
     ProposedField,
@@ -613,6 +614,45 @@ def test_verification_is_repeatable_and_reuses_the_page_analysis(env):
     second = verify(env, F.TOTAL_EQUITY, CUR, "600.00", "Total equity")
 
     assert first == second
+
+
+# --- the run's field set from real PDFs (step 8d) ------------------------------------------------------------------------------
+
+
+def test_the_field_set_of_a_run_combines_verification_reconciliation_plausibility_and_missing(tmp_path):
+    from credit_intel.extraction.field_set import build_field_set
+    from credit_intel.models import StatementBasis
+
+    rows = [
+        ("Revenue from operations", "", "(5.00)", "6.00"),  # a negative revenue is implausible
+        ("Total equity", "", "(10.00)", "20.00"),  # a negative equity is valid
+        ("Finance costs", "", "-", "5.00"),  # a reported nil
+        ("Other income", "", "7.00", "6.00"),  # the wrong label for revenue
+    ]
+    env = build(tmp_path / "set.pdf", rows=rows)
+    verifier, line, attributes = env
+    ctx = verifier._ctx
+    proposals = (
+        proposal(line, F.REVENUE, CUR, "(5.00)", "Revenue from operations"),
+        proposal(line, F.REVENUE, COMP, "6.00", "Revenue from operations"),
+        proposal(line, F.TOTAL_EQUITY, CUR, "(10.00)", "Total equity"),
+        proposal(line, F.INTEREST_EXPENSE, CUR, "-", "Finance costs"),
+        proposal(line, F.REVENUE, CUR, "7.00", "Other income"),  # a second, wrongly labelled occurrence
+    )
+
+    result = build_field_set(
+        [verifier.verify(p) for p in proposals], attributes, ctx.located, StatementBasis.CONSOLIDATED, ctx.source_document
+    )
+
+    revenue = result.get(FieldName.REVENUE, CUR)
+    assert revenue.status is Status.REQUIRES_REVIEW  # the extracted negative is implausible
+    assert revenue.status_reason is R.IMPLAUSIBLE_VALUE
+    assert [o["page_number"] for o in revenue.validation.details["unverified_occurrences"]] == [1]
+    assert result.counts["extracted"] == 3  # revenue comparative, total equity, finance costs
+    assert result.counts["not_found"] == 24 - 4  # four distinct field-periods were proposed
+    assert result.bases_present == ("consolidated",)
+    assert sum(result.counts.values()) == len(result.fields) == 24
+    json.dumps([r.model_dump(mode="json") for r in result.fields])
 
 
 # --- properties over generated proposals (fixed seed) --------------------------------------------------------------------------
