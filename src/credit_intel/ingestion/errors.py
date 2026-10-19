@@ -22,6 +22,7 @@ class ErrorCode(StrEnum):
     LLM_BUDGET_EXCEEDED = "E-LLM-BUDGET-EXCEEDED"
     NO_STATEMENT_PAGES = "E-EXTRACT-NO-STATEMENT-PAGES"
     LLM_INVALID_OUTPUT = "E-LLM-INVALID-OUTPUT"
+    LLM_AUTH = "E-LLM-AUTH"
 
 
 MESSAGES: dict[ErrorCode, str] = {
@@ -53,6 +54,9 @@ MESSAGES: dict[ErrorCode, str] = {
     ErrorCode.NO_STATEMENT_PAGES: (
         "No candidate statement pages were found and no page range was supplied. "
         "Supply the statement pages with --pages."
+    ),
+    ErrorCode.LLM_AUTH: (
+        "Authentication with the LLM provider failed. Check OPENAI_API_KEY."
     ),
     ErrorCode.LLM_INVALID_OUTPUT: (
         "The model's output was still invalid after one corrective retry. "

@@ -13,11 +13,13 @@ from pathlib import Path
 from typing import Protocol
 
 from credit_intel.llm.budget import estimate_tokens
+from credit_intel.llm.strict_schema import ADAPTER_VERSION
 
 # Generation settings that are fixed rather than configurable. Temperature 0 gives
 # the most repeatable output, and both values are part of the cache key (FR-003.5).
 TEMPERATURE = 0
-STRUCTURED_OUTPUT_MODE = "json_schema"
+# The mode names the schema converter's version, so a change to it is a cache miss.
+STRUCTURED_OUTPUT_MODE = f"json_schema.v{ADAPTER_VERSION}"
 
 
 @dataclass(frozen=True)

@@ -202,7 +202,7 @@ def test_cache_entry_records_every_key_input(tmp_path):
         "generation": {
             "temperature": 0,
             "max_output_tokens": 500,
-            "structured_output_mode": "json_schema",
+            "structured_output_mode": "json_schema.v1",
         },
     }
 
