@@ -267,27 +267,33 @@ def verify_attributes(
     return VerifiedAttributes(entity, current, comparative, basis, currency, scale, evidence)
 
 
-def blocking_reason(attributes: VerifiedAttributes, period_role: PeriodRole) -> StatusReason | None:
-    """Why a field of ``period_role`` cannot be ``extracted``, or ``None`` (H.1.2).
+def blocking_reasons(attributes: VerifiedAttributes, period_role: PeriodRole) -> tuple[StatusReason, ...]:
+    """Every reason a field of ``period_role`` cannot be ``extracted`` (H.1.2), in order.
 
     A field depends on its period-end, the statement basis, the reporting currency and
-    the scale. The reason is the attribute's own: an unvalidated period is
+    the scale. Each reason is the attribute's own: an unvalidated period is
     ``period_mismatch`` (FR-005.9), then ``basis_unknown``, ``currency_not_verified``,
-    and ``scale_not_verified`` or ``scale_ambiguous``.
+    and ``scale_not_verified`` or ``scale_ambiguous``. The entity name blocks nothing.
     """
     period = (
         attributes.current_period_end
         if period_role is PeriodRole.CURRENT
         else attributes.comparative_period_end
     )
+    reasons: list[StatusReason] = []
     if period.status is not Status.EXTRACTED:
-        return StatusReason.PERIOD_MISMATCH
+        reasons.append(StatusReason.PERIOD_MISMATCH)
     if attributes.statement_basis.status is not Status.EXTRACTED:
-        return StatusReason.BASIS_UNKNOWN
+        reasons.append(StatusReason.BASIS_UNKNOWN)
     if attributes.reporting_currency.status is not Status.EXTRACTED:
-        return StatusReason.CURRENCY_NOT_VERIFIED
+        reasons.append(StatusReason.CURRENCY_NOT_VERIFIED)
     if attributes.scale.status is not Status.EXTRACTED:
-        if attributes.scale.status_reason is StatusReason.SCALE_AMBIGUOUS:
-            return StatusReason.SCALE_AMBIGUOUS
-        return StatusReason.SCALE_NOT_VERIFIED
-    return None
+        ambiguous = attributes.scale.status_reason is StatusReason.SCALE_AMBIGUOUS
+        reasons.append(StatusReason.SCALE_AMBIGUOUS if ambiguous else StatusReason.SCALE_NOT_VERIFIED)
+    return tuple(reasons)
+
+
+def blocking_reason(attributes: VerifiedAttributes, period_role: PeriodRole) -> StatusReason | None:
+    """The first of ``blocking_reasons``, or ``None``."""
+    reasons = blocking_reasons(attributes, period_role)
+    return reasons[0] if reasons else None

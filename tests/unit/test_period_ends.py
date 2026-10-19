@@ -465,3 +465,14 @@ def test_the_resolver_only_considers_the_header_block():
     structure = analyse_structure(page, page_period_resolver(page, PAGE_TEXT))
 
     assert structure.valid and len(structure.anchors) == 2
+
+
+def test_a_known_current_period_lets_a_comparative_only_page_derive_its_column():
+    page = page_of(TITLE, [("Note", 300), ("2024", 440)], FIGURES[:3] + [("1,600.00", 438)])
+    text = "Balance Sheet\nNote 2024\nTotal assets 14 1,600.00"
+
+    without = analyse_structure(page, page_period_resolver(page, text))
+    derived = analyse_structure(page, page_period_resolver(page, text, known_current=D(2025, 3, 31)))
+
+    assert StructureProblem.NO_USABLE_ANCHOR in without.problems
+    assert derived.valid and [c.period_end for c in derived.columns] == [D(2024, 3, 31)]

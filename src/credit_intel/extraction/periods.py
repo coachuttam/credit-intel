@@ -271,11 +271,13 @@ def page_period_resolver(
     page_text: str,
     settings: ColumnSettings | None = None,
     locator_settings: LocatorSettings | None = None,
+    known_current: date | None = None,
 ) -> Callable[[PeriodAnchor], date | None]:
     """The ``resolve_period`` argument of ``analyse_structure`` for one page.
 
     The anchors are found the same way ``analyse_structure`` finds them (the header
     block of the page's word-lines), so the two always agree. A rotated page has none.
+    ``known_current`` is a current period-end validated on another page.
     """
     if page.rotation != 0:
         return lambda anchor: None
@@ -283,7 +285,7 @@ def page_period_resolver(
     lines = group_lines(page.words, settings.line_tolerance_pt)
     first, last = header_block(lines, locator_settings)
     resolutions = resolve_anchor_texts(
-        (anchor.text for anchor in find_anchors(lines[first:last])), page_text
+        (anchor.text for anchor in find_anchors(lines[first:last])), page_text, known_current
     )
 
     def resolve(anchor: PeriodAnchor) -> date | None:

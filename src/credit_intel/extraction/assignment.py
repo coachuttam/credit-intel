@@ -104,10 +104,12 @@ def _is_value_like(text: str) -> bool:
     return is_numeric_token(text) or is_nil_token(text)
 
 
-def _link_quote(claim: ColumnClaim, structure: PageStructure) -> tuple[Failure | None, Line | None]:
+def link_quote(
+    raw_value: str, evidence_quote: str, structure: PageStructure
+) -> tuple[Failure | None, Line | None]:
     """3.5: the figure line holding the quote's value line, or why there is none."""
-    raw = clean_text(claim.raw_value)
-    value_lines = [line for line in lines_of(claim.evidence_quote) if raw and raw in line]
+    raw = clean_text(raw_value)
+    value_lines = [line for line in lines_of(evidence_quote) if raw and raw in line]
     if not value_lines:
         return Failure.QUOTE_NOT_LINKED, None
     if len(value_lines) > 1:
@@ -149,7 +151,7 @@ def check_column(structure: PageStructure, claim: ColumnClaim) -> ColumnCheck:
 
     if not structure.valid:
         return result(Failure.STRUCTURE_INVALID, Conditions(structure=False))
-    failure, line = _link_quote(claim, structure)
+    failure, line = link_quote(claim.raw_value, claim.evidence_quote, structure)
     if failure is not None:
         return result(failure, Conditions(structure=True, linked=False))
     columns = [c for c in structure.columns if c.period_end == claim.period_end]
