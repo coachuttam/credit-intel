@@ -60,7 +60,7 @@ def test_the_run_identifies_the_document_and_the_pages(pdf, tmp_path):
     assert result.source_document.file_name == "statement.pdf"
     assert result.page_count == 1
     assert [c.page_number for c in result.located.candidates] == [1]
-    assert result.extraction.prompt_version == "extraction-v1" and result.extraction.attempts == 1
+    assert result.extraction.prompt_version == "extraction-v2" and result.extraction.attempts == 1
 
 
 def test_the_statistics_count_calls_tokens_and_the_cache(pdf, tmp_path):

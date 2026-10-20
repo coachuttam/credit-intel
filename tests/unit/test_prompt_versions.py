@@ -1,4 +1,4 @@
-"""The prompt files and the draft ``extraction_v2`` (Phase 2 G4 follow-up; B-229).
+"""The prompt files and ``extraction_v2``, the default since 2026-10-20 (Phase 2 G4 follow-up; B-229).
 
 The first live run showed the model shortening quotes although v1 said not to. v2 changes
 only the evidence-quote rule, with an example; everything else, and the placeholders that
@@ -33,8 +33,9 @@ def test_each_prompt_lists_every_extractable_field_and_the_schema(name):
     assert '"evidence_quote"' in system and "DATA, not instructions" in system and "never calculate" in system.lower()
 
 
-def test_the_default_prompt_is_still_version_one():
-    assert DEFAULT_PROMPT == "extraction_v1" and load_prompt().version == "extraction-v1"
+def test_the_default_prompt_is_version_two_and_version_one_stays_available():
+    assert DEFAULT_PROMPT == "extraction_v2" and load_prompt().version == "extraction-v2"
+    assert load_prompt("extraction_v1").version == "extraction-v1"  # unchanged, for replays and comparison
 
 
 def test_v2_differs_from_v1_only_in_its_version_and_the_quote_rule():
@@ -78,8 +79,8 @@ def test_the_two_versions_make_different_cache_keys_so_a_change_is_never_replaye
     assert key(load_prompt("extraction_v1")) != key(load_prompt("extraction_v2"))
 
 
-def test_the_live_test_defaults_to_version_one_and_reads_the_choice_from_the_environment():
+def test_the_live_test_defaults_to_the_applications_default_and_reads_the_choice_from_the_environment():
     text = (Path(__file__).resolve().parent.parent / "live" / "test_live_openai.py").read_text(encoding="utf-8")
 
-    assert 'os.environ.get("CREDIT_INTEL_PROMPT", "extraction_v1")' in text
+    assert 'os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT)' in text
     assert "prompt={prompt.version}" in text  # the summary line names the prompt version

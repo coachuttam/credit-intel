@@ -9,8 +9,8 @@ what the tuning-set run is for. Run it deliberately:
 
     CREDIT_INTEL_LIVE=1 uv run --locked pytest tests/live -q -s
 
-``CREDIT_INTEL_PROMPT`` (a name under ``prompts/``, default ``extraction_v1``) chooses the
-prompt, so a drafted prompt can be tried on the synthetic page. It is read by this test
+``CREDIT_INTEL_PROMPT`` (a name under ``prompts/``, default the application's default prompt)
+chooses the prompt, so a drafted prompt can be tried on the synthetic page. It is read by this test
 only; the application uses the default prompt unless the caller passes another.
 """
 
@@ -26,7 +26,7 @@ import pipeline_fixture as fx  # noqa: E402
 
 from credit_intel.config import load_llm_settings, load_pricing  # noqa: E402
 from credit_intel.extraction.pipeline import run_extraction  # noqa: E402
-from credit_intel.extraction.prompt import load_prompt  # noqa: E402
+from credit_intel.extraction.prompt import DEFAULT_PROMPT, load_prompt  # noqa: E402
 from credit_intel.llm.factory import build_provider  # noqa: E402
 
 pytestmark = pytest.mark.live
@@ -37,7 +37,7 @@ def test_one_small_synthetic_request_runs_through_the_real_provider(tmp_path):
     pricing = load_pricing()
     pdf = fx.balance_sheet_pdf(tmp_path / "synthetic.pdf")
 
-    prompt = load_prompt(os.environ.get("CREDIT_INTEL_PROMPT", "extraction_v1"))
+    prompt = load_prompt(os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT))
 
     result = run_extraction(
         pdf, build_provider(settings), settings, cache_dir=tmp_path / "cache", pricing=pricing, prompt=prompt

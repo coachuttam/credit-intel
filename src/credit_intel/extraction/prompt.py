@@ -13,7 +13,10 @@ from credit_intel.llm.provider import canonical_json
 from credit_intel.models import ExtractionResponse
 
 PROMPT_DIR = Path(__file__).resolve().parents[3] / "prompts"
-DEFAULT_PROMPT = "extraction_v1"
+# The prompt a run uses unless the caller passes another. extraction_v2 became the default on
+# 2026-10-20 at the owner's word, after the first live run showed the model shortening evidence
+# quotes under v1 (see PROGRESS.md, G4); v1 stays on disk and is a different cache key.
+DEFAULT_PROMPT = "extraction_v2"
 
 # One line per extractable field (H.3). The label phrases that verification accepts
 # are configuration and are deliberately not listed here.

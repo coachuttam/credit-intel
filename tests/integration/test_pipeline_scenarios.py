@@ -306,7 +306,7 @@ def test_a_changed_prompt_version_model_or_output_limit_is_a_cache_miss(pdf, tmp
     reply = fx.good_response(pdf)
     run(pdf, tmp_path, [reply])
 
-    other_prompt = Prompt(version="extraction-v2", system=load_prompt().system)
+    other_prompt = Prompt(version="extraction-v3", system=load_prompt().system)  # any version but the default
     _, p1 = run(pdf, tmp_path, [reply], prompt=other_prompt)
     _, p2 = run(pdf, tmp_path, [reply], llm=replace(fx.LLM, model_id="other-model"))
     _, p3 = run(pdf, tmp_path, [reply], llm=replace(fx.LLM, max_output_tokens=1000))
