@@ -492,3 +492,46 @@ def test_the_order_of_the_proposals_does_not_matter():
 
 def test_verification_is_repeatable():
     assert verify() == verify()
+
+
+# --- a role on an attribute that has none (seen on the first live run) ---------------------------------------------
+
+
+@pytest.mark.parametrize("original", [ENTITY, BASIS, CURRENCY, SCALE])
+@pytest.mark.parametrize("role", [CUR, COMP])
+def test_an_attribute_that_is_not_a_period_end_is_used_even_if_the_model_gives_it_a_role(original, role):
+    with_role = replaced(original, period_role=role)
+
+    result = verify([with_role if a is original else a for a in ALL])
+
+    record = {Name.ENTITY_NAME: result.entity_name, Name.STATEMENT_BASIS: result.statement_basis,
+              Name.REPORTING_CURRENCY: result.reporting_currency, Name.SCALE: result.scale}[original.attribute]  # fmt: skip
+    assert record.status is Status.EXTRACTED and record.period_role is None
+    assert record.raw_text == original.raw_text
+    assert blocking_reason(result, CUR) is None and blocking_reason(result, COMP) is None
+
+
+def test_a_role_that_is_given_to_a_verified_attribute_does_not_change_its_verification():
+    bad = replaced(CURRENCY, period_role=CUR, normalised_value="USD")
+
+    result = verify([bad if a is CURRENCY else a for a in ALL])
+
+    assert result.reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+    assert result.reporting_currency.period_role is None
+
+
+def test_a_period_end_with_no_role_is_still_not_used():
+    # Which period it is cannot be guessed from nothing, so it stays not_found (a known limit).
+    no_role = replaced(CURRENT, period_role=None)
+
+    result = verify([no_role if a is CURRENT else a for a in ALL])
+
+    assert result.current_period_end.status is Status.NOT_FOUND
+
+
+def test_duplicate_non_period_proposals_with_different_roles_are_still_one_attribute():
+    again = replaced(CURRENCY, period_role=COMP)
+
+    result = verify([CURRENCY, again] + [a for a in ALL if a is not CURRENCY])
+
+    assert result.reporting_currency.status is Status.EXTRACTED and result.reporting_currency.period_role is None

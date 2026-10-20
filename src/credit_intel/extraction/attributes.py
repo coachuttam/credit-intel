@@ -77,7 +77,7 @@ class VerifiedAttributes:
 def _record(proposal: ProposedAttribute, status: Status, reason: StatusReason | None) -> DocumentAttribute:
     return DocumentAttribute(
         attribute=proposal.attribute,
-        period_role=proposal.period_role,
+        period_role=proposal.period_role if proposal.attribute is Name.PERIOD_END else None,
         raw_text=proposal.raw_text,
         normalised_value=proposal.normalised_value.strip(),  # a derived form; the evidence is kept as proposed
         page_number=proposal.page_number,
@@ -216,6 +216,11 @@ def verify_attributes(
     """
 
     def group(name: Name, role: PeriodRole | None = None) -> list[ProposedAttribute]:
+        # Only a period-end has a role. Strict mode makes the role nullable for every
+        # attribute, and a model may fill it in for the others (seen on the first live run:
+        # entity_name with "current"); that is meaningless, not a reason to drop the attribute.
+        if name is not Name.PERIOD_END:
+            return [p for p in proposed if p.attribute is name]
         return [p for p in proposed if p.attribute is name and p.period_role == role]
 
     def simple(name: Name, reason_of) -> DocumentAttribute:
