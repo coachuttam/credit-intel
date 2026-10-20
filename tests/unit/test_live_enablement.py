@@ -270,17 +270,27 @@ def nested_pytest(env_changes):
     )  # fmt: skip
 
 
+LIVE_TESTS = 2  # the synthetic smoke test and the tuning-document runner
+
+
+def skipped(done):
+    import re
+
+    found = re.search(r"(\d+) skipped", done.stdout)
+    return int(found.group(1)) if found else 0
+
+
 def test_the_live_tests_are_skipped_by_default():
     done = nested_pytest({})
 
-    assert done.returncode == 0 and "1 skipped" in done.stdout and "passed" not in done.stdout
+    assert done.returncode == 0 and skipped(done) == LIVE_TESTS and "passed" not in done.stdout and "failed" not in done.stdout
 
 
 def test_the_flag_alone_or_a_key_alone_still_skips_them():
     flag = nested_pytest({"CREDIT_INTEL_LIVE": "1"})
     key = nested_pytest({"OPENAI_API_KEY": "sk-not-a-real-key"})
 
-    assert "1 skipped" in flag.stdout and "1 skipped" in key.stdout
+    assert skipped(flag) == skipped(key) == LIVE_TESTS and "passed" not in flag.stdout + key.stdout
 
 
 def test_the_live_marker_is_registered():
@@ -292,6 +302,6 @@ def test_the_live_marker_is_registered():
 
 def test_no_other_test_module_is_marked_live():
     marked = [p.name for p in (ROOT / "tests").rglob("test_*.py") if "mark.live" in p.read_text(encoding="utf-8")
-              and p.name not in ("test_live_openai.py", "test_live_enablement.py")]  # fmt: skip
+              and p.name not in ("test_live_openai.py", "test_live_tuning.py", "test_live_enablement.py")]  # fmt: skip
 
     assert marked == []
