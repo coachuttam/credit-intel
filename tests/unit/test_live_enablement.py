@@ -72,8 +72,14 @@ def test_a_real_env_file_is_ignored_by_git_and_the_example_is_not():
     assert set(ignored.stdout.split()) == {".env", ".env.local"} and example.returncode == 1
 
 
-def test_there_is_no_env_file_in_the_repository():
-    assert not (ROOT / ".env").exists()
+def test_no_env_file_is_tracked_by_git():
+    # SEC-03 requires .env to be excluded from Git. A local, ignored .env (which the owner may
+    # keep for convenience; this project never loads it) is fine, a tracked one is not.
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", ".env"], cwd=ROOT, capture_output=True, text=True)
+    listed = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.split("\n")
+
+    assert tracked.returncode != 0
+    assert not [name for name in listed if name == ".env" or name.endswith("/.env") or name.startswith(".env.") and name != ".env.example"]
 
 
 # --- the provider factory (SEC-02) -------------------------------------------------------------------------
