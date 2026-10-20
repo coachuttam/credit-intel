@@ -11,12 +11,12 @@ and never an error; the bases that were present are recorded for the memo.
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from credit_intel.config import FIELD_STATEMENT_TYPES, LocatorSettings
 from credit_intel.extraction.runs import statement_run_start
 from credit_intel.ingestion.locator import title_block_bases
-from credit_intel.ingestion.models import LocatorResult, PageText
+from credit_intel.ingestion.models import ExcludedCandidate, LocatorResult, PageText
 from credit_intel.models import StatementBasis
 
 CITED_PAGE = "cited_page"
@@ -88,3 +88,53 @@ def filter_by_basis(items: Sequence, configured: str, basis_of) -> BasisFilter:
         else:
             ignored.append(item)
     return BasisFilter(tuple(kept), tuple(ignored), tuple(sorted(present)))
+
+
+BASIS_UNKNOWN_REASON = "basis_unknown"
+
+
+def drop_unknown_basis_pages(
+    pages: Mapping[int, PageText], located: LocatorResult, settings: LocatorSettings | None = None
+) -> LocatorResult:
+    """Remove the candidate pages whose statement basis is ``unknown`` (H.4.6, v0.4.21).
+
+    Called after the basis gate has passed, before any model call. A page's basis is that
+    of its own title block, else that of the first page of its statement run, per statement
+    type; a page is removed only if no type gives it a known basis (a basis of another
+    company-level kind, such as ``standalone`` under a ``consolidated`` run, is known, so
+    that page stays). Each removed (page, type) pair is recorded in ``excluded_candidates``
+    with reason ``basis_unknown`` and the first page of its run as ``chain_start_page``;
+    the record stays in ascending page, then type, order. A page range is returned as it is,
+    because the analyst chose those pages. Nothing frees a place under the candidate cap.
+    """
+    if located.method != "keywords":
+        return located
+    removed: list[ExcludedCandidate] = []
+    kept = []
+    for candidate in located.candidates:
+        own = page_basis(pages[candidate.page_number].text, settings)
+        entries = []
+        known = own is not None and own is not StatementBasis.UNKNOWN
+        for statement_type in candidate.statement_types:
+            start = statement_run_start(located, candidate.page_number, statement_type)
+            if not known and own is None and start is not None and start != candidate.page_number:
+                inherited = page_basis(pages[start].text, settings) if start in pages else None
+                if inherited is not None and inherited is not StatementBasis.UNKNOWN:
+                    known = True
+            entries.append(
+                ExcludedCandidate(
+                    candidate.page_number,
+                    statement_type,
+                    BASIS_UNKNOWN_REASON,
+                    candidate.score or 0,
+                    start if start is not None else candidate.page_number,
+                )
+            )
+        if known:
+            kept.append(candidate)
+        else:
+            removed.extend(entries)
+    if not removed:
+        return located
+    excluded = sorted((*located.excluded_candidates, *removed), key=lambda e: (e.page_number, e.statement_type))
+    return replace(located, candidates=tuple(kept), excluded_candidates=tuple(excluded))

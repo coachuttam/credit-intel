@@ -424,3 +424,56 @@ def test_a_run_without_a_retrying_provider_reports_no_retries(pdf, tmp_path):
     result, _ = run(pdf, tmp_path, [fx.good_response(pdf)])
 
     assert result.stats.llm_retries == 0
+
+
+# --- pages of unknown basis are not sent (H.4.6, v0.4.21; B-235) ----------------------------------------------------------
+
+
+def untitled_then_consolidated(tmp_path):
+    from reportlab.pdfgen import canvas
+
+    path = tmp_path / "mixed.pdf"
+    pdf = canvas.Canvas(str(path), invariant=1)
+    fx._statement_page(pdf, fx.STANDALONE_ROWS, "Balance Sheet", "(Rs. in crore)")  # a title that names no basis
+    fx._statement_page(pdf, fx.ROWS, "Consolidated Balance Sheet", "(Rs. in crore)")
+    pdf.save()
+    return path
+
+
+def test_b6_row_27_the_untitled_page_is_not_sent_and_is_recorded(tmp_path):
+    pdf = untitled_then_consolidated(tmp_path)
+
+    result, provider = run(pdf, tmp_path, [fx.reply([], [])])
+
+    sent = provider.calls[0].user
+    assert "=== PAGE 2 ===" in sent and "=== PAGE 1 ===" not in sent
+    assert [c.page_number for c in result.located.candidates] == [2]
+    assert [(e.page_number, e.reason) for e in result.located.excluded_candidates] == [(1, "basis_unknown")]
+
+
+def test_b6_row_31_a_page_range_run_sends_the_untitled_page_too(tmp_path):
+    pdf = untitled_then_consolidated(tmp_path)
+
+    result, provider = run(pdf, tmp_path, [fx.reply([], [])], page_range="1-2")
+
+    assert "=== PAGE 1 ===" in provider.calls[0].user and "=== PAGE 2 ===" in provider.calls[0].user
+    assert result.located.excluded_candidates == ()
+
+
+def test_b6_row_28_only_untitled_pages_stop_at_the_gate_before_any_call(tmp_path):
+    pdf = fx.balance_sheet_pdf(tmp_path / "untitled.pdf", title="Balance Sheet")
+    provider = FakeProvider(script=[fx.reply([], [])])
+
+    with pytest.raises(IngestionError) as excinfo:
+        run_extraction(pdf, provider, fx.LLM, cache_dir=tmp_path / "c")
+
+    assert excinfo.value.code is ErrorCode.BASIS_UNAVAILABLE and provider.calls == []
+
+
+def test_a_page_of_the_other_known_basis_is_still_sent(both, tmp_path):
+    pdf, reply = both
+
+    result, provider = run(pdf, tmp_path, [reply])
+
+    assert "=== PAGE 1 ===" in provider.calls[0].user and "=== PAGE 2 ===" in provider.calls[0].user
+    assert result.located.excluded_candidates == ()

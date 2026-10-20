@@ -288,3 +288,35 @@ def test_the_command_reports_an_unreadable_input_on_stderr(tmp_path, capsys, mon
     captured = capsys.readouterr()
     assert code == 1 and captured.out == ""
     assert captured.err.strip() == "dry run: stopped E-INPUT-NOT-FOUND" and str(tmp_path) not in captured.err
+
+
+# --- pages of unknown basis (H.4.6, v0.4.21; B-235) ---------------------------------------------------------------------------
+
+
+def mixed_pdf(tmp_path):
+    from reportlab.pdfgen import canvas
+
+    path = tmp_path / "mixed.pdf"
+    pdf = canvas.Canvas(str(path), invariant=1)
+    fx._statement_page(pdf, fx.STANDALONE_ROWS, "Balance Sheet", "(Rs. in crore)")
+    fx._statement_page(pdf, fx.ROWS, "Consolidated Balance Sheet", "(Rs. in crore)")
+    pdf.save()
+    return path
+
+
+def test_the_summary_counts_the_pages_removed_for_an_unknown_basis(tmp_path):
+    pdf = mixed_pdf(tmp_path)
+
+    summary, _ = tuning(pdf, tmp_path, replies=[fx.reply([], [])])
+
+    assert summary["candidate_pages"] == [2] and summary["excluded_candidates"] == 1
+    assert summary["excluded_by_reason"] == {"basis_unknown": 1}
+
+
+def test_the_dry_run_prices_only_the_pages_that_would_be_sent(tmp_path):
+    pdf = mixed_pdf(tmp_path)
+
+    result = dry_run(pdf, fx.LLM, assignments=record(tmp_path, pdf))
+
+    assert result["candidate_pages"] == [2] and result["removed_for_unknown_basis"] == [1]
+    assert result["basis_gate"]["passes"] is True

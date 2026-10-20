@@ -31,6 +31,7 @@ def summarise_run(run: ExtractionRun, document_id: str) -> dict:
         "locator": run.located.method,
         "candidate_pages": sorted(c.page_number for c in run.located.candidates),
         "excluded_candidates": len(run.located.excluded_candidates),
+        "excluded_by_reason": dict(sorted(Counter(e.reason for e in run.located.excluded_candidates).items())),
         "configured_basis": run.configured_basis.value,
         "fields": {
             "counts": run.field_set.counts,

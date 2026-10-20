@@ -61,7 +61,7 @@ class CandidatePage:
 
 @dataclass(frozen=True)
 class ExcludedCandidate:
-    """A (page, statement type) pair removed by the cap or a chain cut (FR-013, P1-2).
+    """A (page, statement type) pair removed by the cap, a chain cut or an unknown basis (FR-013, P1-2).
 
     Member order is the PRD's LOC-2 schema. ``score`` is the page's rule-4
     score exactly as used for ranking; ``chain_start_page`` is the original
@@ -71,7 +71,7 @@ class ExcludedCandidate:
 
     page_number: int  # 1-based physical page number
     statement_type: str  # an existing statement-type identifier, e.g. "balance_sheet"
-    reason: str  # "cap" or "chain_cut"
+    reason: str  # "cap", "chain_cut" or "basis_unknown" (H.4.6, v0.4.21)
     score: int
     chain_start_page: int
 

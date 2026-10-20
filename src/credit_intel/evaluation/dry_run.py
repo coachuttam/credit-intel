@@ -19,6 +19,7 @@ from pathlib import Path
 from credit_intel.config import ENV_TOKEN_CEILING, LLMSettings, PricingSettings, load_llm_settings, load_pricing
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, load_current_sets
 from credit_intel.extraction.extract import render_pages
+from credit_intel.extraction.bases import drop_unknown_basis_pages
 from credit_intel.extraction.prompt import load_prompt
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.ingest import ingest
@@ -42,11 +43,16 @@ def dry_run(
     known = load_current_sets(assignments).get(sha256)
     located = locate_statements(document.pages, None, page_range)
     candidates = sorted(c.page_number for c in located.candidates)
+    removed: list[int] = []
     gate: dict = {"passes": None, "error_code": None, "detail": None}
     if candidates:
         try:
             check_statement_basis(document.pages, located, basis)
             gate["passes"] = True
+            before = candidates
+            located = drop_unknown_basis_pages({p.page_number: p for p in document.pages}, located)  # H.4.6, v0.4.21
+            candidates = sorted(c.page_number for c in located.candidates)
+            removed = [n for n in before if n not in candidates]
         except IngestionError as error:
             gate.update(passes=False, error_code=error.code.value, detail=error.detail)
     else:
@@ -69,6 +75,7 @@ def dry_run(
         "candidate_chars": page_chars,
         "candidate_chars_total": sum(page_chars.values()),
         "excluded_candidates": len(located.excluded_candidates),
+        "removed_for_unknown_basis": removed,
         "configured_basis": basis,
         "basis_gate": gate,
         "prompt_version": prompt.version,

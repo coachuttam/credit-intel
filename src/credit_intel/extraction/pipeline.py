@@ -34,6 +34,7 @@ from credit_intel.extraction.extract import ExtractionResult, extract_fields
 from credit_intel.extraction.field_set import FieldSet, build_field_set
 from credit_intel.extraction.prompt import Prompt, load_prompt
 from credit_intel.extraction.verify import FieldVerification, FieldVerifier, VerificationContext
+from credit_intel.extraction.bases import drop_unknown_basis_pages
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.extractor import TextExtractor, WordExtractor
 from credit_intel.ingestion.ingest import ingest
@@ -141,6 +142,8 @@ def run_extraction(
         located = locate_statements(document.pages, locator_settings, page_range)
         if located.candidates:  # a missing basis is a statements_located failure (G.1); no pages is fields_extracted
             check_statement_basis(document.pages, located, basis.value, locator_settings)
+            # H.4.6 (v0.4.21): pages whose basis is unknown are not sent (not for a page range).
+            located = drop_unknown_basis_pages({p.page_number: p for p in document.pages}, located, locator_settings)
         log(STATEMENTS_LOCATED, method=located.method, candidates=len(located.candidates))
 
         stage = FIELDS_EXTRACTED
