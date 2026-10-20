@@ -535,3 +535,44 @@ def test_duplicate_non_period_proposals_with_different_roles_are_still_one_attri
     result = verify([CURRENCY, again] + [a for a in ALL if a is not CURRENCY])
 
     assert result.reporting_currency.status is Status.EXTRACTED and result.reporting_currency.period_role is None
+
+
+# --- v0.4.20: a wrapped date, and a date below the figures ---------------------------------------------
+
+WRAPPED_PAGE = (
+    "Acme Industries Limited\n"
+    "Consolidated Balance Sheet\n"
+    "As at March 31,\n"
+    "2025\n"
+    "(₹ in crore)\n"
+    "Total current assets 14 1,482.30 1,356.75\n"
+    "Signed on behalf of the Board on April 17, 2025"
+)
+
+
+def test_a_period_end_wrapped_over_two_header_lines_is_accepted():
+    current = attr(Name.PERIOD_END, "March 31, 2025", "2025-03-31", "As at March 31,\n2025", CUR, page=7)
+
+    result = verify_attributes([current], {7: WRAPPED_PAGE})
+
+    assert result.current_period_end.status is Status.EXTRACTED
+    assert result.period_end(CUR) == date(2025, 3, 31)
+
+
+def test_the_signing_date_below_the_figures_is_not_a_period_end():
+    current = attr(Name.PERIOD_END, "April 17, 2025", "2025-04-17", "Signed on behalf of the Board on April 17, 2025", CUR, page=7)
+
+    result = verify_attributes([current], {7: WRAPPED_PAGE})
+
+    assert result.current_period_end.status is Status.REQUIRES_REVIEW
+    assert result.current_period_end.status_reason is Reason.PERIOD_MISMATCH
+
+
+def test_a_year_header_is_not_validated_by_the_signing_date():
+    page = "Acme Limited\nBalance Sheet\n2025 2024\nTotal current assets 14 1,482.30 1,356.75\nSigned on April 17, 2025"
+    current = attr(Name.PERIOD_END, "2025", "2025-04-17", "2025 2024", CUR, page=7)
+
+    result = verify_attributes([current], {7: page})
+
+    assert result.current_period_end.status is Status.REQUIRES_REVIEW
+    assert result.current_period_end.status_reason is Reason.PERIOD_MISMATCH

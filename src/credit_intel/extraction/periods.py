@@ -8,7 +8,7 @@ guessed. This module has no I/O and no dependency on a model's output:
 - ``parse_year_token``: a year-only or financial-year header (``2025``, ``FY2025``,
   ``2024-25``, ``FY 2024-25``), reduced to its (later) year;
 - ``resolve_anchor_texts``: which anchors validate, and how (a full date; a year token
-  matched by the one full date of that year on the page; or the comparative derived
+  matched by the one full date of that year in the page's title or column-header block; or the comparative derived
   from the current period, v0.4.13);
 - ``periods_are_consecutive``: the consecutive-period rule (H.1.1);
 - ``page_period_resolver``: the ``resolve_period`` callable the column check (6b) takes.
@@ -23,7 +23,7 @@ from enum import StrEnum
 
 from credit_intel.config import ColumnSettings, LocatorSettings
 from credit_intel.extraction.columns import PeriodAnchor, find_anchors, group_lines, header_block
-from credit_intel.ingestion.locator import lines_of
+from credit_intel.ingestion.locator import is_figure_word, lines_of
 from credit_intel.ingestion.models import PageWords
 
 _MONTH_NUMBERS = {
@@ -191,6 +191,32 @@ def find_full_dates(page_text: str) -> frozenset[date]:
     return frozenset(found)
 
 
+def header_lines(page_text: str) -> tuple[str, ...]:
+    """The lines above the page's first figure line: its title and column-header block
+    (FR-005.9, v0.4.20). The same region the period-end quote must come from (H.1.2)."""
+    lines = lines_of(page_text)
+    stop = next((i for i, line in enumerate(lines) if any(is_figure_word(w) for w in line.split())), len(lines))
+    return lines[:stop]
+
+
+def find_header_dates(page_text: str) -> frozenset[date]:
+    """Every full date in an accepted form in the page's title and column-header block.
+
+    A date whose words are on two consecutive lines of the block is read as one date
+    (v0.4.20). Nothing is joined across a figure line, because the block ends there, and
+    a date elsewhere on the page (a signature block, a note) is not found.
+    """
+    lines = header_lines(page_text)
+    windows = [*lines, *(f"{a} {b}" for a, b in zip(lines, lines[1:]))]
+    found: set[date] = set()
+    for window in windows:
+        for match in _SCAN.finditer(window):
+            value = _build(match)[1]  # None for an ambiguous or impossible date
+            if value is not None:
+                found.add(value)
+    return frozenset(found)
+
+
 def _is_february_end(day: date) -> bool:
     return day.month == 2 and day.day in (28, 29)
 
@@ -226,7 +252,7 @@ def resolve_anchor_texts(
     validated by a full date elsewhere (on another page); it counts as validated here.
     """
     texts = list(dict.fromkeys(anchor_texts))
-    page_dates = find_full_dates(page_text)
+    page_dates = find_header_dates(page_text)  # v0.4.20: not a date elsewhere on the page
     results: dict[str, PeriodResolution] = {}
     pending: dict[str, int] = {}
 

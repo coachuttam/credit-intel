@@ -110,6 +110,12 @@ def _header_lines(page_text: str) -> list[str]:
     return [normalise_for_match(line) for line in lines[:stop]]
 
 
+def _header_windows(page_text: str) -> list[str]:
+    """Each header line and each pair of consecutive header lines (a wrapped date, v0.4.20)."""
+    lines = _header_lines(page_text)
+    return [*lines, *(f"{a} {b}" for a, b in zip(lines, lines[1:]))]
+
+
 def _period_reason(
     proposal: ProposedAttribute,
     pages: Mapping[int, str],
@@ -120,7 +126,7 @@ def _period_reason(
         return reason, None
     page_text = pages[proposal.page_number]
     raw = normalise_for_match(proposal.raw_text)
-    if not any(raw in line for line in _header_lines(page_text)):
+    if not any(raw in window for window in _header_windows(page_text)):
         return StatusReason.PERIOD_MISMATCH, None
     found = resolve_anchor_texts([proposal.raw_text], page_text, known_current)[proposal.raw_text]
     if found.evidence is None or found.evidence.period_end.isoformat() != proposal.normalised_value.strip():

@@ -16,6 +16,8 @@ from credit_intel.extraction.periods import (
     Reason,
     classify,
     find_full_dates,
+    find_header_dates,
+    header_lines,
     page_period_resolver,
     parse_full_date,
     parse_year_token,
@@ -476,3 +478,108 @@ def test_a_known_current_period_lets_a_comparative_only_page_derive_its_column()
 
     assert StructureProblem.NO_USABLE_ANCHOR in without.problems
     assert derived.valid and [c.period_end for c in derived.columns] == [D(2024, 3, 31)]
+
+
+# --- v0.4.20: dates in the title or column-header block only, and wrapped dates -----------------------
+
+HDR_TITLE = "Acme Limited\nBalance Sheet"
+HDR_FIGURES = "Total current assets 14 1,482.30 1,356.75"
+
+
+def text_of(*lines):
+    return "\n".join(lines)
+
+
+def test_header_lines_stop_at_the_first_figure_line():
+    text = text_of(HDR_TITLE, "As at March 31,", "2025 2024", HDR_FIGURES, "Signed on April 17, 2025")
+
+    assert header_lines(text) == ("Acme Limited", "Balance Sheet", "As at March 31,", "2025 2024")
+
+
+def test_a_page_with_no_figure_line_is_all_header():
+    assert header_lines("A\nB") == ("A", "B")
+
+
+def test_b6_row_22_the_date_is_in_the_header_block():
+    text = text_of(HDR_TITLE, "As at March 31, 2025", "2025 2024", HDR_FIGURES)
+
+    result = resolve(["2025", "2024"], text)
+
+    assert result["2025"].evidence.period_end == D(2025, 3, 31)
+    assert result["2024"].evidence.method is Method.DERIVED_COMPARATIVE
+
+
+def test_b6_row_23_a_date_wrapped_over_two_lines_is_one_date():
+    text = text_of(HDR_TITLE, "As at March 31,", "2025", "2025 2024", HDR_FIGURES)
+
+    assert find_header_dates(text) == {D(2025, 3, 31)}
+    result = resolve(["2025", "2024"], text)
+    assert result["2025"].evidence.period_end == D(2025, 3, 31)
+    assert result["2024"].evidence.period_end == D(2024, 3, 31)
+
+
+def test_b6_row_24_a_date_below_the_figures_validates_nothing():
+    text = text_of(HDR_TITLE, "2025 2024", HDR_FIGURES, "Signed on behalf of the Board on April 17, 2025")
+
+    assert find_header_dates(text) == frozenset()
+    assert find_full_dates(text) == {D(2025, 4, 17)}  # the page scan still sees it; the rule does not use it
+    for token in ("2025", "2024"):
+        found = resolve([token], text)[token]
+        assert found.evidence is None and found.reason is Reason.NO_VALIDATED_CURRENT
+
+
+def test_b6_row_24_the_signing_date_cannot_validate_the_year_even_with_a_real_date_elsewhere():
+    text = text_of(HDR_TITLE, "As at March 31, 2025", "2025 2024", HDR_FIGURES, "Signed April 17, 2025")
+
+    assert resolve(["2025"], text)["2025"].evidence.period_end == D(2025, 3, 31)
+
+
+def test_b6_row_25_two_different_dates_of_the_year_in_the_header_are_not_guessed():
+    text = text_of(HDR_TITLE, "As at March 31, 2025", "Approved April 17, 2025", "2025 2024", HDR_FIGURES)
+
+    found = resolve(["2025"], text)["2025"]
+
+    assert found.evidence is None and found.reason is Reason.AMBIGUOUS_PAGE_DATE
+
+
+def test_the_same_date_written_twice_in_the_header_is_one_date():
+    text = text_of(HDR_TITLE, "As at March 31, 2025", "31 March 2025", "2025 2024", HDR_FIGURES)
+
+    assert resolve(["2025"], text)["2025"].evidence.period_end == D(2025, 3, 31)
+
+
+def test_b6_row_26_a_date_split_by_a_figure_line_is_not_joined():
+    text = text_of(HDR_TITLE, "As at March 31,", HDR_FIGURES, "2025")
+
+    assert find_header_dates(text) == frozenset()
+
+
+def test_a_date_is_not_joined_across_a_line_that_is_not_adjacent():
+    text = text_of(HDR_TITLE, "As at March 31,", "Note", "2025")
+
+    assert find_header_dates(text) == frozenset()
+
+
+def test_a_wrapped_date_that_is_impossible_or_ambiguous_is_not_a_date():
+    assert find_header_dates(text_of("Dated 31 February", "2025")) == frozenset()
+    assert find_header_dates(text_of("Dated 03/04/", "2025")) == frozenset()
+
+
+def test_the_wrapped_date_of_one_year_does_not_validate_another_years_header():
+    text = text_of(HDR_TITLE, "As at March 31,", "2025", "2023 2022", HDR_FIGURES)
+
+    found = resolve(["2023"], text)["2023"]
+
+    assert found.evidence is None and found.reason is Reason.NO_VALIDATED_CURRENT
+
+
+def test_no_page_without_a_header_date_can_validate_a_year_header():
+    rng = random.Random(20)
+    for _ in range(200):
+        year = rng.randint(1990, 2090)
+        below = f"Signed {rng.randint(1, 28)} March {year}"
+        text = text_of(HDR_TITLE, f"{year} {year - 1}", HDR_FIGURES, below)
+
+        found = resolve([str(year)], text)[str(year)]
+
+        assert found.evidence is None
