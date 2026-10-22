@@ -171,7 +171,10 @@ class LabelSettings:
             "profit_before_tax": FieldLabelRule(
                 ("profit/(loss) before tax", "profit before tax")
             ),
-            "interest_expense": FieldLabelRule(("finance costs", "interest expense")),
+            # "finance cost" (singular) added 2026-10-22 from tuning-set evidence (PRD O.2, AC-E-7): the
+            # consolidated statement of profit and loss of tuning document R1 (sha256 a2b9acdfbe79...,
+            # physical page 276) prints the row as "Finance cost". The owner approved it ("b yes").
+            "interest_expense": FieldLabelRule(("finance costs", "finance cost", "interest expense")),
             "current_assets": FieldLabelRule(("total current assets",)),
             "current_liabilities": FieldLabelRule(("total current liabilities",)),
             "total_borrowings": FieldLabelRule(("total borrowings",)),

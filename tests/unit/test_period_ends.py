@@ -17,6 +17,7 @@ from credit_intel.extraction.periods import (
     classify,
     find_full_dates,
     find_header_dates,
+    header_year_tokens,
     header_lines,
     page_period_resolver,
     parse_full_date,
@@ -583,3 +584,42 @@ def test_no_page_without_a_header_date_can_validate_a_year_header():
         found = resolve([str(year)], text)[str(year)]
 
         assert found.evidence is None
+
+
+# --- v0.4.22: year headings in the header block (the code derives the comparative from them) --------------------------------
+
+
+def test_year_headings_are_found_with_their_header_line():
+    text = text_of(HDR_TITLE, "Particulars Note 2025 2024", HDR_FIGURES)
+
+    assert header_year_tokens(text) == (("2025", "Particulars Note 2025 2024"), ("2024", "Particulars Note 2025 2024"))
+
+
+def test_a_financial_year_heading_and_fy_prefix_are_tokens():
+    text = text_of("Particulars FY 2024-25 FY2023-24", HDR_FIGURES)
+
+    assert [t for t, _ in header_year_tokens(text)] == ["FY 2024-25", "FY2023-24"]
+
+
+def test_a_year_inside_a_full_date_is_not_a_heading():
+    text = text_of(HDR_TITLE, "As at 31 March 2025", "Approved on 17 April 2024", HDR_FIGURES)
+
+    assert header_year_tokens(text) == ()
+
+
+def test_a_year_in_a_wrapped_date_is_not_a_heading():
+    text = text_of(HDR_TITLE, "As at March 31,", "2024", HDR_FIGURES)
+
+    assert header_year_tokens(text) == ()
+
+
+def test_a_year_below_the_first_figure_line_is_not_a_heading():
+    text = text_of(HDR_TITLE, "Particulars 2025", HDR_FIGURES, "Annual Report 2024")
+
+    assert [t for t, _ in header_year_tokens(text)] == ["2025"]
+
+
+def test_the_year_heading_next_to_a_date_is_still_found():
+    text = text_of("As at 31 March 2025 and 2024", HDR_FIGURES)
+
+    assert [t for t, _ in header_year_tokens(text)] == ["2024"]

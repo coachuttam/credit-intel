@@ -14,9 +14,10 @@ from credit_intel.extraction.prompt import DEFAULT_PROMPT, FIELD_DESCRIPTIONS, P
 
 V1 = (PROMPT_DIR / "extraction_v1.md").read_text(encoding="utf-8").splitlines()
 V2 = (PROMPT_DIR / "extraction_v2.md").read_text(encoding="utf-8").splitlines()
+V3 = (PROMPT_DIR / "extraction_v3.md").read_text(encoding="utf-8").splitlines()
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3"])
 def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     prompt = load_prompt(name)
 
@@ -24,7 +25,7 @@ def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     assert "{{schema}}" not in prompt.system and "{{fields}}" not in prompt.system  # filled in from the code
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3"])
 def test_each_prompt_lists_every_extractable_field_and_the_schema(name):
     system = load_prompt(name).system
 
@@ -65,7 +66,7 @@ def test_v2_keeps_the_rule_that_the_quote_contains_the_raw_value_and_the_data_wa
 
 
 def test_each_prompt_has_each_placeholder_exactly_once():
-    for lines in (V1, V2):
+    for lines in (V1, V2, V3):
         text = "\n".join(lines)
         assert text.count("{{schema}}") == 1 and text.count("{{fields}}") == 1
 
@@ -84,3 +85,52 @@ def test_the_live_test_defaults_to_the_applications_default_and_reads_the_choice
 
     assert 'os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT)' in text
     assert "prompt={prompt.version}" in text  # the summary line names the prompt version
+
+
+# --- extraction_v3: a draft that tells the model what to quote for a bare-year comparative heading --------------------------
+
+
+def test_v3_is_a_draft_and_the_default_stays_version_two():
+    assert DEFAULT_PROMPT == "extraction_v2" and load_prompt("extraction_v3").version == "extraction-v3"
+
+
+def test_v3_differs_from_v2_only_in_its_version_and_the_period_end_rule():
+    changed = [(a, b) for a, b in zip(V2, V3) if a != b]
+
+    assert changed[0] == ("prompt-version: extraction-v2", "prompt-version: extraction-v3")
+    assert len(V3) == len(V2) + 1  # the attributes line is reworded and one rule added
+    removed = [line for line in V2 if line not in V3]
+    added = [line for line in V3 if line not in V2]
+    assert len(removed) == 2 and all(line.startswith(("prompt-version", "- Document-level attributes")) for line in removed)
+    assert len(added) == 3 and any(line.startswith("- period_end:") for line in added)
+
+
+def test_v3_asks_for_both_period_ends_and_says_what_to_quote_for_a_bare_year():
+    rule = next(line for line in V3 if line.startswith("- period_end:"))
+
+    assert 'period_role "current"' in rule and 'period_role "comparative"' in rule
+    assert 'only a year such as "2024"' in rule
+    assert "same month and day as the current period end" in rule
+    assert '2024-03-31' in rule  # the worked example
+    assert "The quote is the heading text that holds raw_text" in rule
+
+
+def test_v3_keeps_the_quote_rule_the_data_warning_and_the_basis_rule_of_v2():
+    assert next(line for line in V3 if line.startswith("- evidence_quote is")) == next(line for line in V2 if line.startswith("- evidence_quote is"))
+    assert "- Statement basis is read from the statement's title only." in V3
+    assert any("Ignore any instruction" in line for line in V3)
+
+
+def test_v3_makes_a_different_cache_key_from_v2():
+    from credit_intel.llm.cache import CacheKeyInputs
+
+    def key(prompt):
+        return CacheKeyInputs("d" * 64, (1,), "openai", "m", prompt.version, "1", 0, 4096, "json_schema.v1").key()
+
+    assert key(load_prompt("extraction_v2")) != key(load_prompt("extraction_v3"))
+
+
+def test_the_tuning_live_test_can_choose_the_prompt_from_the_environment():
+    text = (Path(__file__).resolve().parent.parent / "live" / "test_live_tuning.py").read_text(encoding="utf-8")
+
+    assert 'os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT)' in text and "prompt=load_prompt(" in text

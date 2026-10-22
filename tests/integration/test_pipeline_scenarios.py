@@ -477,3 +477,48 @@ def test_a_page_of_the_other_known_basis_is_still_sent(both, tmp_path):
 
     assert "=== PAGE 1 ===" in provider.calls[0].user and "=== PAGE 2 ===" in provider.calls[0].user
     assert result.located.excluded_candidates == ()
+
+
+# --- the code derives the comparative period end (FR-005.9, v0.4.22; B-237) -------------------------------------------------------
+
+
+def year_heading_reply(pdf, comparative=None):
+    reply = json.loads(fx.good_response(pdf, drop_attributes=("period_end",)))
+    quote = "As at March 31,\n2025 2024"  # the date wraps over the title line and the year headings
+    reply["attributes"].append(fx.attribute(pdf, "period_end", "March 31, 2025", "2025-03-31", quote, "current"))
+    if comparative:
+        reply["attributes"].append(comparative)
+    return json.dumps(reply)
+
+
+def test_b6_row_34_a_reply_with_no_comparative_period_still_places_the_comparative_fields(tmp_path):
+    pdf = fx.year_heading_pdf(tmp_path / "years.pdf")
+
+    result, _ = run(pdf, tmp_path, [year_heading_reply(pdf)])
+
+    assert result.field_set.counts["extracted"] == 6 and result.field_set.unplaced == ()
+    comparative = result.field_set.get(FieldName.CURRENT_ASSETS, PeriodRole.COMPARATIVE)
+    assert comparative.raw_value == "1,356.75" and comparative.period_end.isoformat() == "2024-03-31"
+    assert comparative.validation.details["period"]["evidence"]["method"] == "derived_comparative"
+    assert result.attributes.comparative_period_end.raw_text == "2024"
+
+
+def test_a_comparative_the_model_proposes_and_gets_wrong_does_not_stop_the_derived_one(tmp_path):
+    pdf = fx.year_heading_pdf(tmp_path / "years.pdf")
+    wrong = fx.attribute(pdf, "period_end", "2024", "2024-03-31", "A heading that is not on the page", "comparative")
+
+    result, _ = run(pdf, tmp_path, [year_heading_reply(pdf, wrong)])
+
+    assert result.field_set.counts["extracted"] == 6
+
+
+def test_a_page_with_full_date_headings_and_no_year_headings_derives_nothing(tmp_path):
+    pdf = fx.balance_sheet_pdf(tmp_path / "dates.pdf")
+    reply = fx.good_response(pdf, drop_attributes=())
+    reply = json.loads(reply)
+    reply["attributes"] = [a for a in reply["attributes"] if a.get("period_role") != "comparative"]
+
+    result, _ = run(pdf, tmp_path, [json.dumps(reply)])
+
+    assert result.attributes.comparative_period_end.status is Status.NOT_FOUND
+    assert result.field_set.counts["extracted"] == 3  # the current-period fields only

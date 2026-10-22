@@ -11,6 +11,7 @@ from credit_intel.config import LLMSettings, PricingSettings
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, check_may_send, file_sha256
 from credit_intel.evaluation.summary import summarise_run, summarise_stop
 from credit_intel.extraction.pipeline import run_extraction
+from credit_intel.extraction.prompt import Prompt
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR
 from credit_intel.llm.provider import LLMProvider
@@ -28,6 +29,7 @@ def run_tuning_document(
     assignments: Path = ASSIGNMENTS_PATH,
     cache_dir: Path = DEFAULT_CACHE_DIR,
     synthetic: bool = False,
+    prompt: Prompt | None = None,
 ) -> dict:
     try:
         sha256 = file_sha256(path)
@@ -36,7 +38,7 @@ def run_tuning_document(
     document_id = check_may_send(sha256, assignments, synthetic=synthetic)  # raises SendRefused
     try:
         run = run_extraction(
-            path, provider, llm, basis=basis, page_range=page_range, cache_dir=cache_dir, pricing=pricing
+            path, provider, llm, basis=basis, page_range=page_range, cache_dir=cache_dir, pricing=pricing, prompt=prompt
         )
     except IngestionError as error:
         return summarise_stop(error, document_id, sha256)

@@ -23,7 +23,14 @@ from datetime import date
 
 from credit_intel.config import DeclarationSettings, LocatorSettings
 from credit_intel.extraction.declarations import check_currency, check_scale
-from credit_intel.extraction.periods import PeriodEvidence, periods_are_consecutive, resolve_anchor_texts
+from credit_intel.extraction.periods import (
+    Method,
+    PeriodEvidence,
+    header_year_tokens,
+    parse_year_token,
+    periods_are_consecutive,
+    resolve_anchor_texts,
+)
 from credit_intel.extraction.presence import check_presence, normalise_for_match
 from credit_intel.ingestion.locator import fold_phrase, is_figure_word, lines_of, title_block_bases
 from credit_intel.models import (
@@ -210,6 +217,37 @@ def _choose(
     return _record(proposal, Status.EXTRACTED, None), evidence
 
 
+def _derived_comparative(
+    pages: Mapping[int, str], current: date
+) -> tuple[DocumentAttribute, PeriodEvidence] | None:
+    """The comparative period end the code derives (FR-005.9, v0.4.22), with its evidence.
+
+    The first candidate page, in page order, whose title or column-header block holds a
+    year-only or financial-year token for exactly the year before ``current`` gives the
+    same month and day in that year. The token is the raw text and its header line the
+    quote. A current period ending on 28 or 29 February derives nothing (H.1.1 counts the
+    two as the same day, so the earlier period end cannot be derived).
+    """
+    if current.month == 2 and current.day in (28, 29):
+        return None
+    year = current.year - 1
+    for number in sorted(pages):
+        for token, line in header_year_tokens(pages[number]):
+            if parse_year_token(token) == year:
+                derived = date(year, current.month, current.day)
+                attribute = DocumentAttribute(
+                    attribute=Name.PERIOD_END,
+                    period_role=PeriodRole.COMPARATIVE,
+                    raw_text=token,
+                    normalised_value=derived.isoformat(),
+                    page_number=number,
+                    evidence_quote=line,
+                    status=Status.EXTRACTED,
+                )
+                return attribute, PeriodEvidence(token, derived, Method.DERIVED_COMPARATIVE, derived_from=current)
+    return None
+
+
 def verify_attributes(
     proposed: Sequence[ProposedAttribute],
     pages: Mapping[int, str],
@@ -254,6 +292,23 @@ def verify_attributes(
         comparative_props,
         [_period_reason(p, pages, known) for p in comparative_props],
     )
+
+    # v0.4.22: the code derives the comparative from a year heading one year before the current
+    # period. A proposed comparative is kept only if it equals the derived date; a failed or
+    # missing one is replaced by it; a validated one that differs is a disagreement.
+    derived = (
+        _derived_comparative(pages, date.fromisoformat(current.normalised_value))
+        if current.status is Status.EXTRACTED
+        else None
+    )
+    if derived is not None:
+        derived_attribute, derived_evidence = derived
+        if comparative.status is not Status.EXTRACTED:
+            comparative, comparative_evidence = derived_attribute, derived_evidence
+        elif comparative.normalised_value != derived_attribute.normalised_value:
+            comparative = comparative.model_copy(
+                update={"status": Status.REQUIRES_REVIEW, "status_reason": StatusReason.PERIOD_MISMATCH}
+            )
 
     if current.status is Status.EXTRACTED and comparative.status is Status.EXTRACTED:
         current_date = date.fromisoformat(current.normalised_value)

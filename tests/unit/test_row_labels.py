@@ -22,7 +22,7 @@ H3 = {
     ],
     "operating_profit": ["operating profit", "ebit"],
     "profit_before_tax": ["profit/(loss) before tax", "profit before tax"],
-    "interest_expense": ["finance costs", "interest expense"],
+    "interest_expense": ["finance costs", "finance cost", "interest expense"],  # "finance cost" from tuning evidence, 2026-10-22
     "current_assets": ["total current assets"],
     "current_liabilities": ["total current liabilities"],
     "total_borrowings": ["total borrowings"],
@@ -43,7 +43,7 @@ def ok(field, line, lines=None, index=None):
 # --- the initial phrases are the H.3 table --------------------------------------------------------
 
 
-def test_the_initial_phrases_are_the_h3_table():
+def test_the_initial_phrases_are_the_h3_table_plus_the_tuning_additions():
     rules = LabelSettings().rules
 
     assert {name: list(rule.phrases) for name, rule in rules.items()} == H3
@@ -311,3 +311,11 @@ def test_configured_headings_are_used():
 
     assert section_heading(["Short-term liabilities", "Borrowings 1.00"], 1, settings) == CURRENT
     assert section_heading(["Current liabilities", "Borrowings 1.00"], 1, settings) is None
+
+
+def test_the_singular_finance_cost_row_of_a_real_statement_is_accepted_and_look_alikes_are_not():
+    # Tuning-set evidence (R1, consolidated statement of profit and loss): "Finance cost 416 470".
+    assert ok("interest_expense", "Finance cost 416 470")
+    assert not ok("interest_expense", "Finance income 416 470")
+    assert not ok("interest_expense", "Finance costs and other charges 416 470")
+    assert not ok("operating_profit", "Finance cost 416 470")

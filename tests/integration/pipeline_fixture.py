@@ -33,16 +33,17 @@ STANDALONE_ROWS = [
 ]
 
 
-def _statement_page(pdf, rows, title, scale):
+def _statement_page(pdf, rows, title, scale, date_line=None, headers=("31 March 2025", "31 March 2024"), note_header=True):
     pdf.setFont("Helvetica", 10)
     y = 780
-    for text in ("Acme Industries Limited", title, scale):
+    for text in ("Acme Industries Limited", title, scale, date_line):
         if text:
             pdf.drawString(72, y, text)
             y -= 15
-    pdf.drawString(300, y, "Note")
-    pdf.drawCentredString(400, y, "31 March 2025")
-    pdf.drawCentredString(480, y, "31 March 2024")
+    if note_header:
+        pdf.drawString(300, y, "Note")
+    pdf.drawCentredString(400, y, headers[0])
+    pdf.drawCentredString(480, y, headers[1])
     y -= 15
     for label, note, current, comparative in rows:
         pdf.drawString(72, y, label)
@@ -73,6 +74,14 @@ def two_basis_pdf(path: Path) -> Path:
     pdf = canvas.Canvas(str(path), invariant=1)
     _statement_page(pdf, ROWS, "Consolidated Balance Sheet", "(Rs. in crore)")
     _statement_page(pdf, STANDALONE_ROWS, "Standalone Balance Sheet", "(Rs. in crore)")
+    pdf.save()
+    return path
+
+
+def year_heading_pdf(path: Path) -> Path:
+    """A balance sheet whose title says "As at March 31," over column headings that are years only."""
+    pdf = canvas.Canvas(str(path), invariant=1)
+    _statement_page(pdf, ROWS, "Consolidated Balance Sheet", "(Rs. in crore)", date_line="As at March 31,", headers=("2025", "2024"), note_header=False)
     pdf.save()
     return path
 
@@ -131,7 +140,7 @@ def reply(attributes, fields) -> str:
 
 def good_response(pdf: Path, field_changes=None, drop_attributes=()) -> str:
     """The reply a careful model would give for ``balance_sheet_pdf``."""
-    header = line_of(pdf, "31 March 2025")
+    header = "" if "period_end" in drop_attributes else line_of(pdf, "31 March 2025")
     attributes = [
         attribute(pdf, "entity_name", "Acme Industries Limited", "Acme Industries Limited", "Acme Industries Limited"),
         attribute(pdf, "period_end", "31 March 2025", "2025-03-31", header, "current"),

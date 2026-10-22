@@ -217,6 +217,50 @@ def find_header_dates(page_text: str) -> frozenset[date]:
     return frozenset(found)
 
 
+def header_year_tokens(page_text: str) -> tuple[tuple[str, str], ...]:
+    """Year-only and financial-year tokens in the page's title and column-header block,
+    each with the header line that holds it, in reading order (FR-005.9, v0.4.22).
+
+    A word that belongs to a full date (even a wrapped one, or an ambiguous one) is not a
+    year header: ``2024`` in ``31 March 2024`` is part of a date, and a date elsewhere in the
+    block must not stand in for a heading. ``FY`` followed by a token is read as one token.
+    """
+    lines = header_lines(page_text)
+    joined = "\n".join(lines)
+    starts = [0]
+    for line in lines[:-1]:
+        starts.append(starts[-1] + len(line) + 1)
+    covered = [match.span() for match in _SCAN.finditer(joined)]
+
+    def free(span: tuple[int, int]) -> bool:
+        return not any(span[0] < end and start < span[1] for start, end in covered)
+
+    def line_of(offset: int) -> str:
+        index = max(i for i, start in enumerate(starts) if start <= offset)
+        return lines[index]
+
+    words = [(m.group(), m.span()) for m in re.finditer(r"\S+", joined)]
+    found: list[tuple[str, str]] = []
+    joined_with_previous = False  # this word was read as the number of an "FY 2024-25" token
+    for i, (word, span) in enumerate(words):
+        if joined_with_previous:
+            joined_with_previous = False
+            continue
+        if not free(span):
+            continue
+        if word.casefold() == "fy" and i + 1 < len(words):
+            follower, follower_span = words[i + 1]
+            if free(follower_span) and line_of(follower_span[0]) == line_of(span[0]):
+                combined = f"{word} {follower}"
+                if parse_year_token(combined) is not None:
+                    found.append((combined, line_of(span[0])))
+                    joined_with_previous = True
+                    continue
+        if parse_year_token(word) is not None:
+            found.append((word, line_of(span[0])))
+    return tuple(found)
+
+
 def _is_february_end(day: date) -> bool:
     return day.month == 2 and day.day in (28, 29)
 

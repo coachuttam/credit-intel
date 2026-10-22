@@ -320,3 +320,12 @@ def test_the_dry_run_prices_only_the_pages_that_would_be_sent(tmp_path):
 
     assert result["candidate_pages"] == [2] and result["removed_for_unknown_basis"] == [1]
     assert result["basis_gate"]["passes"] is True
+
+
+def test_the_runner_uses_the_prompt_it_is_given(pdf, tmp_path):
+    from credit_intel.extraction.prompt import load_prompt
+
+    summary, provider = tuning(pdf, tmp_path, prompt=load_prompt("extraction_v3"))
+
+    assert summary["prompt_version"] == "extraction-v3"
+    assert "period_role" in provider.calls[0].system and "same month and day as the current period end" in provider.calls[0].system

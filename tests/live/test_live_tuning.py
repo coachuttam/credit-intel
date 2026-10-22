@@ -15,8 +15,8 @@ git-ignored response cache .cache/llm (the accepted G2 risk); delete that direct
     CREDIT_INTEL_TOKEN_CEILING=120000 CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 \\
     uv run --locked pytest tests/live/test_live_tuning.py -q -s
 
-CREDIT_INTEL_BASIS (consolidated or standalone, default consolidated) and CREDIT_INTEL_PAGES
-(a page range) are optional.
+CREDIT_INTEL_BASIS (consolidated or standalone, default consolidated), CREDIT_INTEL_PAGES
+(a page range) and CREDIT_INTEL_PROMPT (a name under prompts/, default the application's default) are optional.
 """
 
 import os
@@ -27,6 +27,7 @@ import pytest
 from credit_intel.config import load_llm_settings, load_pricing
 from credit_intel.evaluation.runner import run_tuning_document
 from credit_intel.evaluation.summary import to_line
+from credit_intel.extraction.prompt import DEFAULT_PROMPT, load_prompt
 from credit_intel.llm.factory import build_provider
 from credit_intel.models import StatementBasis
 
@@ -46,6 +47,7 @@ def test_one_tuning_document_by_counts():
         basis=StatementBasis(os.environ.get("CREDIT_INTEL_BASIS", "consolidated")),
         page_range=os.environ.get("CREDIT_INTEL_PAGES") or None,
         pricing=load_pricing(),
+        prompt=load_prompt(os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT)),
     )
 
     print("\n" + to_line("tuning run", summary))

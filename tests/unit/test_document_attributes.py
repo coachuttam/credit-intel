@@ -576,3 +576,110 @@ def test_a_year_header_is_not_validated_by_the_signing_date():
 
     assert result.current_period_end.status is Status.REQUIRES_REVIEW
     assert result.current_period_end.status_reason is Reason.PERIOD_MISMATCH
+
+
+# --- v0.4.22: the code derives the comparative period end -------------------------------------------------------------------
+
+DERIVE_PAGE = (
+    "Acme Industries Limited\n"
+    "Consolidated Balance Sheet\n"
+    "As at March 31, 2025\n"
+    "Particulars Note 2025 2024\n"
+    "(₹ in crore)\n"
+    "Total current assets 14 1,482.30 1,356.75"
+)
+CUR_YEAR_HEADED = attr(Name.PERIOD_END, "March 31, 2025", "2025-03-31", "As at March 31, 2025", CUR, page=7)
+
+
+def comparative_of(proposed, pages=None):
+    return verify_attributes(proposed, pages or {7: DERIVE_PAGE}).comparative_period_end
+
+
+def test_b6_row_34_a_missing_comparative_is_derived_from_the_year_heading():
+    result = verify_attributes([CUR_YEAR_HEADED], {7: DERIVE_PAGE})
+
+    comparative = result.comparative_period_end
+    assert comparative.status is Status.EXTRACTED and comparative.normalised_value == "2024-03-31"
+    assert comparative.raw_text == "2024" and comparative.page_number == 7
+    assert comparative.evidence_quote == "Particulars Note 2025 2024"
+    evidence = result.period_evidence[COMP]
+    assert evidence.method is Method.DERIVED_COMPARATIVE and evidence.derived_from == date(2025, 3, 31)
+    assert result.period_end(COMP) == date(2024, 3, 31)
+
+
+def test_the_derived_comparative_quote_is_on_the_page():
+    from credit_intel.extraction.presence import check_presence
+
+    comparative = comparative_of([CUR_YEAR_HEADED])
+
+    assert check_presence({7: DERIVE_PAGE}, 7, comparative.evidence_quote, comparative.raw_text).evidence_verified
+
+
+def test_b6_row_35_a_current_period_ending_in_february_derives_nothing():
+    page = DERIVE_PAGE.replace("March 31, 2025", "February 28, 2025")
+    current = attr(Name.PERIOD_END, "February 28, 2025", "2025-02-28", "As at February 28, 2025", CUR, page=7)
+
+    comparative = comparative_of([current], {7: page})
+
+    assert comparative.status is Status.NOT_FOUND
+
+
+def test_b6_row_36_no_heading_of_the_previous_year_derives_nothing():
+    page = DERIVE_PAGE.replace("2025 2024", "2025 2022")
+
+    assert comparative_of([CUR_YEAR_HEADED], {7: page}).status is Status.NOT_FOUND
+
+
+def test_b6_row_37_a_proposed_comparative_that_equals_the_derived_date_is_kept():
+    proposed = attr(Name.PERIOD_END, "2024", "2024-03-31", "Particulars Note 2025 2024", COMP, page=7)
+
+    comparative = comparative_of([CUR_YEAR_HEADED, proposed])
+
+    assert comparative.status is Status.EXTRACTED and comparative.normalised_value == "2024-03-31"
+
+
+def test_b6_row_38_a_proposed_comparative_that_differs_from_the_derived_date_is_for_review():
+    page = DERIVE_PAGE.replace("Particulars Note 2025 2024", "Particulars Note 2025 2024 30 March 2024")
+    proposed = attr(Name.PERIOD_END, "30 March 2024", "2024-03-30", "Particulars Note 2025 2024 30 March 2024", COMP, page=7)
+
+    comparative = comparative_of([CUR_YEAR_HEADED, proposed], {7: page})
+
+    assert comparative.status is Status.REQUIRES_REVIEW
+    assert comparative.status_reason is Reason.PERIOD_MISMATCH
+
+
+def test_b6_row_39_an_unvalidated_current_period_derives_nothing():
+    wrong = replaced(CUR_YEAR_HEADED, normalised_value="2025-04-17")
+
+    result = verify_attributes([wrong], {7: DERIVE_PAGE})
+
+    assert result.current_period_end.status is Status.REQUIRES_REVIEW
+    assert result.comparative_period_end.status is Status.NOT_FOUND
+
+
+def test_a_failed_proposed_comparative_is_replaced_by_the_derived_one_without_an_error():
+    broken = attr(Name.PERIOD_END, "2024", "2024-03-31", "A quote that is not on the page", COMP, page=7)
+
+    comparative = comparative_of([CUR_YEAR_HEADED, broken])
+
+    assert comparative.status is Status.EXTRACTED and comparative.evidence_quote == "Particulars Note 2025 2024"
+
+
+def test_a_signing_date_of_the_previous_year_does_not_become_a_comparative():
+    page = DERIVE_PAGE.replace("(₹ in crore)", "Approved on 17 April 2024\n(₹ in crore)")
+    page = page.replace("Particulars Note 2025 2024", "Particulars Note 2025")
+
+    assert comparative_of([CUR_YEAR_HEADED], {7: page}).status is Status.NOT_FOUND
+
+
+def test_property_a_derived_comparative_is_the_same_month_and_day_one_year_earlier():
+    rng = random.Random(22)
+    for _ in range(200):
+        year, month, day = rng.randint(1991, 2090), rng.choice([1, 3, 4, 6, 9, 12]), rng.randint(1, 28)
+        page = f"Acme\nBalance Sheet\nAs at {day} {['', 'January', '', 'March', 'April', '', 'June', '', '', 'September', '', '', 'December'][month]} {year}\nParticulars {year} {year - 1}\nTotal assets 1,740.00 1,600.00"
+        current = attr(Name.PERIOD_END, page.splitlines()[2][len("As at "):], date(year, month, day).isoformat(), page.splitlines()[2], CUR, page=7)
+
+        comparative = verify_attributes([current], {7: page}).comparative_period_end
+
+        assert comparative.status is Status.EXTRACTED
+        assert comparative.normalised_value == date(year - 1, month, day).isoformat()

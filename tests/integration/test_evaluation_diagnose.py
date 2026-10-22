@@ -97,3 +97,33 @@ def test_a_held_out_document_is_refused(pdf, tmp_path):
 
     with pytest.raises(SendRefused):
         diagnose(pdf, assignments=assignments, cache_dir=tmp_path / "cache", llm=fx.LLM)
+
+
+def test_a_run_made_with_another_prompt_is_replayed_with_that_prompt(pdf, tmp_path):
+    from credit_intel.extraction.prompt import load_prompt
+
+    assignments = record(tmp_path, pdf)
+    v3 = load_prompt("extraction_v3")
+    run_tuning_document(pdf, FakeProvider(script=[fx.good_response(pdf)]), fx.LLM, assignments=assignments, cache_dir=tmp_path / "cache", prompt=v3)
+
+    replayed = diagnose(pdf, assignments=assignments, cache_dir=tmp_path / "cache", llm=fx.LLM, prompt=v3)
+    default = diagnose(pdf, assignments=assignments, cache_dir=tmp_path / "cache", llm=fx.LLM)
+
+    assert replayed["replayed"] is True and default["replayed"] is False  # the prompt version is part of the cache key
+
+
+def test_a_quote_that_is_not_on_its_page_is_described_by_lengths_only(pdf, tmp_path):
+    attributes = json.loads(fx.good_response(pdf))["attributes"]
+    for attribute in attributes:
+        if attribute["attribute"] == "entity_name":
+            attribute["evidence_quote"] = "Acme Industries Limited and its friends"  # starts right, then departs from the page
+    reply = fx.reply(attributes, json.loads(fx.good_response(pdf))["fields"])
+    assignments = run_first(pdf, tmp_path, reply)
+
+    result = diagnose(pdf, assignments=assignments, cache_dir=tmp_path / "cache", llm=fx.LLM)
+
+    entity = next(a for a in result["attribute_proposals"] if a["attribute"] == "entity_name")
+    assert entity["presence_reason"] == "evidence_not_verified"
+    assert 0 < entity["quote_longest_prefix_on_page_chars"] < entity["quote_chars"]
+    assert entity["raw_text_in_quote"] is True and entity["raw_text_on_page"] is True
+    assert "friends" not in json.dumps(result)

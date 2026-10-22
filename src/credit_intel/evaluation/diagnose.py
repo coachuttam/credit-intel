@@ -9,7 +9,7 @@ It prints no page text, quote, label, value or date.
 
     uv run --locked python -m credit_intel.evaluation.diagnose <pdf> [--basis consolidated|standalone]
 
-Use the same CREDIT_INTEL_MAX_OUTPUT_TOKENS as the run being replayed (it is part of the cache key).
+Use the same CREDIT_INTEL_MAX_OUTPUT_TOKENS and CREDIT_INTEL_PROMPT as the run being replayed (both are part of the cache key).
 """
 
 import argparse
@@ -26,6 +26,7 @@ from credit_intel.extraction.attributes import _header_lines, _presence_reason
 from credit_intel.extraction.columns import analyse_structure
 from credit_intel.extraction.periods import classify, find_full_dates, page_period_resolver, resolve_anchor_texts
 from credit_intel.extraction.pipeline import run_extraction
+from credit_intel.extraction.prompt import DEFAULT_PROMPT, Prompt, load_prompt
 from credit_intel.extraction.presence import check_presence, normalise_for_match
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.locator import is_figure_word, lines_of
@@ -100,6 +101,22 @@ def _position_report(raw_text: str, page_text: str) -> dict:
     }
 
 
+def _quote_report(proposal, page_text: str) -> dict:
+    """How far a quote that is not on its page agrees with it, by lengths only."""
+    quote, raw, flat = (normalise_for_match(x) for x in (proposal.evidence_quote, proposal.raw_text, page_text))
+    prefix = 0
+    while prefix < len(quote) and quote[: prefix + 1] in flat:
+        prefix += 1
+    return {
+        "quote_chars": len(quote),
+        "quote_longest_prefix_on_page_chars": prefix,
+        "quote_lines": len(proposal.evidence_quote.splitlines()),
+        "raw_text_chars": len(raw),
+        "raw_text_in_quote": raw in quote,
+        "raw_text_on_page": raw in flat,
+    }
+
+
 def _attribute_report(proposal, pages, known_current) -> dict:
     report = {
         "attribute": proposal.attribute.value,
@@ -110,6 +127,8 @@ def _attribute_report(proposal, pages, known_current) -> dict:
     }
     reason = _presence_reason(proposal, pages)
     report["presence_reason"] = reason.value if reason else None
+    if reason is not None and proposal.page_number in pages:
+        report.update(_quote_report(proposal, pages[proposal.page_number]))
     if proposal.attribute is DocumentAttributeName.PERIOD_END:
         report["form"] = classify(proposal.raw_text).value
         if reason is None:
@@ -178,11 +197,12 @@ def diagnose(
     assignments: Path = ASSIGNMENTS_PATH,
     cache_dir: Path = DEFAULT_CACHE_DIR,
     llm: LLMSettings | None = None,
+    prompt: Prompt | None = None,
 ) -> dict:
     document_id = check_may_send(file_sha256(path), assignments)  # same rule as a send, though nothing is sent
     llm = llm or load_llm_settings(env={**os.environ, ENV_TOKEN_CEILING: os.environ.get(ENV_TOKEN_CEILING, "1000000")})
     try:
-        run = run_extraction(path, _NoCallProvider(), llm, basis=basis, cache_dir=cache_dir)
+        run = run_extraction(path, _NoCallProvider(), llm, basis=basis, cache_dir=cache_dir, prompt=prompt)
     except RuntimeError:
         return {"document_id": document_id, "replayed": False, "cache_hits": 0}
     candidates = sorted(c.page_number for c in run.located.candidates)
@@ -215,7 +235,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--basis", choices=("consolidated", "standalone"), default="consolidated")
     args = parser.parse_args(argv)
     try:
-        result = diagnose(args.pdf, StatementBasis(args.basis))
+        result = diagnose(args.pdf, StatementBasis(args.basis), prompt=load_prompt(os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT)))
     except IngestionError as error:
         print(f"diagnose: stopped {error.code.value}", file=sys.stderr)
         return 1
