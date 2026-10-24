@@ -33,7 +33,7 @@ def cand(value, quote="row", label="row", raw=None, page=3):
     return Candidate(page_number=page, evidence_quote=quote, line_item_label=label, raw_value=raw or str(value), value=Decimal(value))
 
 
-def rec(name, value="100", status=Status.EXTRACTED, reason=None, currency="INR", end=D25, role=CUR, basis=Basis.CONSOLIDATED, candidates=()):
+def rec(name, value="100", status=Status.EXTRACTED, reason=None, currency="INR", end=D25, role=CUR, basis=Basis.CONSOLIDATED, candidates=(), label=None):
     extracted = status is Status.EXTRACTED
     if status is Status.REQUIRES_REVIEW and reason is None:
         reason = R.LABEL_NOT_RECOGNISED
@@ -44,7 +44,7 @@ def rec(name, value="100", status=Status.EXTRACTED, reason=None, currency="INR",
         field_id=make_field_id(name, end, basis), field_name=name, origin=Origin.SOURCE, period_end=end, period_length_months=12,
         period_role=role, statement_basis=basis, status=status, status_reason=reason if not extracted else None,
         value=Decimal(value) if extracted else None, currency=currency if extracted else None, raw_value=str(value),
-        scale=Scale.CRORE, source_document=DOC, page_number=3, evidence_quote=f"{name.value} {value}", line_item_label=name.value,
+        scale=Scale.CRORE, source_document=DOC, page_number=3, evidence_quote=f"{name.value} {value}", line_item_label=label or name.value,
         value_interpretation="number", validation={**CHECKS, "details": {}}, candidates=candidates,
     )  # fmt: skip
 

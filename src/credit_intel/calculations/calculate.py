@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from types import MappingProxyType
 
+from credit_intel.calculations.borrowings import total_borrowings_for
 from credit_intel.calculations.derived import derive_ebit_for
 from credit_intel.calculations.metrics import (
     CONTEXT,
@@ -43,6 +44,7 @@ class Comparison:
     comparative: MetricResult
     relative_change: Decimal | None  # percent: (current - comparative) / comparative x 100
     undefined_reason: MetricReason | None
+    caveats: tuple[str, ...] = ()  # the caveats of either result (PRD v0.4.23)
 
     def __post_init__(self) -> None:
         if (self.relative_change is None) == (self.undefined_reason is None):
@@ -54,15 +56,16 @@ def compare(current: MetricResult, comparative: MetricResult) -> Comparison:
     if current.metric_id != comparative.metric_id:
         raise ValueError("a comparison uses two results of one metric")
     reason = current.undefined_reason or comparative.undefined_reason
+    caveats = tuple(dict.fromkeys((*current.caveats, *comparative.caveats)))
     if reason is None:
         if comparative.value == 0:
             reason = MetricReason.ZERO_DENOMINATOR
         elif comparative.value < 0:
             reason = MetricReason.NON_POSITIVE_BASE
     if reason is not None:
-        return Comparison(current.metric_id, current, comparative, None, reason)
+        return Comparison(current.metric_id, current, comparative, None, reason, caveats)
     change = CONTEXT.divide(CONTEXT.subtract(current.value, comparative.value), comparative.value)
-    return Comparison(current.metric_id, current, comparative, CONTEXT.multiply(change, HUNDRED), None)
+    return Comparison(current.metric_id, current, comparative, CONTEXT.multiply(change, HUNDRED), None, caveats)
 
 
 @dataclass(frozen=True)
@@ -80,12 +83,6 @@ class MetricSet:
 
     def comparison(self, metric_id: str) -> Comparison:
         return self.comparisons[metric_id]
-
-
-def total_borrowings_for(field_set: FieldSet, role: PeriodRole) -> ExtractedField | None:
-    """The run's ``total_borrowings`` record for a period: the reported one. A derived total
-    (BORR-SUM, step 3b) will be offered here when no total is reported."""
-    return field_set.get(FieldName.TOTAL_BORROWINGS, role)
 
 
 def calculate_metrics(field_set: FieldSet) -> MetricSet:

@@ -220,6 +220,20 @@ FIELD_STATEMENT_TYPES: dict[str, str] = {
 
 
 @dataclass(frozen=True)
+class BorrowingSettings:
+    """Phrases that classify current maturities of long-term borrowings (PRD H.5 rule 5, D-12).
+
+    An inclusion phrase in the ``borrowings_current`` row label means current maturities are
+    already inside it; an exclusion phrase in that label or in the current-maturities row label
+    means they are a separate component. The initial values are the PRD's examples. They are
+    provisional and may be extended only from tuning-set evidence (PRD O.2, AC-E-7).
+    """
+
+    inclusion_phrases: tuple[str, ...] = ("including current maturities",)
+    exclusion_phrases: tuple[str, ...] = ("excluding current maturities",)
+
+
+@dataclass(frozen=True)
 class DeclarationSettings:
     """Phrases that declare a scale or a currency (PRD FR-005.8).
 

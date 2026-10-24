@@ -17,6 +17,7 @@ from datetime import date
 from decimal import ROUND_HALF_EVEN, Context, Decimal
 from enum import StrEnum
 
+from credit_intel.calculations.borrowings import caveats_of
 from credit_intel.extraction.periods import periods_are_consecutive
 from credit_intel.models import ExtractedField, FieldName, PeriodRole, Status
 
@@ -58,6 +59,7 @@ class MetricResult:
     input_field_ids: tuple[str, ...]
     input_values: tuple[Decimal | None, ...]
     period_ends: tuple[date, ...]
+    caveats: tuple[str, ...] = ()  # stable identifiers; a caveat is not a reason, the result is still defined
 
     def __post_init__(self) -> None:
         if (self.value is None) == (self.undefined_reason is None):
@@ -78,7 +80,7 @@ _INPUT_REASON = {
 _PRECEDENCE = (MetricReason.MISSING_INPUT, MetricReason.INPUT_CONFLICTING, MetricReason.INPUT_REQUIRES_REVIEW)
 
 
-def _result(metric_id, name, unit, formula, expected, records, value=None, reason=None) -> MetricResult:
+def _result(metric_id, name, unit, formula, expected, records, value=None, reason=None, caveats=()) -> MetricResult:
     """``expected`` are the field names and periods the metric reads, aligned with ``records``."""
     ids, values, ends = [], [], []
     for (field, period_end), record in zip(expected, records, strict=True):
@@ -89,7 +91,7 @@ def _result(metric_id, name, unit, formula, expected, records, value=None, reaso
         values.append(record.value if record is not None else None)
         if period_end is not None:
             ends.append(period_end)
-    return MetricResult(metric_id, name, unit, formula, value, reason, tuple(ids), tuple(values), tuple(dict.fromkeys(ends)))
+    return MetricResult(metric_id, name, unit, formula, value, reason, tuple(ids), tuple(values), tuple(dict.fromkeys(ends)), tuple(caveats))
 
 
 def _input_reason(records: Sequence[ExtractedField | None]) -> MetricReason | None:
@@ -137,7 +139,7 @@ def revenue_growth(revenue_current: ExtractedField | None, revenue_comparative: 
     return _result(*args, value=CONTEXT.multiply(change, HUNDRED))
 
 
-def _ratio(metric_id, name, unit, formula, names, records, edge, factor=None) -> MetricResult:
+def _ratio(metric_id, name, unit, formula, names, records, edge, factor=None, caveats=()) -> MetricResult:
     """A metric that divides one record by another of the same period (MET-02 to MET-05).
 
     ``edge(numerator, denominator)`` gives the metric's own undefined reason or ``None``; it runs
@@ -149,6 +151,7 @@ def _ratio(metric_id, name, unit, formula, names, records, edge, factor=None) ->
         raise ValueError("a ratio uses inputs of one period role")
     end = present[0].period_end if present else None
     args = (metric_id, name, unit, formula, [(names[0], end), (names[1], end)], records)
+    extras = {"caveats": caveats}
 
     reason = _input_reason(records)
     if reason is None:
@@ -160,9 +163,9 @@ def _ratio(metric_id, name, unit, formula, names, records, edge, factor=None) ->
         else:
             reason = edge(numerator.value, denominator.value)
     if reason is not None:
-        return _result(*args, reason=reason)
+        return _result(*args, reason=reason, **extras)
     value = CONTEXT.divide(numerator.value, denominator.value)
-    return _result(*args, value=value if factor is None else CONTEXT.multiply(value, factor))
+    return _result(*args, value=value if factor is None else CONTEXT.multiply(value, factor), **extras)
 
 
 def net_profit_margin(net_profit: ExtractedField | None, revenue: ExtractedField | None) -> MetricResult:
@@ -197,7 +200,8 @@ def debt_to_equity(total_borrowings: ExtractedField | None, total_equity: Extrac
     """MET-04: total_borrowings / total_equity, as a ratio, at one balance-sheet date.
 
     ``total_borrowings`` is the reported total or the derived one (H.5). Missing borrowings are
-    undefined: total liabilities are never substituted.
+    undefined: total liabilities are never substituted. A total derived as ``not_presented`` (PRD
+    v0.4.23) gives the result a caveat, whatever the outcome, while the borrowings have a value.
     """
 
     def edge(borrowings: Decimal, equity: Decimal) -> MetricReason | None:
@@ -210,7 +214,8 @@ def debt_to_equity(total_borrowings: ExtractedField | None, total_equity: Extrac
         return None
 
     return _ratio("MET-04", "Debt-to-equity ratio", Unit.RATIO, "total_borrowings / total_equity",
-                  (FieldName.TOTAL_BORROWINGS, FieldName.TOTAL_EQUITY), (total_borrowings, total_equity), edge)  # fmt: skip
+                  (FieldName.TOTAL_BORROWINGS, FieldName.TOTAL_EQUITY), (total_borrowings, total_equity), edge,
+                  caveats=caveats_of(total_borrowings))  # fmt: skip
 
 
 def interest_coverage(ebit: ExtractedField | None, interest_expense: ExtractedField | None) -> MetricResult:

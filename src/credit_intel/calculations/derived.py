@@ -79,9 +79,15 @@ def _derive(
     given: Sequence[ExtractedField | None],
     combine: Callable[[Sequence[Decimal]], Decimal],
     context: Sequence[ExtractedField | None] = (),
+    classification: str | None = None,
+    unresolved: StatusReason | None = None,
+    record_inputs: Sequence[FieldName] | None = None,
 ) -> ExtractedField | None:
     """One derived record from ``given`` (aligned with ``wanted``; ``None`` is a missing record).
 
+    ``classification`` is recorded in the derivation (H.5 rule 5). ``unresolved`` is a reason that
+    turns an otherwise ``extracted`` result into ``requires_review``. ``record_inputs`` names the
+    fields listed in the derivation when they are not just the ones combined.
     ``context`` are other records of the same period (for example a ``not_found`` operating
     profit), used only to find the period and basis when no input has a record. Returns
     ``None`` when there is no record at all, because then there is no period or basis. Raises ``ValueError`` for inputs of different bases or
@@ -95,8 +101,8 @@ def _derive(
     first = anchors[0]
     if any(r.statement_basis is not first.statement_basis or r.period_role is not first.period_role for r in [*present, *anchors]):
         raise ValueError("a derived value uses inputs of one basis and one period role")
-    ids = tuple(make_field_id(field, first.period_end, first.statement_basis) for field in wanted)
-    derivation = Derivation(method_id=method_id, formula=formula, input_field_ids=ids)
+    ids = tuple(make_field_id(field, first.period_end, first.statement_basis) for field in (record_inputs or wanted))
+    derivation = Derivation(method_id=method_id, formula=formula, input_field_ids=ids, component_classification=classification)
 
     def build(status: Status, reason: StatusReason | None = None, value: Decimal | None = None,
               currency: str | None = None, candidates: tuple[Candidate, ...] = ()) -> ExtractedField:  # fmt: skip
@@ -119,6 +125,8 @@ def _derive(
         return build(Status.REQUIRES_REVIEW, StatusReason.PERIOD_MISMATCH)
     if len({r.currency for r in present}) > 1:
         return build(Status.REQUIRES_REVIEW, StatusReason.CURRENCY_MISMATCH)
+    if unresolved is not None:
+        return build(Status.REQUIRES_REVIEW, unresolved)
     values = [r.value for r in present]
     assert all(v is not None for v in values)
     return build(Status.EXTRACTED, value=combine(values), currency=first.currency)  # type: ignore[arg-type]
