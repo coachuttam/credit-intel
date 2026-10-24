@@ -259,8 +259,9 @@ def test_the_evaluation_does_not_change_its_inputs_and_is_repeatable():
     field_set, metrics = scenario({F.REVENUE: "85000", F.NET_PROFIT: "-1", F.CURRENT_ASSETS: "84"})
     before = [r.model_dump() for r in field_set.fields]
 
-    first = [f(CONFIG.rule(i), field_set, metrics) for i, f in RULE_FUNCTIONS.items()]
-    second = [f(CONFIG.rule(i), field_set, metrics) for i, f in RULE_FUNCTIONS.items()]
+    ids = ("RI-001", "RI-002", "RI-003")
+    first = [RULE_FUNCTIONS[i](CONFIG.rule(i), field_set, metrics) for i in ids]
+    second = [RULE_FUNCTIONS[i](CONFIG.rule(i), field_set, metrics) for i in ids]
 
     assert first == second and [r.model_dump() for r in field_set.fields] == before
     assert [r.outcome for r in first] == [R.TRIGGERED, R.TRIGGERED, R.TRIGGERED]
