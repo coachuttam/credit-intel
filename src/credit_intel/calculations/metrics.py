@@ -1,4 +1,4 @@
-"""Financial metrics (PRD Section I; Phase 3 steps 3c to 3e): MET-01 and MET-02 so far.
+"""Financial metrics (PRD Section I; Phase 3 steps 3c to 3e): MET-01 to MET-05.
 
 Every metric is a pure function of verified field records. It returns a ``MetricResult``: a
 value, or an explicit undefined reason, never both and never a guess (I.1). Arithmetic is
@@ -137,27 +137,91 @@ def revenue_growth(revenue_current: ExtractedField | None, revenue_comparative: 
     return _result(*args, value=CONTEXT.multiply(change, HUNDRED))
 
 
-def net_profit_margin(net_profit: ExtractedField | None, revenue: ExtractedField | None) -> MetricResult:
-    """MET-02: net_profit / revenue x 100, in percent, for one period."""
-    records = (net_profit, revenue)
+def _ratio(metric_id, name, unit, formula, names, records, edge, factor=None) -> MetricResult:
+    """A metric that divides one record by another of the same period (MET-02 to MET-05).
+
+    ``edge(numerator, denominator)`` gives the metric's own undefined reason or ``None``; it runs
+    only when the inputs are extracted, share a currency and one period end.
+    """
     _check_same_basis(records)
-    present = [r for r in records if r is not None]
-    if len({r.period_role for r in present}) > 1:
-        raise ValueError("a margin uses inputs of one period role")
+    present = [record for record in records if record is not None]
+    if len({record.period_role for record in present}) > 1:
+        raise ValueError("a ratio uses inputs of one period role")
     end = present[0].period_end if present else None
-    expected = [(FieldName.NET_PROFIT, end), (FieldName.REVENUE, end)]
-    args = ("MET-02", "Net profit margin", Unit.PERCENT, "net_profit / revenue x 100", expected, records)
+    args = (metric_id, name, unit, formula, [(names[0], end), (names[1], end)], records)
 
     reason = _input_reason(records)
     if reason is None:
-        if net_profit.currency != revenue.currency:
+        numerator, denominator = records
+        if numerator.currency != denominator.currency:
             reason = MetricReason.CURRENCY_MISMATCH
-        elif net_profit.period_end != revenue.period_end:
+        elif numerator.period_end != denominator.period_end:
             reason = MetricReason.PERIOD_MISMATCH
-        elif revenue.value == 0:
-            reason = MetricReason.ZERO_DENOMINATOR
-        elif revenue.value < 0:  # defensive: FR-006.5 already makes a negative revenue requires_review
-            reason = MetricReason.NON_POSITIVE_BASE
+        else:
+            reason = edge(numerator.value, denominator.value)
     if reason is not None:
         return _result(*args, reason=reason)
-    return _result(*args, value=CONTEXT.multiply(CONTEXT.divide(net_profit.value, revenue.value), HUNDRED))
+    value = CONTEXT.divide(numerator.value, denominator.value)
+    return _result(*args, value=value if factor is None else CONTEXT.multiply(value, factor))
+
+
+def net_profit_margin(net_profit: ExtractedField | None, revenue: ExtractedField | None) -> MetricResult:
+    """MET-02: net_profit / revenue x 100, in percent, for one period."""
+
+    def edge(_profit: Decimal, revenue_value: Decimal) -> MetricReason | None:
+        if revenue_value == 0:
+            return MetricReason.ZERO_DENOMINATOR
+        if revenue_value < 0:  # defensive: FR-006.5 already makes a negative revenue requires_review
+            return MetricReason.NON_POSITIVE_BASE
+        return None
+
+    return _ratio("MET-02", "Net profit margin", Unit.PERCENT, "net_profit / revenue x 100",
+                  (FieldName.NET_PROFIT, FieldName.REVENUE), (net_profit, revenue), edge, HUNDRED)  # fmt: skip
+
+
+def current_ratio(current_assets: ExtractedField | None, current_liabilities: ExtractedField | None) -> MetricResult:
+    """MET-03: current_assets / current_liabilities, as a ratio, at one balance-sheet date."""
+
+    def edge(assets: Decimal, liabilities: Decimal) -> MetricReason | None:
+        if liabilities == 0:
+            return MetricReason.ZERO_DENOMINATOR
+        if assets < 0 or liabilities < 0:  # defensive: FR-006.5 already makes a negative total requires_review
+            return MetricReason.INPUT_REQUIRES_REVIEW
+        return None
+
+    return _ratio("MET-03", "Current ratio", Unit.RATIO, "current_assets / current_liabilities",
+                  (FieldName.CURRENT_ASSETS, FieldName.CURRENT_LIABILITIES), (current_assets, current_liabilities), edge)  # fmt: skip
+
+
+def debt_to_equity(total_borrowings: ExtractedField | None, total_equity: ExtractedField | None) -> MetricResult:
+    """MET-04: total_borrowings / total_equity, as a ratio, at one balance-sheet date.
+
+    ``total_borrowings`` is the reported total or the derived one (H.5). Missing borrowings are
+    undefined: total liabilities are never substituted.
+    """
+
+    def edge(borrowings: Decimal, equity: Decimal) -> MetricReason | None:
+        if equity == 0:
+            return MetricReason.ZERO_DENOMINATOR
+        if equity < 0:
+            return MetricReason.NOT_MEANINGFUL_NEGATIVE_EQUITY
+        if borrowings < 0:  # defensive: FR-006.5 already makes negative borrowings requires_review
+            return MetricReason.INPUT_REQUIRES_REVIEW
+        return None
+
+    return _ratio("MET-04", "Debt-to-equity ratio", Unit.RATIO, "total_borrowings / total_equity",
+                  (FieldName.TOTAL_BORROWINGS, FieldName.TOTAL_EQUITY), (total_borrowings, total_equity), edge)  # fmt: skip
+
+
+def interest_coverage(ebit: ExtractedField | None, interest_expense: ExtractedField | None) -> MetricResult:
+    """MET-05: ebit / interest_expense, as a ratio, for one period. ``ebit`` is the derived field (H.5)."""
+
+    def edge(ebit_value: Decimal, interest: Decimal) -> MetricReason | None:
+        if interest == 0:
+            return MetricReason.NOT_APPLICABLE_NO_INTEREST
+        if interest < 0:  # defensive: FR-006.5 already makes a negative interest expense requires_review
+            return MetricReason.INPUT_REQUIRES_REVIEW
+        return None
+
+    return _ratio("MET-05", "Interest coverage ratio", Unit.RATIO, "ebit / interest_expense",
+                  (FieldName.EBIT, FieldName.INTEREST_EXPENSE), (ebit, interest_expense), edge)  # fmt: skip
