@@ -1,0 +1,1083 @@
+{
+  "calm": {
+    "provisional_notice": "The thresholds are illustrative placeholders chosen for demonstration and testing. They are not universal banking standards, regulatory requirements or the policy of any institution. Real thresholds vary by institution, industry, borrower size and product, and must be set by the institution's credit policy.",
+    "disabled": [],
+    "rules": [
+      {
+        "rule_id": "RI-001",
+        "name": "Declining revenue",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "0",
+            "values_used": [
+              [
+                "revenue_growth_percent",
+                "20.0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "revenue.2025-03-31.consolidated",
+              "revenue.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-01.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "-10",
+            "values_used": [
+              [
+                "revenue_growth_percent",
+                "20.0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "revenue.2025-03-31.consolidated",
+              "revenue.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-01.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-002",
+        "name": "Negative net profit",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "0",
+            "values_used": [
+              [
+                "net_profit",
+                "96"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "net_profit.2025-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-003",
+        "name": "Deteriorating liquidity",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "1.00",
+            "values_used": [
+              [
+                "current_ratio_current",
+                "1.5"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "current_assets.2025-03-31.consolidated",
+              "current_liabilities.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-03.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "10",
+            "values_used": [
+              [
+                "current_ratio_current",
+                "1.5"
+              ],
+              [
+                "current_ratio_comparative",
+                "1.2"
+              ],
+              [
+                "relative_change_percent",
+                "25.00"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "current_assets.2025-03-31.consolidated",
+              "current_liabilities.2025-03-31.consolidated",
+              "current_assets.2024-03-31.consolidated",
+              "current_liabilities.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-03.2025-03-31",
+              "MET-03.2024-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-004",
+        "name": "Increasing leverage",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [
+          "borrowings_not_presented_assumption"
+        ],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "20",
+            "values_used": [
+              [
+                "debt_to_equity_current",
+                "0.875"
+              ],
+              [
+                "debt_to_equity_comparative",
+                "0.7857142857142857142857142857"
+              ],
+              [
+                "relative_change_percent",
+                "11.36363636363636363636363637"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_borrowings.2025-03-31.consolidated",
+              "total_equity.2025-03-31.consolidated",
+              "total_borrowings.2024-03-31.consolidated",
+              "total_equity.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-04.2025-03-31",
+              "MET-04.2024-03-31"
+            ],
+            "note": null,
+            "caveats": [
+              "borrowings_not_presented_assumption"
+            ]
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "2.00",
+            "values_used": [
+              [
+                "debt_to_equity_current",
+                "0.875"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_borrowings.2025-03-31.consolidated",
+              "total_equity.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-04.2025-03-31"
+            ],
+            "note": null,
+            "caveats": [
+              "borrowings_not_presented_assumption"
+            ]
+          },
+          {
+            "id": "C3",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "0",
+            "values_used": [
+              [
+                "total_equity_current",
+                "800"
+              ],
+              [
+                "total_equity_comparative",
+                "700"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_equity.2025-03-31.consolidated",
+              "total_equity.2024-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-005",
+        "name": "Weak interest coverage",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "1.50",
+            "values_used": [
+              [
+                "interest_coverage_current",
+                "6"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "ebit.2025-03-31.consolidated",
+              "interest_expense.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-05.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "1.00",
+            "values_used": [
+              [
+                "interest_coverage_current",
+                "6"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "ebit.2025-03-31.consolidated",
+              "interest_expense.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-05.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-006",
+        "name": "Missing financial information",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "info",
+            "threshold": null,
+            "values_used": [
+              [
+                "inputs_not_found",
+                "0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-007",
+        "name": "Conflicting or unverified source values",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": null,
+            "values_used": [
+              [
+                "fields_conflicting",
+                "0"
+              ],
+              [
+                "fields_requires_review",
+                "0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      }
+    ]
+  },
+  "stressed": {
+    "provisional_notice": "The thresholds are illustrative placeholders chosen for demonstration and testing. They are not universal banking standards, regulatory requirements or the policy of any institution. Real thresholds vary by institution, industry, borrower size and product, and must be set by the institution's credit policy.",
+    "disabled": [],
+    "rules": [
+      {
+        "rule_id": "RI-001",
+        "name": "Declining revenue",
+        "outcome": "triggered",
+        "severity": "elevated",
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "watch",
+            "threshold": "0",
+            "values_used": [
+              [
+                "revenue_growth_percent",
+                "-15.00"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "revenue.2025-03-31.consolidated",
+              "revenue.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-01.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "fired",
+            "severity": "elevated",
+            "threshold": "-10",
+            "values_used": [
+              [
+                "revenue_growth_percent",
+                "-15.00"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "revenue.2025-03-31.consolidated",
+              "revenue.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-01.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-002",
+        "name": "Negative net profit",
+        "outcome": "triggered",
+        "severity": "elevated",
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "elevated",
+            "threshold": "0",
+            "values_used": [
+              [
+                "net_profit",
+                "-20"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "net_profit.2025-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-003",
+        "name": "Deteriorating liquidity",
+        "outcome": "triggered",
+        "severity": "elevated",
+        "missing_inputs": [
+          "MET-03.2024-03-31 (missing_input)"
+        ],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "elevated",
+            "threshold": "1.00",
+            "values_used": [
+              [
+                "current_ratio_current",
+                "0.9"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "current_assets.2025-03-31.consolidated",
+              "current_liabilities.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-03.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_evaluable",
+            "severity": "watch",
+            "threshold": "10",
+            "values_used": [],
+            "missing_inputs": [
+              "MET-03.2024-03-31 (missing_input)"
+            ],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-004",
+        "name": "Increasing leverage",
+        "outcome": "triggered",
+        "severity": "elevated",
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [
+          "borrowings_not_presented_assumption"
+        ],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "watch",
+            "threshold": "20",
+            "values_used": [
+              [
+                "debt_to_equity_current",
+                "2.5"
+              ],
+              [
+                "debt_to_equity_comparative",
+                "0.7857142857142857142857142857"
+              ],
+              [
+                "relative_change_percent",
+                "218.1818181818181818181818181"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_borrowings.2025-03-31.consolidated",
+              "total_equity.2025-03-31.consolidated",
+              "total_borrowings.2024-03-31.consolidated",
+              "total_equity.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-04.2025-03-31",
+              "MET-04.2024-03-31"
+            ],
+            "note": null,
+            "caveats": [
+              "borrowings_not_presented_assumption"
+            ]
+          },
+          {
+            "id": "C2",
+            "outcome": "fired",
+            "severity": "elevated",
+            "threshold": "2.00",
+            "values_used": [
+              [
+                "debt_to_equity_current",
+                "2.5"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_borrowings.2025-03-31.consolidated",
+              "total_equity.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-04.2025-03-31"
+            ],
+            "note": null,
+            "caveats": [
+              "borrowings_not_presented_assumption"
+            ]
+          },
+          {
+            "id": "C3",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "0",
+            "values_used": [
+              [
+                "total_equity_current",
+                "480"
+              ],
+              [
+                "total_equity_comparative",
+                "700"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_equity.2025-03-31.consolidated",
+              "total_equity.2024-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-005",
+        "name": "Weak interest coverage",
+        "outcome": "triggered",
+        "severity": "elevated",
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "watch",
+            "threshold": "1.50",
+            "values_used": [
+              [
+                "interest_coverage_current",
+                "0.375"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "ebit.2025-03-31.consolidated",
+              "interest_expense.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-05.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "fired",
+            "severity": "elevated",
+            "threshold": "1.00",
+            "values_used": [
+              [
+                "interest_coverage_current",
+                "0.375"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "ebit.2025-03-31.consolidated",
+              "interest_expense.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-05.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-006",
+        "name": "Missing financial information",
+        "outcome": "triggered",
+        "severity": "info",
+        "missing_inputs": [],
+        "notes": [
+          "not found: current_liabilities.comparative"
+        ],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "info",
+            "threshold": null,
+            "values_used": [
+              [
+                "inputs_not_found",
+                "1"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "current_liabilities.comparative"
+            ],
+            "metric_ids": [],
+            "note": "not found: current_liabilities.comparative",
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-007",
+        "name": "Conflicting or unverified source values",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": null,
+            "values_used": [
+              [
+                "fields_conflicting",
+                "0"
+              ],
+              [
+                "fields_requires_review",
+                "0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      }
+    ]
+  },
+  "review": {
+    "provisional_notice": "The thresholds are illustrative placeholders chosen for demonstration and testing. They are not universal banking standards, regulatory requirements or the policy of any institution. Real thresholds vary by institution, industry, borrower size and product, and must be set by the institution's credit policy.",
+    "disabled": [],
+    "rules": [
+      {
+        "rule_id": "RI-001",
+        "name": "Declining revenue",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "0",
+            "values_used": [
+              [
+                "revenue_growth_percent",
+                "20.0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "revenue.2025-03-31.consolidated",
+              "revenue.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-01.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "-10",
+            "values_used": [
+              [
+                "revenue_growth_percent",
+                "20.0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "revenue.2025-03-31.consolidated",
+              "revenue.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-01.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-002",
+        "name": "Negative net profit",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "0",
+            "values_used": [
+              [
+                "net_profit",
+                "96"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "net_profit.2025-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-003",
+        "name": "Deteriorating liquidity",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "1.00",
+            "values_used": [
+              [
+                "current_ratio_current",
+                "1.5"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "current_assets.2025-03-31.consolidated",
+              "current_liabilities.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-03.2025-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "10",
+            "values_used": [
+              [
+                "current_ratio_current",
+                "1.5"
+              ],
+              [
+                "current_ratio_comparative",
+                "1.2"
+              ],
+              [
+                "relative_change_percent",
+                "25.00"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "current_assets.2025-03-31.consolidated",
+              "current_liabilities.2025-03-31.consolidated",
+              "current_assets.2024-03-31.consolidated",
+              "current_liabilities.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-03.2025-03-31",
+              "MET-03.2024-03-31"
+            ],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-004",
+        "name": "Increasing leverage",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [
+          "borrowings_not_presented_assumption"
+        ],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "watch",
+            "threshold": "20",
+            "values_used": [
+              [
+                "debt_to_equity_current",
+                "0.875"
+              ],
+              [
+                "debt_to_equity_comparative",
+                "0.7857142857142857142857142857"
+              ],
+              [
+                "relative_change_percent",
+                "11.36363636363636363636363637"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_borrowings.2025-03-31.consolidated",
+              "total_equity.2025-03-31.consolidated",
+              "total_borrowings.2024-03-31.consolidated",
+              "total_equity.2024-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-04.2025-03-31",
+              "MET-04.2024-03-31"
+            ],
+            "note": null,
+            "caveats": [
+              "borrowings_not_presented_assumption"
+            ]
+          },
+          {
+            "id": "C2",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "2.00",
+            "values_used": [
+              [
+                "debt_to_equity_current",
+                "0.875"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_borrowings.2025-03-31.consolidated",
+              "total_equity.2025-03-31.consolidated"
+            ],
+            "metric_ids": [
+              "MET-04.2025-03-31"
+            ],
+            "note": null,
+            "caveats": [
+              "borrowings_not_presented_assumption"
+            ]
+          },
+          {
+            "id": "C3",
+            "outcome": "not_fired",
+            "severity": "elevated",
+            "threshold": "0",
+            "values_used": [
+              [
+                "total_equity_current",
+                "800"
+              ],
+              [
+                "total_equity_comparative",
+                "700"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "total_equity.2025-03-31.consolidated",
+              "total_equity.2024-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-005",
+        "name": "Weak interest coverage",
+        "outcome": "not_evaluable",
+        "severity": null,
+        "missing_inputs": [
+          "MET-05.2025-03-31 (input_requires_review)"
+        ],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_evaluable",
+            "severity": "watch",
+            "threshold": "1.50",
+            "values_used": [],
+            "missing_inputs": [
+              "MET-05.2025-03-31 (input_requires_review)"
+            ],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          },
+          {
+            "id": "C2",
+            "outcome": "not_evaluable",
+            "severity": "elevated",
+            "threshold": "1.00",
+            "values_used": [],
+            "missing_inputs": [
+              "MET-05.2025-03-31 (input_requires_review)"
+            ],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-006",
+        "name": "Missing financial information",
+        "outcome": "not_triggered",
+        "severity": null,
+        "missing_inputs": [],
+        "notes": [],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "not_fired",
+            "severity": "info",
+            "threshold": null,
+            "values_used": [
+              [
+                "inputs_not_found",
+                "0"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [],
+            "metric_ids": [],
+            "note": null,
+            "caveats": []
+          }
+        ]
+      },
+      {
+        "rule_id": "RI-007",
+        "name": "Conflicting or unverified source values",
+        "outcome": "triggered",
+        "severity": "watch",
+        "missing_inputs": [],
+        "notes": [
+          "operating_profit.2025-03-31.consolidated (requires_review: label_not_recognised)"
+        ],
+        "caveats": [],
+        "conditions": [
+          {
+            "id": "C1",
+            "outcome": "fired",
+            "severity": "watch",
+            "threshold": null,
+            "values_used": [
+              [
+                "fields_conflicting",
+                "0"
+              ],
+              [
+                "fields_requires_review",
+                "1"
+              ]
+            ],
+            "missing_inputs": [],
+            "field_ids": [
+              "operating_profit.2025-03-31.consolidated"
+            ],
+            "metric_ids": [],
+            "note": "operating_profit.2025-03-31.consolidated (requires_review: label_not_recognised)",
+            "caveats": []
+          }
+        ]
+      }
+    ]
+  }
+}
