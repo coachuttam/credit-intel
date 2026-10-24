@@ -177,3 +177,55 @@ Indicators are prompts for a human to investigate. They are not a rating, a scor
 - `ebit.2024-03-31.consolidated` — missing input [UNVERIFIED]
 - `total_borrowings.2025-03-31.consolidated` — missing input [UNVERIFIED]
 - `total_borrowings.2024-03-31.consolidated` — missing input [UNVERIFIED]
+
+## 8. Questions for the credit analyst
+
+1. Revenue for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+2. Revenue for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+3. Net profit for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+4. Net profit for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+5. Profit before tax for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+6. Profit before tax for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+7. Interest expense for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+8. Interest expense for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+9. Non-current borrowings for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+10. Non-current borrowings for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+11. Current borrowings for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+12. Current borrowings for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+13. RI-001 Declining revenue could not be evaluated because of missing inputs (`MET-01.2025-03-31 (missing_input)`). Can they be provided? [RULE: RI-001]
+14. RI-002 Negative net profit could not be evaluated because of missing inputs (`net_profit.2025-03-31 (not_found)`). Can they be provided? [RULE: RI-002]
+15. RI-004 Increasing leverage could not be evaluated because of missing inputs (`MET-04.2025-03-31 (missing_input)`, `MET-04.2024-03-31 (missing_input)`). Can they be provided? [RULE: RI-004]
+16. RI-005 Weak interest coverage could not be evaluated because of missing inputs (`MET-05.2025-03-31 (missing_input)`). Can they be provided? [RULE: RI-005]
+
+## 9. Limitations and human-review requirements
+
+**This memo is a draft. A qualified human must review it, verify every figure against the cited source pages, and make any credit decision. It is not a credit decision, a rating or a score.**
+
+**Scope**
+
+- Only text-based PDF files are read. There is no OCR, so a scanned page cannot be read.
+- One document is reviewed per run. Documents are not compared with each other.
+- Two consecutive annual periods are read: the current period and the comparative period. 52/53-week reporting years, quarterly and interim periods are out of scope.
+- No currency conversion is done. If the figures a ratio needs are in different currencies, the ratio is not defined.
+- Figures are read from one statement basis, consolidated unless the analyst chose another. The basis is never switched automatically, and pages whose basis could not be determined are not sent for extraction.
+- Lease liabilities are excluded from borrowings, so a borrower with large leases shows a lower debt-to-equity ratio than a definition that includes them (D-07).
+- A dash or the word nil in place of a figure is read as a zero reported by the document, and its original text is kept. A dash is never read as a sign (FR-004.3).
+
+**Ratios**
+
+- Revenue growth does not separate acquisitions, disposals, currency effects or changes in accounting policy. A single-year change may be noisy.
+- Net profit margin is distorted by one-off items, discontinued operations and minority interests, and is not comparable across industries.
+- The current ratio is a point-in-time measure that is sensitive to working-capital timing and to window dressing. It ignores the liquidity quality of inventory and receivables.
+- Debt-to-equity uses interest-bearing borrowings excluding lease liabilities. Where no total of borrowings is reported, it is the sum of non-current and current borrowings, which may exclude current maturities shown under another caption.
+- Finance costs may include lease interest, unwinding of discounts and foreign-exchange differences, so interest expense may not equal cash interest. EBIT derived from profit before tax inherits any one-off items.
+
+**Risk indicators**
+
+- Indicators are prompts for human investigation. Severity says how urgently to look, not how creditworthy the borrower is.
+- The thresholds are illustrative placeholders chosen for demonstration and testing. They are not universal banking standards, regulatory requirements or the policy of any institution. Real thresholds vary by institution, industry, borrower size and product, and must be set by the institution's credit policy. [CALCULATED: provisional_notice]
+
+**Extraction and automation**
+
+- An AI model proposes the figures. Each is accepted only if its quote is found on the cited page and passes the checks for value, label, period column, sign, scale and currency. The model can miss an item or misread a page, so a field reported as not found is not proof that it is absent from the document.
+- All arithmetic, the risk rules and the text of this memo are produced by fixed programs, not by the model. This memo contains no AI-generated commentary.
+- Values supplied by the analyst in a profile are shown as given. They are not checked against the document and are not used in any calculation or rule.

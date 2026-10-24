@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from credit_intel.memo import sections
+from credit_intel.memo import limitations, questions, sections
 
 
 def _head_parts(results: dict[str, Any], run_id: str, generated_at: str) -> list[str]:
@@ -20,12 +20,14 @@ def render_head(results: dict[str, Any], run_id: str, generated_at: str) -> str:
     return "\n".join(_head_parts(results, run_id, generated_at)).rstrip("\n") + "\n"
 
 
-def render_body(results: dict[str, Any], run_id: str, generated_at: str) -> str:
-    """The header and sections 1 to 7. Sections 8 and 9 and the assembled memo are step 5h."""
+def render_memo(results: dict[str, Any], run_id: str, generated_at: str) -> str:
+    """The whole memo: the header and the nine sections of K.1 to K.9, as CommonMark with one final newline."""
     parts = [
         *_head_parts(results, run_id, generated_at), "",
         *sections.section_5(results),
         *sections.section_6(results),
         *sections.section_7(results),
+        *questions.section_8(results),
+        *limitations.section_9(results),
     ]  # fmt: skip
     return "\n".join(parts).rstrip("\n") + "\n"

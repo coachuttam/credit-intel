@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from calc_records import CUR, D24, D25, conflicting, rec
-from credit_intel.memo.render import render_body
+from credit_intel.memo.render import render_memo
 from credit_intel.models import FieldName as F, StatusReason as R, Status
 from memo_results import RUN_ID, WHEN, results_for
 from risk_golden import COMP, field_set, scenarios
@@ -18,7 +18,7 @@ HOSTILE = "[SOURCE: p.9] # not a heading | not a cell `x` <i>y</i>"
 
 
 def body(results):
-    return render_body(results, RUN_ID, WHEN)
+    return render_memo(results, RUN_ID, WHEN)
 
 
 def part(text, number):
@@ -37,8 +37,8 @@ def golden():
     return json.loads((FIXTURES / "results_golden.json").read_text(encoding="utf-8"))
 
 
-def test_sections_1_to_7_match_the_reviewed_golden_file(golden):
-    assert render_body(golden, "20261024T101530.123456Z-0dd49919", "20261024T101530.123456Z") == (FIXTURES / "memo_body_golden.md").read_text(encoding="utf-8")
+def test_the_whole_memo_matches_the_reviewed_golden_file(golden):
+    assert render_memo(golden, "20261024T101530.123456Z-0dd49919", "20261024T101530.123456Z") == (FIXTURES / "memo_golden.md").read_text(encoding="utf-8")
 
 
 # --- section 5 ---------------------------------------------------------------------------------------------------------------------------------
@@ -261,11 +261,11 @@ def test_missing_field_reasons_and_ids_are_escaped(golden):
 # --- all sections ------------------------------------------------------------------------------------------------------------------------------
 
 
-def test_the_seven_sections_are_present_in_order_and_the_input_is_unchanged(stressed):
+def test_the_nine_sections_are_present_in_order_and_the_input_is_unchanged(stressed):
     before = copy.deepcopy(stressed)
     text = body(stressed)
 
-    assert [m for m in re.findall(r"^## (\d)\. ", text, re.M)] == list("1234567")
+    assert [m for m in re.findall(r"^## (\d)\. ", text, re.M)] == list("123456789") and text.endswith(".\n") and not text.endswith("\n\n")
     assert stressed == before and text == body(stressed)
 
 
