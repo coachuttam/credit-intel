@@ -1,0 +1,135 @@
+"""``manifest.json``: what a run was and how it went (PRD FR-012.1; step 5e).
+
+Unlike ``results.json`` this file holds what changes between runs: the run ID, the timestamps, the code
+version and the cost. It is built from explicit values, so a test passes a fixed clock, a fixed code version
+and fixed package versions; ``code_version`` and ``package_versions`` read the real ones. A failed run has a
+manifest too: what was not reached (page count, candidate pages, tokens before the failure) is ``null``, never
+a guess, and the final state is ``failed`` with the stage it failed in and its error code. Only counts,
+identifiers and configuration are written: no document text, quote or financial value (FR-012.3). The
+analyst profile's values are not written, only the file name.
+"""
+
+import json
+import subprocess
+import sys
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from importlib import metadata
+from pathlib import Path
+from typing import Any
+
+from credit_intel.config import LLMSettings
+from credit_intel.export.results import SCHEMA_VERSION as RESULTS_SCHEMA_VERSION, to_jsonable
+from credit_intel.models import StatementBasis
+from credit_intel.run import RunResult
+from credit_intel.states import Recorder
+
+MANIFEST_SCHEMA_VERSION = "1"
+PACKAGES = ("openai", "pdfplumber", "pydantic")  # the runtime dependencies (pyproject.toml)
+REPOSITORY = Path(__file__).resolve().parents[3]
+
+
+@dataclass(frozen=True)
+class CodeVersion:
+    git_commit: str | None  # None when the code is not a git checkout or git is unavailable
+    dirty: bool | None
+
+
+def code_version(repository: Path = REPOSITORY) -> CodeVersion:
+    """The commit the code was run from and whether the working tree differs from it (FR-012.1)."""
+
+    def git(*args: str) -> str | None:
+        try:
+            done = subprocess.run(["git", *args], cwd=repository, capture_output=True, text=True, timeout=10, check=True)
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return done.stdout
+
+    commit = git("rev-parse", "HEAD")
+    status = git("status", "--porcelain")
+    if commit is None or status is None:
+        return CodeVersion(None, None)
+    return CodeVersion(commit.strip(), bool(status.strip()))
+
+
+def package_versions(names: tuple[str, ...] = PACKAGES) -> dict[str, str | None]:
+    """Installed versions of the runtime dependencies, and of Python itself."""
+    versions: dict[str, str | None] = {}
+    for name in names:
+        try:
+            versions[name] = metadata.version(name)
+        except metadata.PackageNotFoundError:
+            versions[name] = None
+    versions["python"] = ".".join(str(part) for part in sys.version_info[:3])
+    return versions
+
+
+def timestamp(moment: datetime) -> str:
+    """UTC to the microsecond, as in the run ID: ``20261013T101530.123456Z``."""
+    if moment.tzinfo is None or moment.utcoffset() != UTC.utcoffset(None):
+        raise ValueError("a run timestamp must be in UTC")
+    return moment.strftime("%Y%m%dT%H%M%S.%fZ")
+
+
+def run_id(started: datetime, input_sha256: str) -> str:
+    """``<UTC timestamp to the microsecond>-<first 8 hex of the input SHA-256>`` (FR-010.1)."""
+    return f"{timestamp(started)}-{input_sha256[:8]}"
+
+
+def build_manifest(
+    *,
+    recorder: Recorder,
+    llm: LLMSettings,
+    requested_basis: StatementBasis,
+    version: CodeVersion,
+    packages: dict[str, str | None],
+    input_file_name: str | None = None,
+    input_sha256: str | None = None,
+    result: RunResult | None = None,
+    profile_file_name: str | None = None,
+    rules_sha256: str | None = None,
+) -> dict[str, Any]:
+    """The contents of ``manifest.json``. ``result`` is ``None`` for a run that failed before it finished."""
+    events = recorder.events
+    if not events:
+        raise ValueError("a manifest needs at least one recorded state")
+    extraction = result.extraction if result is not None else None
+    stats = extraction.stats if extraction is not None else None
+    located = extraction.located if extraction is not None else None
+    sha = input_sha256 if input_sha256 is not None else (extraction.source_document.sha256 if extraction else None)
+    name = input_file_name if input_file_name is not None else (extraction.source_document.file_name if extraction else None)
+    return {
+        "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
+        "results_schema_version": RESULTS_SCHEMA_VERSION,
+        "run_id": run_id(events[0].at, sha) if sha is not None else None,
+        "started_at": timestamp(events[0].at),
+        "finished_at": timestamp(events[-1].at),
+        "stage_events": [{"state": e.state, "at": timestamp(e.at), "counts": to_jsonable(dict(e.counts))} for e in events],
+        "final_state": recorder.final_state,
+        "failed_stage": recorder.failed_stage,
+        "error_code": recorder.error_code,
+        "input": {"file_name": name, "sha256": sha, "page_count": extraction.page_count if extraction else None},
+        "profile_file_name": profile_file_name,
+        "locator_method": located.method if located else None,
+        "candidate_pages": sorted(c.page_number for c in located.candidates) if located else None,
+        "range_pages_without_text": list(located.range_pages_without_text) if located else None,
+        "excluded_candidate_count": len(located.excluded_candidates) if located else None,
+        "requested_basis": requested_basis.value,
+        "bases_found": list(extraction.field_set.bases_present) if extraction else None,
+        "code_version": {"git_commit": version.git_commit, "dirty": version.dirty},
+        "package_versions": dict(sorted(packages.items())),
+        "llm": {"provider": llm.provider, "model_id": llm.model_id, "token_ceiling": llm.token_ceiling,
+                "max_output_tokens": llm.max_output_tokens},  # fmt: skip
+        "prompt_version": extraction.extraction.prompt_version if extraction else None,
+        "extraction_schema_version": extraction.extraction.schema_version if extraction else None,
+        "rules_config_sha256": rules_sha256 if rules_sha256 is not None else (result.rules_sha256 if result else None),
+        "cache": {"hits": stats.cache_hits, "misses": stats.cache_misses} if stats else None,
+        "tokens": {"input": stats.input_tokens, "output": stats.output_tokens, "counted": stats.tokens_used,
+                   "llm_calls": stats.llm_calls, "retries": stats.llm_retries} if stats else None,  # fmt: skip
+        "estimated_cost_usd": to_jsonable(stats.estimated_cost) if stats else None,
+    }
+
+
+def render_manifest(manifest: dict[str, Any]) -> str:
+    """Sorted keys, two-space indent, one final newline, like ``results.json``."""
+    return json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
