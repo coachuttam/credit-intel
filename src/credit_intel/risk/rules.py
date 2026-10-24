@@ -1,4 +1,4 @@
-"""The Release 1 rules (PRD J.3): RI-001 to RI-005 so far (Phase 4 steps 4c and 4d).
+"""The Release 1 rules (PRD J.3): RI-001 to RI-007 (Phase 4 steps 4c to 4e).
 
 Each rule is a small named function. It reads the verified field set and the metric set, evaluates
 each of its conditions on its own (a condition that cannot be evaluated lists exactly what it
@@ -13,10 +13,11 @@ estimated, and nothing is added up across conditions or rules.
 from collections.abc import Callable, Sequence
 from decimal import Decimal
 
+from credit_intel.calculations.borrowings import total_borrowings_for
 from credit_intel.calculations.calculate import Comparison, MetricSet
 from credit_intel.calculations.metrics import MetricReason, MetricResult
 from credit_intel.extraction.field_set import FieldSet
-from credit_intel.models import ExtractedField, FieldName, PeriodRole, Status
+from credit_intel.models import ExtractedField, FieldName, Origin, PeriodRole, Status
 from credit_intel.risk.config import ConditionConfig, RuleConfig
 from credit_intel.risk.results import ConditionOutcome, ConditionResult, RuleResult, aggregate, condition_result
 
@@ -199,10 +200,66 @@ def weak_interest_coverage(rule: RuleConfig, field_set: FieldSet, metrics: Metri
     ])  # fmt: skip
 
 
+# --- RI-006 Missing financial information -----------------------------------------------------------------------------------------------------
+
+# What MET-01 to MET-05 read, in metric order. Total borrowings and EBIT are taken after the H.5 methods: a total derived
+# from components, or an EBIT derived from profit before tax and interest, counts as present, and an absent optional
+# operating profit is not counted when its derived alternative is available.
+_SOURCE_INPUTS = (FieldName.REVENUE, FieldName.NET_PROFIT, FieldName.CURRENT_ASSETS, FieldName.CURRENT_LIABILITIES)
+
+
+def _is_absent(record: ExtractedField | None) -> bool:
+    return record is None or record.status is Status.NOT_FOUND
+
+
+def missing_financial_information(rule: RuleConfig, field_set: FieldSet, metrics: MetricSet) -> RuleResult:
+    """C1 fires if any input the five metrics need is ``not_found`` in either period, after the H.5 methods.
+    It is always evaluable. A field that was found but needs review is not missing (RI-007 reports it)."""
+    condition = rule.condition("C1")
+    ebit = {r.period_role: r for r in metrics.derived}
+    absent: list[tuple[str, str]] = []  # (field name, reference)
+    for role in (PeriodRole.CURRENT, PeriodRole.COMPARATIVE):
+        inputs: list[tuple[FieldName, ExtractedField | None]] = [(name, field_set.get(name, role)) for name in _SOURCE_INPUTS]
+        inputs += [
+            (FieldName.TOTAL_BORROWINGS, total_borrowings_for(field_set, role)),
+            (FieldName.TOTAL_EQUITY, field_set.get(FieldName.TOTAL_EQUITY, role)),
+            (FieldName.EBIT, ebit.get(role)),
+            (FieldName.INTEREST_EXPENSE, field_set.get(FieldName.INTEREST_EXPENSE, role)),
+        ]
+        absent += [(name.value, f"{name.value}.{role.value}" if record is None else record.field_id) for name, record in inputs if _is_absent(record)]
+    if not absent:
+        return aggregate(rule, [condition_result(condition, NOT_FIRED, values_used=[("inputs_not_found", Decimal(0))])])
+    return aggregate(rule, [condition_result(
+        condition, FIRED, values_used=[("inputs_not_found", Decimal(len(absent)))], field_ids=[ref for _, ref in absent],
+        note="not found: " + ", ".join(ref for _, ref in absent),
+    )])  # fmt: skip
+
+
+# --- RI-007 Conflicting or unverified source values --------------------------------------------------------------------------------------------
+
+
+def unverified_source_values(rule: RuleConfig, field_set: FieldSet, metrics: MetricSet) -> RuleResult:
+    """C1 fires if any source field of the run is ``conflicting`` or ``requires_review``, whether or not a metric
+    reads it. Derived values and fields of another basis are not counted. It is always evaluable."""
+    condition = rule.condition("C1")
+    flagged = [r for r in field_set.fields if r.origin is Origin.SOURCE and r.status in (Status.CONFLICTING, Status.REQUIRES_REVIEW)]
+    conflicting = sum(1 for r in flagged if r.status is Status.CONFLICTING)
+    values = [("fields_conflicting", Decimal(conflicting)), ("fields_requires_review", Decimal(len(flagged) - conflicting))]
+    if not flagged:
+        return aggregate(rule, [condition_result(condition, NOT_FIRED, values_used=values)])
+    def why(r: ExtractedField) -> str:
+        return f"{r.field_id} ({r.status.value}" + (f": {r.status_reason.value})" if r.status_reason else ")")
+    return aggregate(rule, [condition_result(
+        condition, FIRED, values_used=values, field_ids=[r.field_id for r in flagged], note="; ".join(why(r) for r in flagged),
+    )])  # fmt: skip
+
+
 RULE_FUNCTIONS = {
     "RI-001": declining_revenue,
     "RI-002": negative_net_profit,
     "RI-003": deteriorating_liquidity,
     "RI-004": increasing_leverage,
     "RI-005": weak_interest_coverage,
+    "RI-006": missing_financial_information,
+    "RI-007": unverified_source_values,
 }
