@@ -1,0 +1,106 @@
+# Risk indicator rules and their provisional thresholds (PRD FR-008, Section J).
+#
+# The logic of each rule is Python code; this file supplies the numbers, the names, the
+# severities and the on/off switch. A comparison operator is never set here: each condition
+# has its operator fixed in the code (for example RI-001 C1 fires when revenue growth is
+# below the threshold). Thresholds are exact decimals. Changing one needs no code change.
+#
+# Severity says how urgently a human should look: info, watch or elevated. It is not a view
+# of creditworthiness. There is no score, rating, grade, approval or rejection anywhere.
+
+provisional_notice = "The thresholds are illustrative placeholders chosen for demonstration and testing. They are not universal banking standards, regulatory requirements or the policy of any institution. Real thresholds vary by institution, industry, borrower size and product, and must be set by the institution's credit policy."
+
+[[rule]]
+id = "RI-001"
+name = "Declining revenue"
+description = "Revenue growth (MET-01) is negative, or at least as bad as a set fall."
+enabled = true
+inputs = ["MET-01"]
+  [[rule.condition]]
+  id = "C1"          # fires when revenue growth is below the threshold (percent)
+  severity = "watch"
+  threshold = 0
+  [[rule.condition]]
+  id = "C2"          # fires when revenue growth is at or below the threshold (percent)
+  severity = "elevated"
+  threshold = -10
+
+[[rule]]
+id = "RI-002"
+name = "Negative net profit"
+description = "Net profit for the current period is below zero."
+enabled = true
+inputs = ["net_profit"]
+  [[rule.condition]]
+  id = "C1"          # fires when current-period net profit is below the threshold
+  severity = "elevated"
+  threshold = 0
+
+[[rule]]
+id = "RI-003"
+name = "Deteriorating liquidity"
+description = "The current ratio (MET-03) is low, or has fallen by a set share since the comparative period."
+enabled = true
+inputs = ["MET-03"]
+  [[rule.condition]]
+  id = "C1"          # fires when the current period's current ratio is below the threshold
+  severity = "elevated"
+  threshold = 1.00
+  [[rule.condition]]
+  id = "C2"          # fires when the current ratio fell by at least the threshold (percent), relative to the comparative period
+  severity = "watch"
+  threshold = 10
+
+[[rule]]
+id = "RI-004"
+name = "Increasing leverage"
+description = "Debt-to-equity (MET-04) has risen by a set share or is high, or equity is zero or negative."
+enabled = true
+inputs = ["MET-04", "total_equity"]
+  [[rule.condition]]
+  id = "C1"          # fires when debt-to-equity rose by at least the threshold (percent), relative to the comparative period
+  severity = "watch"
+  threshold = 20
+  [[rule.condition]]
+  id = "C2"          # fires when the current period's debt-to-equity is above the threshold
+  severity = "elevated"
+  threshold = 2.00
+  [[rule.condition]]
+  id = "C3"          # fires when equity in either period is at or below the threshold
+  severity = "elevated"
+  threshold = 0
+
+[[rule]]
+id = "RI-005"
+name = "Weak interest coverage"
+description = "Interest coverage (MET-05) is low."
+enabled = true
+inputs = ["MET-05"]
+  [[rule.condition]]
+  id = "C1"          # fires when the current period's interest coverage is below the threshold
+  severity = "watch"
+  threshold = 1.50
+  [[rule.condition]]
+  id = "C2"          # fires when the current period's interest coverage is below the threshold (a negative ratio included)
+  severity = "elevated"
+  threshold = 1.00
+
+[[rule]]
+id = "RI-006"
+name = "Missing financial information"
+description = "An input that one of the five metrics needs was not found, after the derived alternatives were tried."
+enabled = true
+inputs = ["MET-01", "MET-02", "MET-03", "MET-04", "MET-05"]
+  [[rule.condition]]
+  id = "C1"
+  severity = "info"
+
+[[rule]]
+id = "RI-007"
+name = "Conflicting or unverified source values"
+description = "A source field is conflicting or needs review."
+enabled = true
+inputs = ["source fields"]
+  [[rule.condition]]
+  id = "C1"
+  severity = "watch"
