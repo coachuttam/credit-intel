@@ -216,3 +216,23 @@ def test_property_scaling_every_amount_leaves_every_ratio_and_comparison_unchang
             assert result_a.value == b.results[key].value
         for metric, comparison in a.comparisons.items():
             assert comparison.relative_change == b.comparisons[metric].relative_change
+
+
+# --- derived borrowings totals (Phase 5 step 5d; B-259) ---------------------------------------------------------------------
+
+
+def test_a_reported_total_of_borrowings_leaves_derived_borrowings_empty():
+    assert calculate_metrics(field_set()).derived_borrowings == ()
+
+
+def test_a_derived_total_is_listed_for_each_period_with_a_missing_component_shown_as_not_found():
+    current = {k: v for k, v in CURRENT_VALUES.items() if k is not F.TOTAL_BORROWINGS}
+    comparative = {k: v for k, v in COMPARATIVE_VALUES.items() if k is not F.TOTAL_BORROWINGS}
+    extra = [rec(F.BORROWINGS_NON_CURRENT, "300", role=CUR, end=D25), rec(F.BORROWINGS_CURRENT, "100", role=CUR, end=D25),
+             rec(F.BORROWINGS_NON_CURRENT, "200", role=COMP, end=D24)]  # fmt: skip
+
+    metrics = calculate_metrics(field_set(current, comparative, extra=extra))
+
+    assert [(t.period_role, t.value, t.status) for t in metrics.derived_borrowings] == [
+        (CUR, Decimal("400"), Status.EXTRACTED), (COMP, None, Status.NOT_FOUND)]  # fmt: skip
+    assert metrics.get("MET-04", CUR).value == Decimal("0.8")

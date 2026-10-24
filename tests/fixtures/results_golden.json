@@ -1,0 +1,1898 @@
+{
+  "analyst_provided": {},
+  "attributes": [
+    {
+      "attribute": "entity_name",
+      "evidence_quote": "Acme Industries Limited",
+      "normalised_value": "Acme Industries Limited",
+      "page_number": 1,
+      "period_role": null,
+      "raw_text": "Acme Industries Limited",
+      "status": "extracted",
+      "status_reason": null
+    },
+    {
+      "attribute": "period_end",
+      "evidence_quote": "Note 31 March 2025 31 March 2024",
+      "normalised_value": "2025-03-31",
+      "page_number": 1,
+      "period_role": "current",
+      "raw_text": "31 March 2025",
+      "status": "extracted",
+      "status_reason": null
+    },
+    {
+      "attribute": "period_end",
+      "evidence_quote": "Note 31 March 2025 31 March 2024",
+      "normalised_value": "2024-03-31",
+      "page_number": 1,
+      "period_role": "comparative",
+      "raw_text": "31 March 2024",
+      "status": "extracted",
+      "status_reason": null
+    },
+    {
+      "attribute": "statement_basis",
+      "evidence_quote": "Consolidated Balance Sheet",
+      "normalised_value": "consolidated",
+      "page_number": 1,
+      "period_role": null,
+      "raw_text": "Consolidated",
+      "status": "extracted",
+      "status_reason": null
+    },
+    {
+      "attribute": "reporting_currency",
+      "evidence_quote": "(Rs. in crore)",
+      "normalised_value": "INR",
+      "page_number": 1,
+      "period_role": null,
+      "raw_text": "Rs.",
+      "status": "extracted",
+      "status_reason": null
+    },
+    {
+      "attribute": "scale",
+      "evidence_quote": "(Rs. in crore)",
+      "normalised_value": "crore",
+      "page_number": 1,
+      "period_role": null,
+      "raw_text": "in crore",
+      "status": "extracted",
+      "status_reason": null
+    }
+  ],
+  "comparisons": {
+    "MET-02": {
+      "caveats": [],
+      "metric_id": "MET-02",
+      "relative_change_percent": null,
+      "undefined_reason": "missing_input"
+    },
+    "MET-03": {
+      "caveats": [],
+      "metric_id": "MET-03",
+      "relative_change_percent": "3.184079601990049751243781083",
+      "undefined_reason": null
+    },
+    "MET-04": {
+      "caveats": [],
+      "metric_id": "MET-04",
+      "relative_change_percent": null,
+      "undefined_reason": "missing_input"
+    },
+    "MET-05": {
+      "caveats": [],
+      "metric_id": "MET-05",
+      "relative_change_percent": null,
+      "undefined_reason": "missing_input"
+    }
+  },
+  "derived_fields": [
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": {
+        "component_classification": null,
+        "formula": "ebit = profit_before_tax + interest_expense",
+        "input_field_ids": [
+          "profit_before_tax.2025-03-31.consolidated",
+          "interest_expense.2025-03-31.consolidated"
+        ],
+        "method_id": "EBIT-PBT"
+      },
+      "evidence_quote": null,
+      "field_id": "ebit.2025-03-31.consolidated",
+      "field_name": "ebit",
+      "line_item_label": null,
+      "origin": "derived",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": null,
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": "missing_input",
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": {
+        "component_classification": null,
+        "formula": "ebit = profit_before_tax + interest_expense",
+        "input_field_ids": [
+          "profit_before_tax.2024-03-31.consolidated",
+          "interest_expense.2024-03-31.consolidated"
+        ],
+        "method_id": "EBIT-PBT"
+      },
+      "evidence_quote": null,
+      "field_id": "ebit.2024-03-31.consolidated",
+      "field_name": "ebit",
+      "line_item_label": null,
+      "origin": "derived",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": null,
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": "missing_input",
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": {
+        "component_classification": "not_presented",
+        "formula": "total_borrowings = borrowings_non_current + borrowings_current",
+        "input_field_ids": [
+          "borrowings_non_current.2025-03-31.consolidated",
+          "borrowings_current.2025-03-31.consolidated"
+        ],
+        "method_id": "BORR-SUM"
+      },
+      "evidence_quote": null,
+      "field_id": "total_borrowings.2025-03-31.consolidated",
+      "field_name": "total_borrowings",
+      "line_item_label": null,
+      "origin": "derived",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": null,
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": "missing_input",
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": {
+        "component_classification": "not_presented",
+        "formula": "total_borrowings = borrowings_non_current + borrowings_current",
+        "input_field_ids": [
+          "borrowings_non_current.2024-03-31.consolidated",
+          "borrowings_current.2024-03-31.consolidated"
+        ],
+        "method_id": "BORR-SUM"
+      },
+      "evidence_quote": null,
+      "field_id": "total_borrowings.2024-03-31.consolidated",
+      "field_name": "total_borrowings",
+      "line_item_label": null,
+      "origin": "derived",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": null,
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": "missing_input",
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    }
+  ],
+  "disabled_rules": [],
+  "document": {
+    "file_name": "statement.pdf",
+    "page_count": 1,
+    "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+  },
+  "extraction": {
+    "attribute_basis_differs": false,
+    "bases_present": [
+      "consolidated"
+    ],
+    "candidate_pages": [
+      1
+    ],
+    "configured_basis": "consolidated",
+    "excluded_candidates": [],
+    "locator_method": "keywords",
+    "range_pages_without_text": []
+  },
+  "fields": [
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "revenue.2025-03-31.consolidated",
+      "field_name": "revenue",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "revenue.2024-03-31.consolidated",
+      "field_name": "revenue",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "net_profit.2025-03-31.consolidated",
+      "field_name": "net_profit",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "net_profit.2024-03-31.consolidated",
+      "field_name": "net_profit",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "operating_profit.2025-03-31.consolidated",
+      "field_name": "operating_profit",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "operating_profit.2024-03-31.consolidated",
+      "field_name": "operating_profit",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "profit_before_tax.2025-03-31.consolidated",
+      "field_name": "profit_before_tax",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "profit_before_tax.2024-03-31.consolidated",
+      "field_name": "profit_before_tax",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "interest_expense.2025-03-31.consolidated",
+      "field_name": "interest_expense",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "interest_expense.2024-03-31.consolidated",
+      "field_name": "interest_expense",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": "INR",
+      "derivation": null,
+      "evidence_quote": "Total current assets 14 1,482.30 1,356.75",
+      "field_id": "current_assets.2025-03-31.consolidated",
+      "field_name": "current_assets",
+      "line_item_label": "Total current assets",
+      "origin": "source",
+      "page_label": null,
+      "page_number": 1,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": "1,482.30",
+      "scale": "crore",
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "extracted",
+      "status_reason": null,
+      "validation": {
+        "currency_verified": true,
+        "details": {
+          "basis": {
+            "read_from": "cited_page",
+            "value": "consolidated"
+          },
+          "blocked_by": [],
+          "column": {
+            "anchor_quotes": [
+              "31 March 2025"
+            ],
+            "conditions": {
+              "boundary": true,
+              "column": true,
+              "linked": true,
+              "number": true,
+              "row_label": true,
+              "structure": true,
+              "unique": true,
+              "value_matches": true
+            },
+            "failure": null,
+            "figure_line_index": 5,
+            "region": [
+              363.65,
+              436.34999999999997
+            ],
+            "region_words": [
+              "1,482.30"
+            ],
+            "token": {
+              "bottom": 137.9598000000001,
+              "text": "1,482.30",
+              "top": 127.95980000000009,
+              "x0": 391.08,
+              "x1": 430.0
+            }
+          },
+          "currency": {
+            "supported_by": "cited_page"
+          },
+          "label": {
+            "label": "Total current assets",
+            "matched_phrase": "total current assets",
+            "normalised": "total current assets",
+            "section": null
+          },
+          "period": {
+            "evidence": {
+              "derived_from": null,
+              "method": "full_date",
+              "raw_text": "31 March 2025"
+            },
+            "role": "current"
+          },
+          "scale": {
+            "declared_on_cited_page": [
+              "crore"
+            ],
+            "declared_on_run_start": [],
+            "supported_by": "cited_page"
+          },
+          "sign": {
+            "marker_on_page": false,
+            "raw_negative": false
+          }
+        },
+        "evidence_verified": true,
+        "label_verified": true,
+        "period_column_verified": true,
+        "period_end_verified": true,
+        "scale_verified": true,
+        "sign_verified": true,
+        "value_in_evidence": true
+      },
+      "value": "14823000000",
+      "value_interpretation": "number"
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": "INR",
+      "derivation": null,
+      "evidence_quote": "Total current assets 14 1,482.30 1,356.75",
+      "field_id": "current_assets.2024-03-31.consolidated",
+      "field_name": "current_assets",
+      "line_item_label": "Total current assets",
+      "origin": "source",
+      "page_label": null,
+      "page_number": 1,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": "1,356.75",
+      "scale": "crore",
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "extracted",
+      "status_reason": null,
+      "validation": {
+        "currency_verified": true,
+        "details": {
+          "basis": {
+            "read_from": "cited_page",
+            "value": "consolidated"
+          },
+          "blocked_by": [],
+          "column": {
+            "anchor_quotes": [
+              "31 March 2024"
+            ],
+            "conditions": {
+              "boundary": true,
+              "column": true,
+              "linked": true,
+              "number": true,
+              "row_label": true,
+              "structure": true,
+              "unique": true,
+              "value_matches": true
+            },
+            "failure": null,
+            "figure_line_index": 5,
+            "region": [
+              443.65,
+              516.3499999999999
+            ],
+            "region_words": [
+              "1,356.75"
+            ],
+            "token": {
+              "bottom": 137.9598000000001,
+              "text": "1,356.75",
+              "top": 127.95980000000009,
+              "x0": 471.08,
+              "x1": 510.0
+            }
+          },
+          "currency": {
+            "supported_by": "cited_page"
+          },
+          "label": {
+            "label": "Total current assets",
+            "matched_phrase": "total current assets",
+            "normalised": "total current assets",
+            "section": null
+          },
+          "period": {
+            "evidence": {
+              "derived_from": null,
+              "method": "full_date",
+              "raw_text": "31 March 2024"
+            },
+            "role": "comparative"
+          },
+          "scale": {
+            "declared_on_cited_page": [
+              "crore"
+            ],
+            "declared_on_run_start": [],
+            "supported_by": "cited_page"
+          },
+          "sign": {
+            "marker_on_page": false,
+            "raw_negative": false
+          }
+        },
+        "evidence_verified": true,
+        "label_verified": true,
+        "period_column_verified": true,
+        "period_end_verified": true,
+        "scale_verified": true,
+        "sign_verified": true,
+        "value_in_evidence": true
+      },
+      "value": "13567500000",
+      "value_interpretation": "number"
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": "INR",
+      "derivation": null,
+      "evidence_quote": "Total current liabilities 15 900.00 850.00",
+      "field_id": "current_liabilities.2025-03-31.consolidated",
+      "field_name": "current_liabilities",
+      "line_item_label": "Total current liabilities",
+      "origin": "source",
+      "page_label": null,
+      "page_number": 1,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": "900.00",
+      "scale": "crore",
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "extracted",
+      "status_reason": null,
+      "validation": {
+        "currency_verified": true,
+        "details": {
+          "basis": {
+            "read_from": "cited_page",
+            "value": "consolidated"
+          },
+          "blocked_by": [],
+          "column": {
+            "anchor_quotes": [
+              "31 March 2025"
+            ],
+            "conditions": {
+              "boundary": true,
+              "column": true,
+              "linked": true,
+              "number": true,
+              "row_label": true,
+              "structure": true,
+              "unique": true,
+              "value_matches": true
+            },
+            "failure": null,
+            "figure_line_index": 8,
+            "region": [
+              363.65,
+              436.34999999999997
+            ],
+            "region_words": [
+              "900.00"
+            ],
+            "token": {
+              "bottom": 179.9598000000001,
+              "text": "900.00",
+              "top": 169.9598000000001,
+              "x0": 399.42,
+              "x1": 430.0
+            }
+          },
+          "currency": {
+            "supported_by": "cited_page"
+          },
+          "label": {
+            "label": "Total current liabilities",
+            "matched_phrase": "total current liabilities",
+            "normalised": "total current liabilities",
+            "section": null
+          },
+          "period": {
+            "evidence": {
+              "derived_from": null,
+              "method": "full_date",
+              "raw_text": "31 March 2025"
+            },
+            "role": "current"
+          },
+          "scale": {
+            "declared_on_cited_page": [
+              "crore"
+            ],
+            "declared_on_run_start": [],
+            "supported_by": "cited_page"
+          },
+          "sign": {
+            "marker_on_page": false,
+            "raw_negative": false
+          }
+        },
+        "evidence_verified": true,
+        "label_verified": true,
+        "period_column_verified": true,
+        "period_end_verified": true,
+        "scale_verified": true,
+        "sign_verified": true,
+        "value_in_evidence": true
+      },
+      "value": "9000000000",
+      "value_interpretation": "number"
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": "INR",
+      "derivation": null,
+      "evidence_quote": "Total current liabilities 15 900.00 850.00",
+      "field_id": "current_liabilities.2024-03-31.consolidated",
+      "field_name": "current_liabilities",
+      "line_item_label": "Total current liabilities",
+      "origin": "source",
+      "page_label": null,
+      "page_number": 1,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": "850.00",
+      "scale": "crore",
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "extracted",
+      "status_reason": null,
+      "validation": {
+        "currency_verified": true,
+        "details": {
+          "basis": {
+            "read_from": "cited_page",
+            "value": "consolidated"
+          },
+          "blocked_by": [],
+          "column": {
+            "anchor_quotes": [
+              "31 March 2024"
+            ],
+            "conditions": {
+              "boundary": true,
+              "column": true,
+              "linked": true,
+              "number": true,
+              "row_label": true,
+              "structure": true,
+              "unique": true,
+              "value_matches": true
+            },
+            "failure": null,
+            "figure_line_index": 8,
+            "region": [
+              443.65,
+              516.3499999999999
+            ],
+            "region_words": [
+              "850.00"
+            ],
+            "token": {
+              "bottom": 179.9598000000001,
+              "text": "850.00",
+              "top": 169.9598000000001,
+              "x0": 479.42,
+              "x1": 510.0
+            }
+          },
+          "currency": {
+            "supported_by": "cited_page"
+          },
+          "label": {
+            "label": "Total current liabilities",
+            "matched_phrase": "total current liabilities",
+            "normalised": "total current liabilities",
+            "section": null
+          },
+          "period": {
+            "evidence": {
+              "derived_from": null,
+              "method": "full_date",
+              "raw_text": "31 March 2024"
+            },
+            "role": "comparative"
+          },
+          "scale": {
+            "declared_on_cited_page": [
+              "crore"
+            ],
+            "declared_on_run_start": [],
+            "supported_by": "cited_page"
+          },
+          "sign": {
+            "marker_on_page": false,
+            "raw_negative": false
+          }
+        },
+        "evidence_verified": true,
+        "label_verified": true,
+        "period_column_verified": true,
+        "period_end_verified": true,
+        "scale_verified": true,
+        "sign_verified": true,
+        "value_in_evidence": true
+      },
+      "value": "8500000000",
+      "value_interpretation": "number"
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "total_borrowings.2025-03-31.consolidated",
+      "field_name": "total_borrowings",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "total_borrowings.2024-03-31.consolidated",
+      "field_name": "total_borrowings",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "borrowings_non_current.2025-03-31.consolidated",
+      "field_name": "borrowings_non_current",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "borrowings_non_current.2024-03-31.consolidated",
+      "field_name": "borrowings_non_current",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "borrowings_current.2025-03-31.consolidated",
+      "field_name": "borrowings_current",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "borrowings_current.2024-03-31.consolidated",
+      "field_name": "borrowings_current",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "current_maturities_long_term_borrowings.2025-03-31.consolidated",
+      "field_name": "current_maturities_long_term_borrowings",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": null,
+      "derivation": null,
+      "evidence_quote": null,
+      "field_id": "current_maturities_long_term_borrowings.2024-03-31.consolidated",
+      "field_name": "current_maturities_long_term_borrowings",
+      "line_item_label": null,
+      "origin": "source",
+      "page_label": null,
+      "page_number": null,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": null,
+      "scale": null,
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "not_found",
+      "status_reason": null,
+      "validation": null,
+      "value": null,
+      "value_interpretation": null
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": "INR",
+      "derivation": null,
+      "evidence_quote": "Total equity 600.00 500.00",
+      "field_id": "total_equity.2025-03-31.consolidated",
+      "field_name": "total_equity",
+      "line_item_label": "Total equity",
+      "origin": "source",
+      "page_label": null,
+      "page_number": 1,
+      "period_end": "2025-03-31",
+      "period_length_months": 12,
+      "period_role": "current",
+      "raw_value": "600.00",
+      "scale": "crore",
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "extracted",
+      "status_reason": null,
+      "validation": {
+        "currency_verified": true,
+        "details": {
+          "basis": {
+            "read_from": "cited_page",
+            "value": "consolidated"
+          },
+          "blocked_by": [],
+          "column": {
+            "anchor_quotes": [
+              "31 March 2025"
+            ],
+            "conditions": {
+              "boundary": true,
+              "column": true,
+              "linked": true,
+              "number": true,
+              "row_label": true,
+              "structure": true,
+              "unique": true,
+              "value_matches": true
+            },
+            "failure": null,
+            "figure_line_index": 7,
+            "region": [
+              363.65,
+              436.34999999999997
+            ],
+            "region_words": [
+              "600.00"
+            ],
+            "token": {
+              "bottom": 165.9598000000001,
+              "text": "600.00",
+              "top": 155.9598000000001,
+              "x0": 399.42,
+              "x1": 430.0
+            }
+          },
+          "currency": {
+            "supported_by": "cited_page"
+          },
+          "label": {
+            "label": "Total equity",
+            "matched_phrase": "total equity",
+            "normalised": "total equity",
+            "section": null
+          },
+          "period": {
+            "evidence": {
+              "derived_from": null,
+              "method": "full_date",
+              "raw_text": "31 March 2025"
+            },
+            "role": "current"
+          },
+          "scale": {
+            "declared_on_cited_page": [
+              "crore"
+            ],
+            "declared_on_run_start": [],
+            "supported_by": "cited_page"
+          },
+          "sign": {
+            "marker_on_page": false,
+            "raw_negative": false
+          }
+        },
+        "evidence_verified": true,
+        "label_verified": true,
+        "period_column_verified": true,
+        "period_end_verified": true,
+        "scale_verified": true,
+        "sign_verified": true,
+        "value_in_evidence": true
+      },
+      "value": "6000000000",
+      "value_interpretation": "number"
+    },
+    {
+      "candidates": [],
+      "corroborating_evidence": [],
+      "currency": "INR",
+      "derivation": null,
+      "evidence_quote": "Total equity 600.00 500.00",
+      "field_id": "total_equity.2024-03-31.consolidated",
+      "field_name": "total_equity",
+      "line_item_label": "Total equity",
+      "origin": "source",
+      "page_label": null,
+      "page_number": 1,
+      "period_end": "2024-03-31",
+      "period_length_months": 12,
+      "period_role": "comparative",
+      "raw_value": "500.00",
+      "scale": "crore",
+      "source_document": {
+        "file_name": "statement.pdf",
+        "sha256": "0dd49919cbf0d0d50ee6aa5183ed3b19be9188eed39287c3539b4d3d5bc6b110"
+      },
+      "statement_basis": "consolidated",
+      "status": "extracted",
+      "status_reason": null,
+      "validation": {
+        "currency_verified": true,
+        "details": {
+          "basis": {
+            "read_from": "cited_page",
+            "value": "consolidated"
+          },
+          "blocked_by": [],
+          "column": {
+            "anchor_quotes": [
+              "31 March 2024"
+            ],
+            "conditions": {
+              "boundary": true,
+              "column": true,
+              "linked": true,
+              "number": true,
+              "row_label": true,
+              "structure": true,
+              "unique": true,
+              "value_matches": true
+            },
+            "failure": null,
+            "figure_line_index": 7,
+            "region": [
+              443.65,
+              516.3499999999999
+            ],
+            "region_words": [
+              "500.00"
+            ],
+            "token": {
+              "bottom": 165.9598000000001,
+              "text": "500.00",
+              "top": 155.9598000000001,
+              "x0": 479.42,
+              "x1": 510.0
+            }
+          },
+          "currency": {
+            "supported_by": "cited_page"
+          },
+          "label": {
+            "label": "Total equity",
+            "matched_phrase": "total equity",
+            "normalised": "total equity",
+            "section": null
+          },
+          "period": {
+            "evidence": {
+              "derived_from": null,
+              "method": "full_date",
+              "raw_text": "31 March 2024"
+            },
+            "role": "comparative"
+          },
+          "scale": {
+            "declared_on_cited_page": [
+              "crore"
+            ],
+            "declared_on_run_start": [],
+            "supported_by": "cited_page"
+          },
+          "sign": {
+            "marker_on_page": false,
+            "raw_negative": false
+          }
+        },
+        "evidence_verified": true,
+        "label_verified": true,
+        "period_column_verified": true,
+        "period_end_verified": true,
+        "scale_verified": true,
+        "sign_verified": true,
+        "value_in_evidence": true
+      },
+      "value": "5000000000",
+      "value_interpretation": "number"
+    }
+  ],
+  "ignored_fields": [],
+  "indicators": [
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "MET-01.2025-03-31 (missing_input)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "watch",
+          "threshold": "0",
+          "values_used": []
+        },
+        {
+          "caveats": [],
+          "condition_id": "C2",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "MET-01.2025-03-31 (missing_input)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "elevated",
+          "threshold": "-10",
+          "values_used": []
+        }
+      ],
+      "id": "RI-001",
+      "missing_inputs": [
+        "MET-01.2025-03-31 (missing_input)"
+      ],
+      "name": "Declining revenue",
+      "notes": [],
+      "outcome": "not_evaluable",
+      "severity": null
+    },
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "net_profit.2025-03-31 (not_found)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "elevated",
+          "threshold": "0",
+          "values_used": []
+        }
+      ],
+      "id": "RI-002",
+      "missing_inputs": [
+        "net_profit.2025-03-31 (not_found)"
+      ],
+      "name": "Negative net profit",
+      "notes": [],
+      "outcome": "not_evaluable",
+      "severity": null
+    },
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [
+            "current_assets.2025-03-31.consolidated",
+            "current_liabilities.2025-03-31.consolidated"
+          ],
+          "metric_ids": [
+            "MET-03.2025-03-31"
+          ],
+          "missing_inputs": [],
+          "note": null,
+          "outcome": "not_fired",
+          "severity": "elevated",
+          "threshold": "1.00",
+          "values_used": [
+            {
+              "name": "current_ratio_current",
+              "value": "1.647"
+            }
+          ]
+        },
+        {
+          "caveats": [],
+          "condition_id": "C2",
+          "field_ids": [
+            "current_assets.2025-03-31.consolidated",
+            "current_liabilities.2025-03-31.consolidated",
+            "current_assets.2024-03-31.consolidated",
+            "current_liabilities.2024-03-31.consolidated"
+          ],
+          "metric_ids": [
+            "MET-03.2025-03-31",
+            "MET-03.2024-03-31"
+          ],
+          "missing_inputs": [],
+          "note": null,
+          "outcome": "not_fired",
+          "severity": "watch",
+          "threshold": "10",
+          "values_used": [
+            {
+              "name": "current_ratio_current",
+              "value": "1.647"
+            },
+            {
+              "name": "current_ratio_comparative",
+              "value": "1.596176470588235294117647059"
+            },
+            {
+              "name": "relative_change_percent",
+              "value": "3.184079601990049751243781083"
+            }
+          ]
+        }
+      ],
+      "id": "RI-003",
+      "missing_inputs": [],
+      "name": "Deteriorating liquidity",
+      "notes": [],
+      "outcome": "not_triggered",
+      "severity": null
+    },
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "MET-04.2025-03-31 (missing_input)",
+            "MET-04.2024-03-31 (missing_input)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "watch",
+          "threshold": "20",
+          "values_used": []
+        },
+        {
+          "caveats": [],
+          "condition_id": "C2",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "MET-04.2025-03-31 (missing_input)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "elevated",
+          "threshold": "2.00",
+          "values_used": []
+        },
+        {
+          "caveats": [],
+          "condition_id": "C3",
+          "field_ids": [
+            "total_equity.2025-03-31.consolidated",
+            "total_equity.2024-03-31.consolidated"
+          ],
+          "metric_ids": [],
+          "missing_inputs": [],
+          "note": null,
+          "outcome": "not_fired",
+          "severity": "elevated",
+          "threshold": "0",
+          "values_used": [
+            {
+              "name": "total_equity_current",
+              "value": "6000000000"
+            },
+            {
+              "name": "total_equity_comparative",
+              "value": "5000000000"
+            }
+          ]
+        }
+      ],
+      "id": "RI-004",
+      "missing_inputs": [
+        "MET-04.2025-03-31 (missing_input)",
+        "MET-04.2024-03-31 (missing_input)"
+      ],
+      "name": "Increasing leverage",
+      "notes": [],
+      "outcome": "not_evaluable",
+      "severity": null
+    },
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "MET-05.2025-03-31 (missing_input)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "watch",
+          "threshold": "1.50",
+          "values_used": []
+        },
+        {
+          "caveats": [],
+          "condition_id": "C2",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [
+            "MET-05.2025-03-31 (missing_input)"
+          ],
+          "note": null,
+          "outcome": "not_evaluable",
+          "severity": "elevated",
+          "threshold": "1.00",
+          "values_used": []
+        }
+      ],
+      "id": "RI-005",
+      "missing_inputs": [
+        "MET-05.2025-03-31 (missing_input)"
+      ],
+      "name": "Weak interest coverage",
+      "notes": [],
+      "outcome": "not_evaluable",
+      "severity": null
+    },
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [
+            "revenue.2025-03-31.consolidated",
+            "net_profit.2025-03-31.consolidated",
+            "total_borrowings.2025-03-31.consolidated",
+            "ebit.2025-03-31.consolidated",
+            "interest_expense.2025-03-31.consolidated",
+            "revenue.2024-03-31.consolidated",
+            "net_profit.2024-03-31.consolidated",
+            "total_borrowings.2024-03-31.consolidated",
+            "ebit.2024-03-31.consolidated",
+            "interest_expense.2024-03-31.consolidated"
+          ],
+          "metric_ids": [],
+          "missing_inputs": [],
+          "note": "not found: revenue.2025-03-31.consolidated, net_profit.2025-03-31.consolidated, total_borrowings.2025-03-31.consolidated, ebit.2025-03-31.consolidated, interest_expense.2025-03-31.consolidated, revenue.2024-03-31.consolidated, net_profit.2024-03-31.consolidated, total_borrowings.2024-03-31.consolidated, ebit.2024-03-31.consolidated, interest_expense.2024-03-31.consolidated",
+          "outcome": "fired",
+          "severity": "info",
+          "threshold": null,
+          "values_used": [
+            {
+              "name": "inputs_not_found",
+              "value": "10"
+            }
+          ]
+        }
+      ],
+      "id": "RI-006",
+      "missing_inputs": [],
+      "name": "Missing financial information",
+      "notes": [
+        "not found: revenue.2025-03-31.consolidated, net_profit.2025-03-31.consolidated, total_borrowings.2025-03-31.consolidated, ebit.2025-03-31.consolidated, interest_expense.2025-03-31.consolidated, revenue.2024-03-31.consolidated, net_profit.2024-03-31.consolidated, total_borrowings.2024-03-31.consolidated, ebit.2024-03-31.consolidated, interest_expense.2024-03-31.consolidated"
+      ],
+      "outcome": "triggered",
+      "severity": "info"
+    },
+    {
+      "caveats": [],
+      "conditions": [
+        {
+          "caveats": [],
+          "condition_id": "C1",
+          "field_ids": [],
+          "metric_ids": [],
+          "missing_inputs": [],
+          "note": null,
+          "outcome": "not_fired",
+          "severity": "watch",
+          "threshold": null,
+          "values_used": [
+            {
+              "name": "fields_conflicting",
+              "value": "0"
+            },
+            {
+              "name": "fields_requires_review",
+              "value": "0"
+            }
+          ]
+        }
+      ],
+      "id": "RI-007",
+      "missing_inputs": [],
+      "name": "Conflicting or unverified source values",
+      "notes": [],
+      "outcome": "not_triggered",
+      "severity": null
+    }
+  ],
+  "metrics": [
+    {
+      "caveats": [],
+      "formula": "(revenue_current - revenue_comparative) / revenue_comparative x 100",
+      "id": "MET-01.2025-03-31",
+      "input_field_ids": [
+        "revenue.2025-03-31.consolidated",
+        "revenue.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        null
+      ],
+      "metric_id": "MET-01",
+      "name": "Revenue growth",
+      "origin": "calculated",
+      "period_ends": [
+        "2025-03-31",
+        "2024-03-31"
+      ],
+      "period_role": null,
+      "undefined_reason": "missing_input",
+      "unit": "percent",
+      "value": null
+    },
+    {
+      "caveats": [],
+      "formula": "net_profit / revenue x 100",
+      "id": "MET-02.2024-03-31",
+      "input_field_ids": [
+        "net_profit.2024-03-31.consolidated",
+        "revenue.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        null
+      ],
+      "metric_id": "MET-02",
+      "name": "Net profit margin",
+      "origin": "calculated",
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "period_role": "comparative",
+      "undefined_reason": "missing_input",
+      "unit": "percent",
+      "value": null
+    },
+    {
+      "caveats": [],
+      "formula": "net_profit / revenue x 100",
+      "id": "MET-02.2025-03-31",
+      "input_field_ids": [
+        "net_profit.2025-03-31.consolidated",
+        "revenue.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        null
+      ],
+      "metric_id": "MET-02",
+      "name": "Net profit margin",
+      "origin": "calculated",
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "period_role": "current",
+      "undefined_reason": "missing_input",
+      "unit": "percent",
+      "value": null
+    },
+    {
+      "caveats": [],
+      "formula": "current_assets / current_liabilities",
+      "id": "MET-03.2024-03-31",
+      "input_field_ids": [
+        "current_assets.2024-03-31.consolidated",
+        "current_liabilities.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        "13567500000",
+        "8500000000"
+      ],
+      "metric_id": "MET-03",
+      "name": "Current ratio",
+      "origin": "calculated",
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "period_role": "comparative",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "value": "1.596176470588235294117647059"
+    },
+    {
+      "caveats": [],
+      "formula": "current_assets / current_liabilities",
+      "id": "MET-03.2025-03-31",
+      "input_field_ids": [
+        "current_assets.2025-03-31.consolidated",
+        "current_liabilities.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        "14823000000",
+        "9000000000"
+      ],
+      "metric_id": "MET-03",
+      "name": "Current ratio",
+      "origin": "calculated",
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "period_role": "current",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "value": "1.647"
+    },
+    {
+      "caveats": [],
+      "formula": "total_borrowings / total_equity",
+      "id": "MET-04.2024-03-31",
+      "input_field_ids": [
+        "total_borrowings.2024-03-31.consolidated",
+        "total_equity.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        "5000000000"
+      ],
+      "metric_id": "MET-04",
+      "name": "Debt-to-equity ratio",
+      "origin": "calculated",
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "period_role": "comparative",
+      "undefined_reason": "missing_input",
+      "unit": "ratio",
+      "value": null
+    },
+    {
+      "caveats": [],
+      "formula": "total_borrowings / total_equity",
+      "id": "MET-04.2025-03-31",
+      "input_field_ids": [
+        "total_borrowings.2025-03-31.consolidated",
+        "total_equity.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        "6000000000"
+      ],
+      "metric_id": "MET-04",
+      "name": "Debt-to-equity ratio",
+      "origin": "calculated",
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "period_role": "current",
+      "undefined_reason": "missing_input",
+      "unit": "ratio",
+      "value": null
+    },
+    {
+      "caveats": [],
+      "formula": "ebit / interest_expense",
+      "id": "MET-05.2024-03-31",
+      "input_field_ids": [
+        "ebit.2024-03-31.consolidated",
+        "interest_expense.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        null
+      ],
+      "metric_id": "MET-05",
+      "name": "Interest coverage ratio",
+      "origin": "calculated",
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "period_role": "comparative",
+      "undefined_reason": "missing_input",
+      "unit": "ratio",
+      "value": null
+    },
+    {
+      "caveats": [],
+      "formula": "ebit / interest_expense",
+      "id": "MET-05.2025-03-31",
+      "input_field_ids": [
+        "ebit.2025-03-31.consolidated",
+        "interest_expense.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        null,
+        null
+      ],
+      "metric_id": "MET-05",
+      "name": "Interest coverage ratio",
+      "origin": "calculated",
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "period_role": "current",
+      "undefined_reason": "missing_input",
+      "unit": "ratio",
+      "value": null
+    }
+  ],
+  "provisional_notice": "The thresholds are illustrative placeholders chosen for demonstration and testing. They are not universal banking standards, regulatory requirements or the policy of any institution. Real thresholds vary by institution, industry, borrower size and product, and must be set by the institution's credit policy.",
+  "schema_version": "1"
+}

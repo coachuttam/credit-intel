@@ -29,7 +29,7 @@ from credit_intel.calculations.metrics import (
     revenue_growth,
 )
 from credit_intel.extraction.field_set import FieldSet
-from credit_intel.models import ExtractedField, FieldName, PeriodRole, StatementBasis
+from credit_intel.models import ExtractedField, FieldName, Origin, PeriodRole, StatementBasis
 
 CURRENT, COMPARATIVE = PeriodRole.CURRENT, PeriodRole.COMPARATIVE
 PERIODIC = ("MET-02", "MET-03", "MET-04", "MET-05")  # computed per period; MET-01 spans both
@@ -76,6 +76,7 @@ class MetricSet:
     derived: tuple[ExtractedField, ...]  # the EBIT records, current period first
     results: Mapping[tuple[str, PeriodRole | None], MetricResult]
     comparisons: Mapping[str, Comparison]
+    derived_borrowings: tuple[ExtractedField, ...] = ()  # totals derived by BORR-SUM (none when a total is reported)
 
     def get(self, metric_id: str, role: PeriodRole | None = None) -> MetricResult:
         """MET-01 has no role; the others are asked for by period."""
@@ -103,6 +104,10 @@ def calculate_metrics(field_set: FieldSet) -> MetricSet:
     return MetricSet(
         configured_basis=field_set.configured_basis,
         derived=tuple(record for record in (ebit[CURRENT], ebit[COMPARATIVE]) if record is not None),
+        derived_borrowings=tuple(
+            total for total in (total_borrowings_for(field_set, CURRENT), total_borrowings_for(field_set, COMPARATIVE))
+            if total is not None and total.origin is Origin.DERIVED
+        ),  # fmt: skip
         results=MappingProxyType(results),
         comparisons=MappingProxyType(comparisons),
     )
