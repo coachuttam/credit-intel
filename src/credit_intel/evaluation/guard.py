@@ -74,3 +74,15 @@ def check_may_send(sha256: str, assignments: Path = ASSIGNMENTS_PATH, *, synthet
     if current_set != "tuning":
         raise SendRefused(f"document {document_id} is not a tuning document, so it may not be sent")
     return document_id
+
+
+def refuse_if_held_out(sha256: str, assignments: Path = ASSIGNMENTS_PATH) -> None:
+    """Refuse to look at a held-out document before the held-out evaluation run (PRD O.2).
+
+    Reading its statement pages, even offline and counting only, is an inspection. A document
+    that is on the record as tuning, or not on it at all, is not refused here (an unrecorded
+    document is only an offline question). A missing or malformed record refuses everything.
+    """
+    known = load_current_sets(assignments).get(sha256)
+    if known is not None and known[1] == "held_out":
+        raise SendRefused(f"document {known[0]} is held out, so it may not be inspected before the held-out run")

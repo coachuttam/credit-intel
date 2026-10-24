@@ -13,6 +13,7 @@ from credit_intel.evaluation.guard import (
     check_may_send,
     file_sha256,
     load_current_sets,
+    refuse_if_held_out,
 )
 
 R1 = "a2b9acdfbe79586ffdbe1780c4f14e5b2630743a4c81ee626f812f4c2fff1b44"
@@ -36,9 +37,15 @@ def record(tmp_path, *lines, raw=None):
 # --- the committed record ----------------------------------------------------------------------------
 
 
-def test_the_committed_record_allows_exactly_the_two_tuning_reports():
+def test_the_committed_record_allows_the_two_tuning_reports_and_refuses_every_held_out_one():
     assert check_may_send(R1) == "R1" and check_may_send(R2) == "R2"
-    assert set(load_current_sets()) == {R1, R2} and ASSIGNMENTS_PATH == ROOT / "tests/eval/assignments.jsonl"
+    sets = load_current_sets()
+    assert {sha for sha, (_, kind) in sets.items() if kind == "tuning"} == {R1, R2}
+    assert ASSIGNMENTS_PATH == ROOT / "tests/eval/assignments.jsonl"
+    for sha, (_, kind) in sets.items():
+        if kind == "held_out":  # whatever the record holds; no held-out value is copied into a test
+            with pytest.raises(SendRefused):
+                check_may_send(sha)
 
 
 def test_an_unrecorded_document_is_refused_with_only_a_short_hash():
@@ -183,3 +190,35 @@ def test_the_file_hash_matches_hashlib_including_files_larger_than_a_chunk(tmp_p
 
     assert file_sha256(small) == hashlib.sha256(b"abc").hexdigest()
     assert file_sha256(large) == hashlib.sha256(large.read_bytes()).hexdigest()
+
+
+# --- a held-out document is not even looked at (PRD O.2; the dry run) ---------------------------------------------
+
+
+def test_a_held_out_document_is_refused_before_inspection_and_the_message_holds_no_content(tmp_path):
+    path = record(tmp_path, line("H9", HELD, "held_out"))
+
+    with pytest.raises(SendRefused) as excinfo:
+        refuse_if_held_out(HELD, path)
+
+    assert "H9" in str(excinfo.value) and HELD not in str(excinfo.value) and "held out" in str(excinfo.value)
+
+
+def test_tuning_and_unrecorded_documents_are_not_refused_for_inspection(tmp_path):
+    path = record(tmp_path, line("R9", R1, "tuning"))
+
+    assert refuse_if_held_out(R1, path) is None
+    assert refuse_if_held_out(OTHER, path) is None
+
+
+def test_a_document_moved_from_held_out_to_tuning_may_be_inspected_again(tmp_path):
+    path = record(tmp_path, line("H9", HELD, "held_out"), line("H9", HELD, "tuning", "moved", "held_out", "debugged a failure"))
+
+    assert refuse_if_held_out(HELD, path) is None
+
+
+def test_a_missing_or_malformed_record_refuses_inspection_too(tmp_path):
+    with pytest.raises(SendRefused):
+        refuse_if_held_out(R1, tmp_path / "absent.jsonl")
+    with pytest.raises(SendRefused):
+        refuse_if_held_out(R1, record(tmp_path, raw=b"not json\n"))

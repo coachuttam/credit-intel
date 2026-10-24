@@ -329,3 +329,28 @@ def test_the_runner_uses_the_prompt_it_is_given(pdf, tmp_path):
 
     assert summary["prompt_version"] == "extraction-v3"
     assert "period_role" in provider.calls[0].system and "same month and day as the current period end" in provider.calls[0].system
+
+
+def test_the_dry_run_refuses_a_held_out_document_before_reading_a_page(pdf, tmp_path, capsys, monkeypatch):
+    held = record(tmp_path, pdf, set_="held_out", document_id="H9")
+    monkeypatch.setattr("credit_intel.evaluation.dry_run.ASSIGNMENTS_PATH", held)
+    read = []
+    monkeypatch.setattr("credit_intel.evaluation.dry_run.ingest", lambda *a, **k: read.append(a) or (_ for _ in ()).throw(AssertionError("a page was read")))
+    from credit_intel.evaluation.guard import SendRefused
+
+    with pytest.raises(SendRefused):
+        dry_run(pdf, fx.LLM, assignments=held)
+
+    assert read == []  # ingest, which reads the pages, was never called
+
+
+def test_the_dry_run_command_line_reports_the_refusal_and_exits_with_one(pdf, tmp_path, capsys, monkeypatch):
+    held = record(tmp_path, pdf, set_="held_out", document_id="H9")
+    monkeypatch.setattr("credit_intel.evaluation.dry_run.ASSIGNMENTS_PATH", held)
+    import credit_intel.evaluation.dry_run as module
+
+    real = module.dry_run
+    monkeypatch.setattr(module, "dry_run", lambda *a, **k: real(*a, **{**k, "assignments": held}))
+
+    assert main([str(pdf)]) == 1
+    assert "dry run: refused" in capsys.readouterr().err

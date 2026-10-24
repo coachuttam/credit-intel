@@ -17,7 +17,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from credit_intel.config import ENV_TOKEN_CEILING, LLMSettings, PricingSettings, load_llm_settings, load_pricing
-from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, load_current_sets
+from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, file_sha256, load_current_sets, refuse_if_held_out
 from credit_intel.extraction.extract import render_pages
 from credit_intel.extraction.bases import drop_unknown_basis_pages
 from credit_intel.extraction.prompt import load_prompt
@@ -38,6 +38,10 @@ def dry_run(
     assignments: Path = ASSIGNMENTS_PATH,
 ) -> dict:
     """Counts and estimates for one document. Raises ``IngestionError`` for an unreadable input."""
+    try:
+        refuse_if_held_out(file_sha256(path), assignments)  # before any page is read (PRD O.2)
+    except OSError:
+        pass  # an unreadable file is reported by ingest below, as a catalogued error
     document = ingest(path)  # validates the file and hashes it; an unreadable input is a catalogued error
     sha256 = document.file_info.sha256
     known = load_current_sets(assignments).get(sha256)
@@ -106,6 +110,9 @@ def main(argv: list[str] | None = None) -> int:
         # The dry run makes no call, so it needs no ceiling; a placeholder satisfies the loader.
         llm = load_llm_settings(env={**os.environ, ENV_TOKEN_CEILING: os.environ.get(ENV_TOKEN_CEILING, "1")})
         result = dry_run(args.pdf, llm, basis=args.basis, page_range=args.pages, pricing=load_pricing())
+    except SendRefused as refusal:
+        print(f"dry run: refused ({refusal})", file=sys.stderr)
+        return 1
     except IngestionError as error:
         print(f"dry run: stopped {error.code.value}", file=sys.stderr)
         return 1
