@@ -1,0 +1,219 @@
+{
+  "results": {
+    "MET-01/-": {
+      "value": "20.0",
+      "undefined_reason": null,
+      "unit": "percent",
+      "formula": "(revenue_current - revenue_comparative) / revenue_comparative x 100",
+      "input_field_ids": [
+        "revenue.2025-03-31.consolidated",
+        "revenue.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        "1200",
+        "1000"
+      ],
+      "period_ends": [
+        "2025-03-31",
+        "2024-03-31"
+      ],
+      "caveats": []
+    },
+    "MET-02/comparative": {
+      "value": "10.0",
+      "undefined_reason": null,
+      "unit": "percent",
+      "formula": "net_profit / revenue x 100",
+      "input_field_ids": [
+        "net_profit.2024-03-31.consolidated",
+        "revenue.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        "100",
+        "1000"
+      ],
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "caveats": []
+    },
+    "MET-02/current": {
+      "value": "8.00",
+      "undefined_reason": null,
+      "unit": "percent",
+      "formula": "net_profit / revenue x 100",
+      "input_field_ids": [
+        "net_profit.2025-03-31.consolidated",
+        "revenue.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        "96",
+        "1200"
+      ],
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "caveats": []
+    },
+    "MET-03/comparative": {
+      "value": "1.2",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "formula": "current_assets / current_liabilities",
+      "input_field_ids": [
+        "current_assets.2024-03-31.consolidated",
+        "current_liabilities.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        "360",
+        "300"
+      ],
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "caveats": []
+    },
+    "MET-03/current": {
+      "value": "1.5",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "formula": "current_assets / current_liabilities",
+      "input_field_ids": [
+        "current_assets.2025-03-31.consolidated",
+        "current_liabilities.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        "450",
+        "300"
+      ],
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "caveats": []
+    },
+    "MET-04/comparative": {
+      "value": "0.7857142857142857142857142857",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "formula": "total_borrowings / total_equity",
+      "input_field_ids": [
+        "total_borrowings.2024-03-31.consolidated",
+        "total_equity.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        "550",
+        "700"
+      ],
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "caveats": [
+        "borrowings_not_presented_assumption"
+      ]
+    },
+    "MET-04/current": {
+      "value": "0.875",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "formula": "total_borrowings / total_equity",
+      "input_field_ids": [
+        "total_borrowings.2025-03-31.consolidated",
+        "total_equity.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        "700",
+        "800"
+      ],
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "caveats": [
+        "borrowings_not_presented_assumption"
+      ]
+    },
+    "MET-05/comparative": {
+      "value": null,
+      "undefined_reason": "not_applicable_no_interest",
+      "unit": "ratio",
+      "formula": "ebit / interest_expense",
+      "input_field_ids": [
+        "ebit.2024-03-31.consolidated",
+        "interest_expense.2024-03-31.consolidated"
+      ],
+      "input_values": [
+        "140",
+        "0"
+      ],
+      "period_ends": [
+        "2024-03-31"
+      ],
+      "caveats": []
+    },
+    "MET-05/current": {
+      "value": "6",
+      "undefined_reason": null,
+      "unit": "ratio",
+      "formula": "ebit / interest_expense",
+      "input_field_ids": [
+        "ebit.2025-03-31.consolidated",
+        "interest_expense.2025-03-31.consolidated"
+      ],
+      "input_values": [
+        "180",
+        "30"
+      ],
+      "period_ends": [
+        "2025-03-31"
+      ],
+      "caveats": []
+    }
+  },
+  "comparisons": {
+    "MET-02": {
+      "relative_change": "-20.0",
+      "undefined_reason": null,
+      "caveats": []
+    },
+    "MET-03": {
+      "relative_change": "25.00",
+      "undefined_reason": null,
+      "caveats": []
+    },
+    "MET-04": {
+      "relative_change": "11.36363636363636363636363637",
+      "undefined_reason": null,
+      "caveats": [
+        "borrowings_not_presented_assumption"
+      ]
+    },
+    "MET-05": {
+      "relative_change": null,
+      "undefined_reason": "not_applicable_no_interest",
+      "caveats": []
+    }
+  },
+  "derived": [
+    {
+      "field_id": "ebit.2025-03-31.consolidated",
+      "status": "extracted",
+      "value": "180",
+      "method": "EBIT-PBT",
+      "classification": null,
+      "input_field_ids": [
+        "profit_before_tax.2025-03-31.consolidated",
+        "interest_expense.2025-03-31.consolidated"
+      ]
+    },
+    {
+      "field_id": "ebit.2024-03-31.consolidated",
+      "status": "extracted",
+      "value": "140",
+      "method": "EBIT-PBT",
+      "classification": null,
+      "input_field_ids": [
+        "profit_before_tax.2024-03-31.consolidated",
+        "interest_expense.2024-03-31.consolidated"
+      ]
+    }
+  ]
+}
