@@ -149,3 +149,12 @@ def test_the_extraction_pipeline_uses_the_same_state_names():
 
     for name in ("RECEIVED", "VALIDATED", "TEXT_EXTRACTED", "STATEMENTS_LOCATED", "FIELDS_EXTRACTED", "VALIDATED_FIELDS", "FAILED"):
         assert getattr(pipeline, name) == getattr(states, name)
+
+
+def test_now_reads_the_recorders_own_clock_without_recording_anything():
+    ticks = iter(datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=n) for n in range(10))
+    recorder = Recorder(lambda: next(ticks))
+
+    first, second = recorder.now(), recorder.now()
+
+    assert second - first == timedelta(seconds=1) and recorder.events == () and recorder.state is None

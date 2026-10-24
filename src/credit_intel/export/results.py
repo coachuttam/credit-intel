@@ -142,6 +142,11 @@ def _indicator(result: Any) -> dict[str, Any]:
     }
 
 
+def render_data(data: dict[str, Any]) -> str:
+    """The exact text of ``results.json`` for data from ``build_results``: sorted keys, two-space indent, UTF-8 characters, one final newline."""
+    return json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
 def render_results(extraction: Any, metrics: MetricSet, rules: RuleSet, profile: Any | None = None) -> str:
-    """The exact text of ``results.json``: sorted keys, two-space indent, UTF-8 characters, one final newline."""
-    return json.dumps(build_results(extraction, metrics, rules, profile), indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    """The exact text of ``results.json`` for a run."""
+    return render_data(build_results(extraction, metrics, rules, profile))

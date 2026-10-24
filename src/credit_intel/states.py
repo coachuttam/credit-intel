@@ -52,6 +52,10 @@ class Recorder:
         self._error_code: str | None = None
         self._failed = False
 
+    def now(self) -> datetime:
+        """The current time by this recorder's clock (so a timestamp written beside the events agrees with them in tests)."""
+        return self._clock()
+
     @property
     def events(self) -> tuple[StageEvent, ...]:
         return tuple(self._events)
