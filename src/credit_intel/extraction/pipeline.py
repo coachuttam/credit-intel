@@ -16,6 +16,7 @@ hash, never document text, quotes, file names or values (FR-012.3).
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -49,14 +50,15 @@ from credit_intel.models import SourceDocument, StatementBasis, Status
 
 logger = logging.getLogger("credit_intel.pipeline")
 
-# FR-011 states, in order, for the stages this pipeline runs.
-RECEIVED = "received"
-VALIDATED = "validated"
-TEXT_EXTRACTED = "text_extracted"
-STATEMENTS_LOCATED = "statements_located"
-FIELDS_EXTRACTED = "fields_extracted"
-VALIDATED_FIELDS = "validated_fields"
-FAILED = "failed"
+from credit_intel.states import (  # noqa: E402  (FR-011 states; defined once in states.py)
+    FAILED,
+    FIELDS_EXTRACTED,
+    RECEIVED,
+    STATEMENTS_LOCATED,
+    TEXT_EXTRACTED,
+    VALIDATED,
+    VALIDATED_FIELDS,
+)
 
 
 @dataclass(frozen=True)
@@ -103,10 +105,12 @@ def run_extraction(
     declaration_settings: DeclarationSettings | None = None,
     column_settings: ColumnSettings | None = None,
     pricing: PricingSettings | None = None,
+    observer: Callable[[str, dict[str, object]], None] | None = None,
 ) -> ExtractionRun:
     """Run the pipeline on one PDF and return its field set and statistics.
 
-    Raises ``IngestionError`` for a catalogued failure (the input, no candidate pages, a
+    ``observer(state, counts)`` is told about each stage from ``validated`` onwards, with the same counts that
+    are logged (the caller owns ``received``). Raises ``IngestionError`` for a catalogued failure (the input, no candidate pages, a
     missing configured basis, invalid model output twice, or the token ceiling).
     """
     if basis not in (StatementBasis.CONSOLIDATED, StatementBasis.STANDALONE):
@@ -128,14 +132,19 @@ def run_extraction(
         elapsed = int((time.perf_counter() - started) * 1000)
         detail = " ".join(f"{key}={value}" for key, value in counts.items())
         logger.info("stage=%s doc=%s ms=%d %s", state, document_tag, elapsed, detail)
+        if observer is not None and state != RECEIVED:
+            observer(state, dict(counts))
 
     try:
         log(RECEIVED)
         stage = VALIDATED
-        document = ingest(path, ingestion_settings, extractor)  # type: ignore[arg-type]
-        document_tag = document.file_info.sha256[:12]
-        log(VALIDATED, pages=document.file_info.page_count)
-        stage = TEXT_EXTRACTED
+        def validated(info) -> None:  # called once validation passes, before the text is read
+            nonlocal document_tag, stage
+            document_tag = info.sha256[:12]
+            log(VALIDATED, pages=info.page_count)
+            stage = TEXT_EXTRACTED
+
+        document = ingest(path, ingestion_settings, extractor, on_validated=validated)  # type: ignore[arg-type]
         log(TEXT_EXTRACTED, pages_with_text=sum(1 for p in document.pages if p.has_text))
 
         stage = STATEMENTS_LOCATED
