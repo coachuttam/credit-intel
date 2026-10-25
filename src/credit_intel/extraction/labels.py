@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from credit_intel.config import LabelSettings
-from credit_intel.ingestion.locator import fold_phrase, is_nil_token, is_numeric_token
+from credit_intel.ingestion.locator import fold_phrase, is_figure_word, is_nil_token, is_numeric_token
 
 # A leading item marker: Roman numerals, one letter or digits, bare or in brackets or
 # followed by "." or ")" (applied after casefolding).
@@ -69,6 +69,23 @@ def normalise_label(label: str) -> str:
 
 def _heading_text(line: str) -> str:
     return normalise_label(row_label(line)).rstrip(":").strip()
+
+
+def expense_table_heading(lines: Sequence[str], index: int, settings: LabelSettings | None = None) -> bool:
+    """Whether a heading of an income-and-expense table is within the window above ``lines[index]`` (PRD FR-006.5, v0.4.33).
+
+    A heading is a line with no figure on it (a note number or a year is not a figure) whose folded text contains one of the
+    configured phrases. Only the ``expense_heading_window`` lines above the row are looked at, so a phrase further up does not count.
+    """
+    settings = settings or LabelSettings()
+    phrases = tuple(fold_phrase(phrase) for phrase in settings.expense_table_headings)
+    for line in lines[max(0, index - settings.expense_heading_window) : index]:
+        if any(is_figure_word(word) for word in line.split()):
+            continue
+        folded = fold_phrase(line)
+        if any(phrase in folded for phrase in phrases):
+            return True
+    return False
 
 
 def section_heading(

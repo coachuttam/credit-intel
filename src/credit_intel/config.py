@@ -203,6 +203,10 @@ class LabelSettings:
     currency_symbols: tuple[str, ...] = field(
         default_factory=lambda: tuple(t for tokens in DeclarationSettings().currency_tokens.values() for t in tokens if not t[0].isalpha())
     )
+    # A heading of an income-and-expense table (PRD FR-006.5, v0.4.33): under one of these, a bracketed interest expense is a positive
+    # expense. Provisional; extended only from tuning-set evidence (O.2). ``expense_heading_window`` is how many lines above the row it may be.
+    expense_table_headings: tuple[str, ...] = ("income (expense)", "(expense) income", "income/(expense)", "(expense)/income", "income and expense")
+    expense_heading_window: int = 8
     section_headings: dict[str, tuple[str, ...]] = field(
         default_factory=lambda: {
             NON_CURRENT: ("non-current liabilities",),

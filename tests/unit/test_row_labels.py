@@ -7,6 +7,7 @@ import pytest
 from credit_intel.config import CURRENT, NON_CURRENT, FieldLabelRule, LabelSettings
 from credit_intel.extraction.labels import (
     check_label,
+    expense_table_heading,
     normalise_label,
     row_label,
     section_heading,
@@ -391,3 +392,48 @@ def test_a_section_heading_row_is_not_affected_by_the_sign_rule():
 def test_the_sign_before_a_nil_dash_or_a_note_reference_is_dropped_too():
     assert check_label("total_equity", "Total equity $ - 1.00").ok
     assert check_label("total_equity", "Total equity 14 $ 600.00 $ 500.00").ok  # the note reference ends the label before any sign
+
+
+# --- the heading of an income-and-expense table (PRD v0.4.33, FR-006.5) -----------------------------------------------------------------
+
+
+NOTE = ["NOTE 3 - OTHER INCOME (EXPENSE), NET", "(In millions)", "Year Ended June 30, 2025 2024", "Interest and dividends income 4,100 3,900", "Interest expense (2,385) (2,935)"]
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["Other income (expense), net", "OTHER INCOME (EXPENSE)", "(Expense)/income", "Income/(expense) summary", "(Expense) income, net", "Income and expense", "Other income and expense"],
+)
+def test_each_configured_phrase_marks_the_heading(heading):
+    assert expense_table_heading([heading, "Interest expense (1.00)"], 1)
+
+
+def test_a_heading_with_a_note_number_or_a_year_still_counts_because_neither_is_a_figure():
+    assert expense_table_heading(NOTE, 4)
+
+
+@pytest.mark.parametrize("heading", ["Finance costs", "Other income", "Income (net of expense)", "Expenses", "Statement of profit and loss"])
+def test_other_headings_do_not(heading):
+    assert not expense_table_heading([heading, "Interest expense (1.00)"], 1)
+
+
+def test_a_line_with_a_figure_is_a_row_not_a_heading():
+    assert not expense_table_heading(["Other income (expense), net 4,100.00", "Interest expense (1.00)"], 1)
+
+
+def test_only_the_window_above_the_row_is_looked_at():
+    lines = ["Other income (expense), net", *["a sentence without a figure"] * 8, "Interest expense (1.00)"]
+
+    assert not expense_table_heading(lines, 9) and expense_table_heading(lines, 8)
+    assert expense_table_heading(lines, 9, replace(LabelSettings(), expense_heading_window=9))
+
+
+def test_a_phrase_after_the_row_or_on_the_row_itself_does_not_count():
+    assert not expense_table_heading(["Interest expense (1.00)", "Other income (expense), net"], 0)
+    assert not expense_table_heading(["Interest expense (1.00)", "Other income (expense), net"], 1 - 1)
+
+
+def test_the_phrases_are_a_setting_and_an_empty_list_turns_the_rule_off():
+    off = replace(LabelSettings(), expense_table_headings=())
+
+    assert not expense_table_heading(NOTE, 4, off) and expense_table_heading(NOTE, 4)

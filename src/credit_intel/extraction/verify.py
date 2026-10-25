@@ -36,7 +36,7 @@ from credit_intel.extraction.attributes import VerifiedAttributes, blocking_reas
 from credit_intel.extraction.bases import field_basis
 from credit_intel.extraction.columns import PageStructure, analyse_structure
 from credit_intel.extraction.declarations import check_currency, check_scale, check_sign
-from credit_intel.extraction.labels import LabelCheck, check_label
+from credit_intel.extraction.labels import LabelCheck, check_label, expense_table_heading
 from credit_intel.extraction.normalise import apply_scale, parse_value
 from credit_intel.extraction.periods import page_period_resolver
 from credit_intel.extraction.presence import check_presence
@@ -236,6 +236,12 @@ class FieldVerifier:
         # Each field has the basis of its own statement (H.4.6), not the document's one.
         basis = basis_info[0]
         extracted = not reasons
+        # FR-006.5 (v0.4.33): a bracketed interest expense under the heading of an income-and-expense table is a positive expense.
+        expense_rule = bool(
+            extracted and parsed is not None and parsed.value < 0 and name is FieldName.INTEREST_EXPENSE
+            and structure is not None and line is not None
+            and expense_table_heading([candidate.text for candidate in structure.lines], line.index, ctx.label_settings)
+        )  # fmt: skip
         validation = Validation(
             evidence_verified=presence.evidence_verified,
             value_in_evidence=presence.value_in_evidence,
@@ -245,7 +251,7 @@ class FieldVerifier:
             sign_verified=sign.ok if sign is not None else None,
             scale_verified=scale.ok if scale is not None else None,
             currency_verified=currency.ok if currency is not None else None,
-            details=self._details(role, label, column, sign, scale, currency, blockers, basis_info),
+            details=self._details(role, label, column, sign, scale, currency, blockers, basis_info, expense_rule),
         )
         record = ExtractedField(
             field_id=make_field_id(name, period_end, basis),
@@ -258,7 +264,7 @@ class FieldVerifier:
             basis_evidence=basis_evidence,
             status=Status.EXTRACTED if extracted else Status.REQUIRES_REVIEW,
             status_reason=None if extracted else reasons[0],
-            value=apply_scale(parsed.value, proposed.scale) if extracted and parsed is not None else None,
+            value=apply_scale(abs(parsed.value) if expense_rule else parsed.value, proposed.scale) if extracted and parsed is not None else None,
             currency=proposed.currency if extracted else None,
             raw_value=proposed.raw_value,
             # An unparsable raw value (which can never be extracted) is recorded as a number.
@@ -273,7 +279,7 @@ class FieldVerifier:
         )
         return FieldVerification(proposed, record, reasons)
 
-    def _details(self, role, label, column, sign, scale, currency, blockers, basis_info) -> dict:
+    def _details(self, role, label, column, sign, scale, currency, blockers, basis_info, expense_rule=False) -> dict:
         evidence = self._ctx.attributes.period_evidence.get(role)
         details: dict = {
             "period": {
@@ -297,7 +303,9 @@ class FieldVerifier:
                 "section": label.section,
             },
             "column": None,
-            "sign": None if sign is None else {"marker_on_page": sign.marker_present, "raw_negative": sign.negative},
+            "sign": None
+            if sign is None
+            else {"marker_on_page": sign.marker_present, "raw_negative": sign.negative, **({"expense_table_rule": True} if expense_rule else {})},
             "scale": None
             if scale is None
             else {

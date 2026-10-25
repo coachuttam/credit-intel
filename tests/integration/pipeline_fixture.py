@@ -108,6 +108,31 @@ def three_year_pdf(path: Path, headers=("2026", "2025", "2024")) -> Path:
     return path
 
 
+def income_expense_pdf(path: Path, heading: str = "Other income (expense), net", rows=None, gap_lines: int = 0) -> Path:
+    """A one-page table under ``heading`` (PRD v0.4.33): year columns under "Year ended March 31,", then ``rows`` of (label, current, comparative).
+
+    ``gap_lines`` plain sentences (no figures) sit between the heading and the table, to put the heading out of reach.
+    """
+    rows = rows if rows is not None else [("Interest and dividends income", "4,100.00", "3,900.00"), ("Interest expense", "(2,385.00)", "(2,935.00)")]
+    pdf = canvas.Canvas(str(path), invariant=1)
+    pdf.setFont("Helvetica", 10)
+    y = 780
+    for text in ("Acme Industries Limited", heading, *(f"The amounts below are shown in sentence {n}." for n in range(gap_lines)), "(Rs. in crore)", "Year ended March 31,"):
+        pdf.drawString(72, y, text)
+        y -= 15
+    pdf.drawCentredString(400, y, "2025")
+    pdf.drawCentredString(480, y, "2024")
+    y -= 15
+    for label, current, comparative in rows:
+        pdf.drawString(72, y, label)
+        pdf.drawRightString(430, y, current)
+        pdf.drawRightString(510, y, comparative)
+        y -= 14
+    pdf.showPage()
+    pdf.save()
+    return path
+
+
 def blank_text_pdf(path: Path) -> Path:
     """A PDF with text that is not a financial statement."""
     pdf = canvas.Canvas(str(path), invariant=1)

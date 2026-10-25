@@ -610,3 +610,86 @@ def test_b6_row_69_a_page_without_any_currency_declaration_still_blocks_the_fiel
 
     assert result.attributes.reporting_currency.status_reason is R.CURRENCY_NOT_VERIFIED
     assert result.field_set.counts["extracted"] == 0
+
+
+# --- a bracketed expense under an income-and-expense heading (PRD v0.4.33, FR-006.5; Appendix B.6 rows 75 to 79) ----------------------------
+
+
+def expense_reply(pdf, name="interest_expense", label="Interest expense", current="(2,385.00)", comparative="(2,935.00)"):
+    attributes = [
+        fx.attribute(pdf, "entity_name", "Acme Industries Limited", "Acme Industries Limited", "Acme Industries Limited"),
+        fx.attribute(pdf, "period_end", "March 31, 2025", "2025-03-31", "Year ended March 31,\n2025 2024", "current"),
+        fx.attribute(pdf, "reporting_currency", "Rs.", "INR", "(Rs. in crore)"),
+        fx.attribute(pdf, "scale", "in crore", "crore", "(Rs. in crore)"),
+    ]
+    return fx.reply(attributes, [fx.field(pdf, name, "current", current, label), fx.field(pdf, name, "comparative", comparative, label)])
+
+
+def expense_run(pdf, tmp_path, reply):
+    return run(pdf, tmp_path, [reply], page_range="1", assert_basis=StatementBasis.CONSOLIDATED)[0]
+
+
+def test_b6_row_75_a_bracketed_interest_expense_under_an_income_expense_heading_is_a_positive_expense(tmp_path):
+    pdf = fx.income_expense_pdf(tmp_path / "note.pdf")
+
+    result = expense_run(pdf, tmp_path, expense_reply(pdf))
+
+    current, comparative = (result.field_set.get(FieldName.INTEREST_EXPENSE, role) for role in (CUR, COMP))
+    assert (current.status, comparative.status) == (Status.EXTRACTED, Status.EXTRACTED)
+    assert (current.value, comparative.value) == (Decimal("23850000000.00"), Decimal("29350000000.00"))  # crore: the magnitude, scaled
+    assert (current.raw_value, comparative.raw_value) == ("(2,385.00)", "(2,935.00)")  # as printed
+    assert current.validation.sign_verified is True and current.validation.details["sign"]["expense_table_rule"] is True
+
+
+def test_b6_row_76_the_same_row_under_a_heading_without_the_phrase_stays_implausible(tmp_path):
+    pdf = fx.income_expense_pdf(tmp_path / "plain.pdf", heading="Finance costs")
+
+    result = expense_run(pdf, tmp_path, expense_reply(pdf))
+
+    record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
+    assert (record.status, record.status_reason, record.value) == (Status.REQUIRES_REVIEW, R.IMPLAUSIBLE_VALUE, None)
+
+
+def test_b6_row_76_a_heading_more_than_the_window_above_the_row_does_not_count(tmp_path):
+    near = fx.income_expense_pdf(tmp_path / "near.pdf", gap_lines=2)
+    far = fx.income_expense_pdf(tmp_path / "far.pdf", gap_lines=9)
+
+    assert expense_run(near, tmp_path / "a", expense_reply(near)).field_set.get(FieldName.INTEREST_EXPENSE, CUR).status is Status.EXTRACTED
+    assert expense_run(far, tmp_path / "b", expense_reply(far)).field_set.get(FieldName.INTEREST_EXPENSE, CUR).status_reason is R.IMPLAUSIBLE_VALUE
+
+
+def test_b6_row_77_an_income_row_is_not_accepted_as_interest_expense(tmp_path):
+    pdf = fx.income_expense_pdf(tmp_path / "income.pdf")
+
+    result = expense_run(pdf, tmp_path, expense_reply(pdf, label="Interest and dividends income", current="4,100.00", comparative="3,900.00"))
+
+    record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
+    assert record.status is Status.REQUIRES_REVIEW and record.status_reason is R.LABEL_NOT_RECOGNISED
+
+
+def test_b6_row_78_an_unbracketed_expense_is_taken_as_printed_without_the_rule(tmp_path):
+    pdf = fx.income_expense_pdf(tmp_path / "plus.pdf", rows=[("Interest expense", "2,385.00", "2,935.00")])
+
+    result = expense_run(pdf, tmp_path, expense_reply(pdf, current="2,385.00", comparative="2,935.00"))
+
+    record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
+    assert record.status is Status.EXTRACTED and record.value == Decimal("23850000000.00") and "expense_table_rule" not in record.validation.details["sign"]
+
+
+def test_b6_row_79_another_field_in_brackets_under_the_heading_keeps_its_own_rules(tmp_path):
+    pdf = fx.income_expense_pdf(tmp_path / "revenue.pdf", rows=[("Revenue", "(100.00)", "(90.00)")])
+
+    result = expense_run(pdf, tmp_path, expense_reply(pdf, name="revenue", label="Revenue", current="(100.00)", comparative="(90.00)"))
+
+    record = result.field_set.get(FieldName.REVENUE, CUR)
+    assert record.status is Status.REQUIRES_REVIEW and record.status_reason is R.IMPLAUSIBLE_VALUE  # a negative revenue is still implausible
+
+
+def test_the_sign_check_still_comes_first_a_model_that_drops_the_bracket_is_refused(tmp_path):
+    pdf = fx.income_expense_pdf(tmp_path / "dropped.pdf")
+
+    result = expense_run(pdf, tmp_path, expense_reply(pdf, current="2,385.00"))  # the page shows a bracket, the model's raw value does not
+
+    record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
+    assert record.status is Status.REQUIRES_REVIEW and record.status_reason is not None and record.status_reason is not R.IMPLAUSIBLE_VALUE
+
