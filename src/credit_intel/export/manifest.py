@@ -88,14 +88,26 @@ def build_manifest(
     result: RunResult | None = None,
     profile_file_name: str | None = None,
     rules_sha256: str | None = None,
+    asserted_basis: StatementBasis | None = None,
 ) -> dict[str, Any]:
-    """The contents of ``manifest.json``. ``result`` is ``None`` for a run that failed before it finished."""
+    """The contents of ``manifest.json``. ``result`` is ``None`` for a run that failed before it finished.
+
+    ``asserted_basis`` is the basis the analyst asked to assert (H.4.6, v0.4.24). A finished run records the assertion
+    itself (basis, pages, applied pages); a run that failed before the pages were known records the basis only.
+    """
     events = recorder.events
     if not events:
         raise ValueError("a manifest needs at least one recorded state")
     extraction = result.extraction if result is not None else None
     stats = extraction.stats if extraction is not None else None
     located = extraction.located if extraction is not None else None
+    assertion = extraction.basis_assertion if extraction is not None else None
+    if assertion is not None:
+        recorded_assertion: dict[str, Any] | None = to_jsonable(assertion)
+    elif asserted_basis is not None:
+        recorded_assertion = {"basis": asserted_basis.value, "pages": None, "applied_pages": None}
+    else:
+        recorded_assertion = None
     sha = input_sha256 if input_sha256 is not None else (extraction.source_document.sha256 if extraction else None)
     name = input_file_name if input_file_name is not None else (extraction.source_document.file_name if extraction else None)
     return {
@@ -115,6 +127,7 @@ def build_manifest(
         "range_pages_without_text": list(located.range_pages_without_text) if located else None,
         "excluded_candidate_count": len(located.excluded_candidates) if located else None,
         "requested_basis": requested_basis.value,
+        "basis_assertion": recorded_assertion,
         "bases_found": list(extraction.field_set.bases_present) if extraction else None,
         "code_version": {"git_commit": version.git_commit, "dirty": version.dirty},
         "package_versions": dict(sorted(packages.items())),

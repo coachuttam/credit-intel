@@ -65,3 +65,17 @@ def grouped(amount: str) -> str:
 def rounded(value: str, places: int) -> str:
     """Display rounding, half to even (FR-007.4). The exact value stays in ``results.json``."""
     return format(Decimal(value).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_EVEN), "f")
+
+
+def page_phrase(pages: list[int]) -> str:
+    """``page 3`` or ``pages 274–277, 280``: runs of consecutive pages joined with an en dash."""
+    if not pages:
+        return "the pages reviewed"
+    runs: list[list[int]] = []
+    for page in sorted(pages):
+        if runs and page == runs[-1][-1] + 1:
+            runs[-1].append(page)
+        else:
+            runs.append([page])
+    text = ", ".join(str(r[0]) if len(r) == 1 else f"{r[0]}–{r[-1]}" for r in runs)
+    return ("page " if len(pages) == 1 else "pages ") + text

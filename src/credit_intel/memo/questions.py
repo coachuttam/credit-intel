@@ -14,7 +14,7 @@ from typing import Any
 
 from credit_intel.memo.rule_text import condition_text
 from credit_intel.memo.sections import CAVEATS, SEVERITY_ORDER, listed_records, words
-from credit_intel.memo.text import UNVERIFIED_LABEL, calculated, code, esc, rule
+from credit_intel.memo.text import UNVERIFIED_LABEL, calculated, code, esc, page_phrase, rule
 
 FIELD_NAMES = {
     "revenue": "Revenue",
@@ -36,20 +36,6 @@ COMPONENTS = {"borrowings_non_current", "borrowings_current"}
 NOT_ASKED_RULES = {"RI-006", "RI-007"}  # the fields they name are asked about one by one
 NONE_TEXT = ("No questions were generated: no indicator was triggered and no field is missing, conflicting or awaiting review. "
              "A qualified human must still review this memo.")  # fmt: skip
-
-
-def page_phrase(pages: list[int]) -> str:
-    """``page 3`` or ``pages 274–277, 280``: runs of consecutive pages joined with an en dash."""
-    if not pages:
-        return "the pages reviewed"
-    runs: list[list[int]] = []
-    for page in sorted(pages):
-        if runs and page == runs[-1][-1] + 1:
-            runs[-1].append(page)
-        else:
-            runs.append([page])
-    text = ", ".join(str(r[0]) if len(r) == 1 else f"{r[0]}–{r[-1]}" for r in runs)
-    return ("page " if len(pages) == 1 else "pages ") + text
 
 
 def _subject(record: dict[str, Any]) -> str:

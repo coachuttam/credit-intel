@@ -66,10 +66,12 @@ def export_failure(
     input_file_name: str,
     input_sha256: str,
     profile_file_name: str | None = None,
+    asserted_basis: StatementBasis | None = None,
 ) -> Path:
     """Write a run folder holding only the manifest of a run that failed (its ``final_state`` is ``failed``)."""
     if not recorder.failed:
         raise ValueError("export_failure is for a run that failed")
     manifest = build_manifest(recorder=recorder, llm=llm, requested_basis=requested_basis, version=version, packages=packages,
-                              input_file_name=input_file_name, input_sha256=input_sha256, profile_file_name=profile_file_name)  # fmt: skip
+                              input_file_name=input_file_name, input_sha256=input_sha256, profile_file_name=profile_file_name,
+                              asserted_basis=asserted_basis)  # fmt: skip
     return write_run(output_dir, run_id(recorder.events[0].at, input_sha256), {"manifest.json": render_manifest(manifest)})

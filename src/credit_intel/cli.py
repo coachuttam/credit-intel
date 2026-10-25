@@ -111,7 +111,8 @@ def _record_failure(call: _Invocation, err: IO[str], error: BaseException) -> No
     try:
         path = export_failure(call.args.output_dir, recorder, call.llm, requested_basis=StatementBasis(call.args.basis), version=code_version(),
                               packages=package_versions(), input_file_name=call.args.pdf_path.name, input_sha256=call.sha256,
-                              profile_file_name=call.args.profile.name if call.args.profile else None)  # fmt: skip
+                              profile_file_name=call.args.profile.name if call.args.profile else None,
+                              asserted_basis=StatementBasis(call.args.assert_basis) if call.args.assert_basis else None)  # fmt: skip
     except Exception:
         logger.debug("the failure record could not be written", exc_info=True)
         return

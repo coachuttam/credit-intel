@@ -9,6 +9,9 @@
 * every field, metric and rule ID written in the memo exists in the results;
 * in the field and metric tables a row is labelled ``[UNVERIFIED]`` exactly when the field is not ``extracted``, and
   the value shown is the one in the results (as printed, whole units, or rounded half to even);
+* a sentence about an asserted basis (K.0) carries ``[ANALYST-PROVIDED]`` and exists only if ``extraction.basis_assertion`` does; the header
+  sentence is there when an assertion was given (applied or not needed); the sentence under sections 4 and 5 is there exactly when an
+  extracted field of the run has ``basis_evidence = analyst_assertion``;
 * headings are the title, then sections 1 to 9 in order; tables are rectangular; code spans are closed; no
   unescaped HTML, link or heading marker reaches the text.
 """
@@ -24,6 +27,8 @@ METRIC_ID = re.compile(r"\bMET-0\d(?:\.\d{4}-\d{2}-\d{2})?\b")
 RULE_ID = re.compile(r"\bRI-00\d\b")
 CODE = re.compile(r"`([^`]*)`")
 TOP_LEVEL = {"document", "extraction", "provisional_notice"}
+ASSERTION_MARKERS = ("asserted by the analyst", "analyst assertion of the basis")
+ASSERTED_INPUTS = "These figures rest on a statement basis that was asserted by the analyst, not established by the document."
 FORMS = [re.compile(p) for p in (r"SOURCE: p\.\d+", r"CALCULATED: [A-Za-z0-9_.\-]+", r"RULE: [A-Za-z0-9_.\-]+", r"ANALYST-PROVIDED", r"UNVERIFIED")]
 
 
@@ -53,12 +58,22 @@ def problems(memo: str, results: dict) -> list[str]:
     calculated_ids = set(metrics) | {f for f, r in fields.items() if r["origin"] == "derived"} | set(results["comparisons"]) | TOP_LEVEL
     rule_ids = {i["id"] for i in results["indicators"]}
     profile = results["analyst_provided"]
+    assertion = results["extraction"].get("basis_assertion")
     lines = memo.split("\n")
     headings = [l for l in lines if l.startswith("#")]
     if [h.split(" ")[0] for h in headings] != ["#"] + ["##"] * 9 or [re.match(r"## (\d)\.", h).group(1) for h in headings[1:] if re.match(r"## (\d)\.", h)] != list("123456789"):
         found.append(f"headings are not the title and sections 1 to 9: {headings}")
     if not memo.endswith("\n") or memo.endswith("\n\n"):
         found.append("the memo must end with exactly one newline")
+
+    if assertion is not None:
+        header_sentence = "**Basis asserted by the analyst**" if assertion["applied_pages"] else "was not needed."
+        if header_sentence not in memo.split("\n## 1. ")[0]:  # in the header itself, not only in section 1
+            found.append("an assertion of the basis was given but the memo does not disclose it")
+    rests = any(r["status"] == "extracted" and r.get("basis_evidence") == "analyst_assertion" for r in fields.values())
+    standalone = sum(1 for line in lines if line == f"{ASSERTED_INPUTS} [ANALYST-PROVIDED]")  # whole lines: a profile note that quotes it is not one
+    if standalone != (2 if rests else 0):
+        found.append(f"the sentence about figures resting on an asserted basis appears {standalone} times, expected {2 if rests else 0}")
 
     section, current_field, in_table, table_width = 0, None, False, None
     for number, line in enumerate(lines, 1):
@@ -118,7 +133,8 @@ def problems(memo: str, results: dict) -> list[str]:
                 if not ok:
                     found.append(f"{where}: [{label}] is not a page the field was read on")
             elif label == "ANALYST-PROVIDED" and not any(esc(v) in text for v in profile.values()):
-                found.append(f"{where}: [ANALYST-PROVIDED] beside text the profile does not hold")
+                if not (assertion is not None and any(marker in text for marker in ASSERTION_MARKERS)):
+                    found.append(f"{where}: [ANALYST-PROVIDED] beside text the profile does not hold and no assertion records")
         # field and metric tables
         cells = split_cells(line) if line.startswith("| `") else []
         if section == 3 and cells and cells[0].strip("`") in fields:

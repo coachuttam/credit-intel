@@ -104,6 +104,7 @@ def build_results(extraction: Any, metrics: MetricSet, rules: RuleSet, profile: 
             "configured_basis": field_set.configured_basis.value,
             "bases_present": list(field_set.bases_present),
             "attribute_basis_differs": extraction.attribute_basis_differs,
+            "basis_assertion": to_jsonable(getattr(extraction, "basis_assertion", None)),  # null, or {basis, pages, applied_pages} (H.4.6, v0.4.24)
         },
         "attributes": to_jsonable(list(extraction.attributes.all)),
         "fields": to_jsonable(list(field_set.fields)),

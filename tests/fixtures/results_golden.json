@@ -243,6 +243,7 @@
     "bases_present": [
       "consolidated"
     ],
+    "basis_assertion": null,
     "candidate_pages": [
       1
     ],

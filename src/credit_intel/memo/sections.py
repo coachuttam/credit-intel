@@ -11,7 +11,7 @@ from typing import Any
 
 from credit_intel.memo.rule_text import condition_text
 from credit_intel.memo.text import (
-    ANALYST_LABEL, DASH, UNVERIFIED_LABEL, calculated, code, esc, grouped, rounded, rule, source, table,
+    ANALYST_LABEL, DASH, UNVERIFIED_LABEL, calculated, code, esc, grouped, page_phrase, rounded, rule, source, table,
 )  # fmt: skip
 
 DRAFT_STATEMENT = "DRAFT — generated for human review. Not a credit decision. Verify all figures against the cited sources."
@@ -56,6 +56,29 @@ def borrower_line(results: dict[str, Any]) -> str:
     return _attribute_text(_attribute(results, "entity_name"))
 
 
+ASSERTED_INPUTS = ("These figures rest on a statement basis that was asserted by the analyst, not established by the document. " + ANALYST_LABEL)
+
+
+def basis_assertion(results: dict[str, Any]) -> dict[str, Any] | None:
+    """The analyst's assertion of the basis for this run (H.4.6, v0.4.24), or ``None``."""
+    return results["extraction"].get("basis_assertion")
+
+
+def assertion_sentence(results: dict[str, Any]) -> str | None:
+    """The memo's statement of an asserted basis (K.0): where it was applied, or that it was not needed."""
+    assertion = basis_assertion(results)
+    if assertion is None:
+        return None
+    if assertion["applied_pages"]:
+        return f"**Basis asserted by the analyst** for {page_phrase(assertion['applied_pages'])} ({esc(assertion['basis'])}); not established by the document. {ANALYST_LABEL}"
+    return f"An analyst assertion of the basis ({esc(assertion['basis'])}) was given for {page_phrase(assertion['pages'])} and was not needed. {ANALYST_LABEL}"
+
+
+def rests_on_assertion(results: dict[str, Any]) -> bool:
+    """Whether any extracted field of the run, source or derived, has a basis the analyst asserted."""
+    return any(r["status"] == "extracted" and r.get("basis_evidence") == "analyst_assertion" for r in listed_records(results))
+
+
 def header(results: dict[str, Any], run_id: str, generated_at: str) -> list[str]:
     document = results["document"]
     lines = [
@@ -65,6 +88,7 @@ def header(results: dict[str, Any], run_id: str, generated_at: str) -> list[str]
         f"**Run ID:** {code(run_id)}  ",
         f"**Generated:** {code(generated_at)} (UTC)", "",
         f"> **{DRAFT_STATEMENT}**", "",
+        *([assertion_sentence(results), ""] if basis_assertion(results) is not None else []),
         "**Origin labels**", "", *table(["Label", "Meaning"], [list(row) for row in LEGEND]), "",
     ]  # fmt: skip
     return lines
@@ -81,6 +105,8 @@ def section_1(results: dict[str, Any]) -> list[str]:
         f"- **Current period end:** {_attribute_text(_attribute(results, 'period_end', 'current'))}",
         f"- **Comparative period end:** {_attribute_text(_attribute(results, 'period_end', 'comparative'))}",
     ]  # fmt: skip
+    if basis_assertion(results) is not None:
+        lines.append(f"- **Basis assertion:** {assertion_sentence(results)}")
     stated = _attribute(results, "statement_basis")
     if results["extraction"]["attribute_basis_differs"] and stated is not None:
         lines.append(f"- **Note:** the basis the document states ({esc(stated['normalised_value'])}) differs from the basis used. {calculated('extraction')}")
@@ -112,6 +138,10 @@ def section_2(results: dict[str, Any], generated_at: str) -> list[str]:
         lines.append(f"- **Pages in the supplied range without text:** {empty} {calculated('extraction')}")
     if extraction["excluded_candidates"]:
         lines.append(f"- **Candidate pages not sent:** {len(extraction['excluded_candidates'])} {calculated('extraction')}")
+    assertion = basis_assertion(results)
+    if assertion is not None:
+        applied = page_phrase(assertion["applied_pages"]) if assertion["applied_pages"] else "no page"
+        lines.append(f"- **Basis asserted by the analyst:** {esc(assertion['basis'])} for {page_phrase(assertion['pages'])}; applied to {applied} {ANALYST_LABEL}")
     lines.append(f"- **Extraction date:** {code(generated_at)} (UTC) {calculated('document')}")
     return [*lines, ""]
 
@@ -140,6 +170,8 @@ def _notes(record: dict[str, Any], superseded: bool) -> str:
     notes = []
     if record["status_reason"]:
         notes.append(esc(words(record["status_reason"])))
+    if record.get("basis_evidence") == "analyst_assertion":
+        notes.append("basis asserted by the analyst")
     if record["origin"] == "derived" and record["derivation"]:
         notes.append(f"{code(record['derivation']['formula'])} ({esc(record['derivation']['method_id'])})")
     if superseded:
@@ -182,6 +214,8 @@ def section_4(results: dict[str, Any]) -> list[str]:
     lines = ["## 4. Financial ratios", ""]
     if not metrics:
         return [*lines, "No metrics were computed.", ""]
+    if rests_on_assertion(results):
+        lines += [ASSERTED_INPUTS, ""]
     rows = [
         [code(m["id"]), esc(m["name"]), _metric_value(m), code(m["formula"]), ", ".join(code(i) for i in m["input_field_ids"]), calculated(m["id"])]
         for m in metrics
@@ -294,6 +328,8 @@ def section_5(results: dict[str, Any]) -> list[str]:
     triggered = sorted((i for i in indicators if i["outcome"] == "triggered"), key=lambda i: (SEVERITY_ORDER[i["severity"]], i["id"]))
     lines = ["## 5. Potential risk indicators", "", f"> {esc(results['provisional_notice'])} {calculated('provisional_notice')}", ""]
     lines += ["Indicators are prompts for a human to investigate. They are not a rating, a score or a credit decision.", ""]
+    if rests_on_assertion(results):
+        lines += [ASSERTED_INPUTS, ""]
     if not triggered:
         lines += ["No risk indicators triggered by the configured rules.", ""]
     for indicator in triggered:
