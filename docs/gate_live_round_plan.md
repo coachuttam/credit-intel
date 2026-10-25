@@ -85,7 +85,7 @@ A mismatch shows up as `cache_miss` (a failure to replay, not a pass), never as 
 R1, one live round (the harness of runs 2 and 3; the key is already exported in your shell):
 
 ```
-CREDIT_INTEL_DOCUMENT=private/R1_infosys_2024_25.pdf CREDIT_INTEL_LIVE=1 \
+CREDIT_INTEL_PRIVATE_APPROVED=1 CREDIT_INTEL_DOCUMENT=private/R1_infosys_2024_25.pdf CREDIT_INTEL_LIVE=1 \
 CREDIT_INTEL_TOKEN_CEILING=30000 CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 \
 CREDIT_INTEL_PRICE_INPUT_PER_MILLION=0.15 CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION=0.60 \
 CREDIT_INTEL_PAGES=274-277 CREDIT_INTEL_PROMPT=extraction_v2 \
@@ -95,7 +95,7 @@ uv run --locked pytest tests/live/test_live_tuning.py -q -s
 R2, one live round (the pages are an example and must match the reference file):
 
 ```
-CREDIT_INTEL_DOCUMENT=private/R2_microsoft_2025.pdf CREDIT_INTEL_LIVE=1 \
+CREDIT_INTEL_PRIVATE_APPROVED=1 CREDIT_INTEL_DOCUMENT=private/R2_microsoft_2025.pdf CREDIT_INTEL_LIVE=1 \
 CREDIT_INTEL_TOKEN_CEILING=30000 CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 \
 CREDIT_INTEL_PRICE_INPUT_PER_MILLION=0.15 CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION=0.60 \
 CREDIT_INTEL_PAGES=36-38 CREDIT_INTEL_ASSERT_BASIS=consolidated CREDIT_INTEL_PROMPT=extraction_v2 \

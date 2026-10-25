@@ -16,7 +16,7 @@ import sys
 from decimal import Decimal
 from pathlib import Path
 
-from credit_intel.config import ENV_TOKEN_CEILING, LLMSettings, PricingSettings, load_llm_settings, load_pricing
+from credit_intel.config import ENV_TOKEN_CEILING, ENV_USE_JEV, JevSettings, LLMSettings, PricingSettings, load_jev_settings, load_llm_settings, load_pricing
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, file_sha256, load_current_sets, refuse_if_held_out
 from credit_intel.extraction.assertion import apply_assertion
 from credit_intel.extraction.extract import render_pages
@@ -28,6 +28,7 @@ from credit_intel.ingestion.locator import check_statement_basis, locate_stateme
 from credit_intel.llm.budget import estimate_tokens
 from credit_intel.llm.cost import estimate_cost
 from credit_intel.models import StatementBasis
+from credit_intel.pagefilter.jev import page_state, question_text
 
 
 def dry_run(
@@ -39,8 +40,13 @@ def dry_run(
     pricing: PricingSettings | None = None,
     assignments: Path = ASSIGNMENTS_PATH,
     assert_basis: str | None = None,
+    jev: JevSettings | None = None,
+    jev_all_pages: bool = False,
 ) -> dict:
     """Counts and estimates for one document. Raises ``IngestionError`` for an unreadable input.
+
+    ``jev`` adds the estimate for the optional page classifier (PRD v0.4.31): how many pages it would read (the candidates, or every
+    page with text if ``jev_all_pages``), the conservative input tokens and, if a price is set, the cost. Nothing is called.
 
     ``assert_basis`` is the analyst's assertion for the pages of ``page_range`` (H.4.6, v0.4.24); it needs a page range. A page whose
     title names the other basis stops the gate here, as it would stop the run, and the result says which pages the assertion covers.
@@ -109,6 +115,18 @@ def dry_run(
         "worst_case_usd_two_calls": None,
         "ceiling_bound_usd": None,
     }
+    if jev is not None:
+        read = [p for p in document.pages if p.has_text] if jev_all_pages else [by_number[n] for n in candidates]
+        overhead = estimate_tokens(question_text())
+        tokens = sum(estimate_tokens(page_state(p.text, jev.state_lines)) + overhead for p in read)
+        result["jev"] = {
+            "model": jev.model,
+            "pages_read": len(read),
+            "all_pages": jev_all_pages,
+            "state_lines": jev.state_lines,
+            "estimated_input_tokens": tokens,
+            "estimated_cost_usd": None if jev.price_input_per_million is None else format(Decimal(tokens) * jev.price_input_per_million / Decimal(1_000_000), "f"),
+        }
     if pricing is not None and estimate is not None:
         one = estimate_cost(estimate, llm.max_output_tokens, pricing)
         result["worst_case_usd_one_call"] = str(one)
@@ -123,13 +141,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--basis", choices=("consolidated", "standalone"), default="consolidated")
     parser.add_argument("--pages", default=None)
     parser.add_argument("--assert-basis", choices=("consolidated", "standalone"), default=None, help="the analyst's assertion for the pages of --pages (needs --pages)")
+    parser.add_argument("--jev", action="store_true", help="also estimate the optional Jev page classifier (reads the candidate pages)")
+    parser.add_argument("--jev-all-pages", action="store_true", help="with --jev: estimate reading every page with text")
     args = parser.parse_args(argv)
     if args.assert_basis and not args.pages:
         parser.error("--assert-basis requires --pages")
     try:
         # The dry run makes no call, so it needs no ceiling; a placeholder satisfies the loader.
         llm = load_llm_settings(env={**os.environ, ENV_TOKEN_CEILING: os.environ.get(ENV_TOKEN_CEILING, "1")})
-        result = dry_run(args.pdf, llm, basis=args.basis, page_range=args.pages, pricing=load_pricing(), assert_basis=args.assert_basis)
+        jev = load_jev_settings(env={**os.environ, ENV_USE_JEV: "true"}) if args.jev or args.jev_all_pages else None
+        result = dry_run(args.pdf, llm, basis=args.basis, page_range=args.pages, pricing=load_pricing(), assert_basis=args.assert_basis,
+                         jev=jev, jev_all_pages=args.jev_all_pages)  # fmt: skip
     except SendRefused as refusal:
         print(f"dry run: refused ({refusal})", file=sys.stderr)
         return 1

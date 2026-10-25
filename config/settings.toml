@@ -11,3 +11,20 @@ max_output_tokens = 4096     # CREDIT_INTEL_MAX_OUTPUT_TOKENS; per-call output l
 # Set it here, or with CREDIT_INTEL_TOKEN_CEILING. A missing, non-integer, zero
 # or negative value fails with E-CONFIG-INVALID.
 # token_ceiling = <a positive integer>
+
+# Which provider does each step (PRD v0.4.31). `extract` must be the [llm] provider; `classify` runs only when
+# the environment variable USE_JEV is "true" (default: off, and then behaviour is exactly as without this table).
+[steps]
+classify = "jev"
+extract = "openai"
+
+# Optional page classification by Jev (TypeSafe AI). Provisional, tuned on the tuning set only (O.2). The API key is
+# read from TYPESAFE_API_KEY in the environment only. The price of a Jev call has no default (D-02): enter it after
+# checking docs.typesafe.ai, here or with CREDIT_INTEL_JEV_PRICE_INPUT_PER_MILLION.
+[jev]
+model = "jev-latest"            # an alias that moves with new releases; every response's versioned ID is logged
+threshold = 0.85                # confidence (0 to 1) a label needs before a page may be dropped
+timeout_seconds = 10.0          # per call
+time_budget_seconds = 60.0      # per document; then Jev is skipped for its remaining pages
+state_lines = 40                # lines from the top of a page that Jev reads
+max_consecutive_failures = 3    # then Jev is skipped for the rest of the run

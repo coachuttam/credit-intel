@@ -26,8 +26,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any
 
-from credit_intel.config import DEFAULT_SETTINGS_PATH, LLMSettings, load_llm_settings, load_pricing
-from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, file_sha256
+from credit_intel.config import (
+    DEFAULT_SETTINGS_PATH,
+    LLMSettings,
+    load_jev_settings,
+    load_llm_settings,
+    load_pricing,
+    load_step_settings,
+)
+from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, ENV_PRIVATE_APPROVED, file_sha256
 from credit_intel.export.manifest import code_version, package_versions, run_id
 from credit_intel.export.run_export import export_failure, export_run
 from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, ErrorCode, IngestionError, exit_code
@@ -35,6 +42,8 @@ from credit_intel.llm.factory import build_provider
 from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
 from credit_intel.memo.trace import MemoCheckFailed
 from credit_intel.models import StatementBasis
+from credit_intel.pagefilter.factory import ClassifierFactory, build_classifier
+from credit_intel.pagefilter.filter import PageFilterSetup
 from credit_intel.run import run_pipeline
 from credit_intel.send_rule import NOTICE, SendRefusal, check_send
 from credit_intel.states import Clock, Recorder, utc_now
@@ -121,17 +130,35 @@ def _record_failure(call: _Invocation, err: IO[str], error: BaseException) -> No
     print(f"Run record: {path}", file=err)
 
 
-def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[str], assignments: Path, env: Mapping[str, str]) -> int:
+def _page_filter(args: argparse.Namespace, llm: LLMSettings, env: Mapping[str, str], factory: ClassifierFactory) -> PageFilterSetup | None:
+    """The optional page classifier of a run (PRD v0.4.31), or ``None`` when ``USE_JEV`` is not "true". Never raises for the classifier."""
+    jev = load_jev_settings(args.config, env)
+    if not jev.enabled:
+        return None
+    load_step_settings(args.config, llm.provider)  # a bad [steps] table is a configuration error, as any other setting is
+    try:
+        classifier = factory(jev, env)
+    except Exception:
+        logger.debug("the page classifier could not be built", exc_info=True)
+        return PageFilterSetup(jev, None, "error")
+    return PageFilterSetup(jev, classifier, None if classifier is not None else "no_key")
+
+
+def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[str], assignments: Path, env: Mapping[str, str],
+             classifier_factory: ClassifierFactory = build_classifier) -> int:  # fmt: skip
     args = call.args
     call.llm = llm = load_llm_settings(args.config, env)
     pricing = load_pricing(args.config, env)
+    page_filter = _page_filter(args, llm, env, classifier_factory)
     try:
         call.sha256 = file_sha256(args.pdf_path)
     except OSError:
         raise IngestionError(ErrorCode.NOT_FOUND) from None
-    external = llm.provider != "fake"
+    # The send rule applies to every provider that would receive page text: the extraction model and the classifier (v0.4.31).
+    external = llm.provider != "fake" or (page_filter is not None and page_filter.classifier is not None and page_filter.classifier.sends_off_machine)
     try:
-        check_send(call.sha256, external=external, confirmed=args.confirm_public_document, assignments=assignments)
+        check_send(call.sha256, external=external, confirmed=args.confirm_public_document, assignments=assignments,
+                   path=args.pdf_path, private_approved=env.get(ENV_PRIVATE_APPROVED) == "1")  # fmt: skip
     except SendRefusal as refusal:  # a catalogued failure before `received`: exit 3, a fixed reason word, no failure record (G.1, v0.4.27)
         raise IngestionError(ErrorCode.SEND_REFUSED, detail=refusal.reason) from None
     if external:
@@ -140,7 +167,7 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     result = run_pipeline(
         args.pdf_path, LazyProvider(lambda: factory(llm, env)), llm, recorder=call.recorder, basis=basis, page_range=args.pages,
         pricing=pricing, profile_path=args.profile,
-        assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None,
+        assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, page_filter=page_filter,
     )  # fmt: skip
     path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),
                       profile_file_name=args.profile.name if args.profile else None)  # fmt: skip
@@ -157,8 +184,9 @@ def main(
     stderr: IO[str] | None = None,
     assignments: Path = ASSIGNMENTS_PATH,
     env: Mapping[str, str] | None = None,
+    classifier_factory: ClassifierFactory = build_classifier,
 ) -> int:
-    """Run the command and return its exit code. The streams, clock, environment and provider factory can be replaced for tests."""
+    """Run the command and return its exit code. The streams, clock, environment and the provider and classifier factories can be replaced for tests."""
     out, err = stdout or sys.stdout, stderr or sys.stderr
     environment = os.environ if env is None else env
     try:
@@ -178,7 +206,7 @@ def main(
     package_logger.setLevel(handler.level)
     call = _Invocation(args, Recorder(clock))
     try:
-        return _execute(call, provider_factory, out, err, assignments, environment)
+        return _execute(call, provider_factory, out, err, assignments, environment, classifier_factory)
     except IngestionError as error:
         print(str(error), file=err)
         _record_failure(call, err, error)

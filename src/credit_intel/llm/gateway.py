@@ -26,6 +26,8 @@ class LLMGateway:
         self.calls = 0  # provider calls made (a cache hit or a refused call makes none)
         self.input_tokens = 0  # as reported by the provider, over the calls made
         self.output_tokens = 0
+        self.cached_input_tokens = 0  # what the cache hits would have used (not billed; for comparing runs)
+        self.cached_output_tokens = 0
 
     def complete(
         self,
@@ -35,6 +37,8 @@ class LLMGateway:
     ) -> LLMResponse:
         cached = self._cache.get(inputs)
         if cached is not None:
+            self.cached_input_tokens += cached.usage.input_tokens
+            self.cached_output_tokens += cached.usage.output_tokens
             return cached
         self._budget.check(estimate_tokens(request.prompt_text), request.max_output_tokens)
         response = self._provider.complete(request)

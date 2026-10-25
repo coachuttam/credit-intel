@@ -94,11 +94,77 @@ def test_the_message_is_the_reason_word_and_nothing_else(tmp_path):
 
 
 def test_a_refusal_is_a_send_refused_so_the_tuning_tools_still_catch_it():
-    assert issubclass(SendRefusal, SendRefused) and set(REASONS) == {"held_out", "not_recorded", "record_unreadable"}
+    assert issubclass(SendRefusal, SendRefused) and set(REASONS) == {"held_out", "not_recorded", "record_unreadable", "private_path"}
 
 
-def test_only_the_three_reasons_exist():
+def test_only_the_four_reasons_exist():
     for reason in REASONS:
         assert SendRefusal(reason).reason == reason
     with pytest.raises(ValueError):
         SendRefusal("because I said so")
+
+
+# --- the owner's private/ folder (PRD v0.4.31, SEC-10) -------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def private_document(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    folder = tmp_path / "private"
+    folder.mkdir()
+    document = folder / "report.pdf"
+    document.write_bytes(b"%PDF-")
+    return document
+
+
+def test_a_document_under_private_is_refused_even_when_recorded_as_tuning_unless_the_owner_approved_the_run(tmp_path, private_document):
+    path = record(tmp_path, ("R9", SHA, "tuning"))
+
+    with pytest.raises(SendRefusal) as caught:
+        check_send(SHA, external=True, confirmed=False, assignments=path, path=private_document)
+    assert caught.value.reason == "private_path" and str(caught.value) == "private_path" and str(tmp_path) not in str(caught.value)
+    assert check_send(SHA, external=True, confirmed=False, assignments=path, path=private_document, private_approved=True) == "tuning"
+
+
+def test_the_confirmation_does_not_open_private_and_an_approval_does_not_open_an_unrecorded_document(tmp_path, private_document):
+    empty = record(tmp_path)
+
+    for approved in (False, True):
+        with pytest.raises(SendRefusal) as caught:
+            check_send(SHA, external=True, confirmed=True, assignments=empty, path=private_document, private_approved=approved)
+        assert caught.value.reason == "private_path"
+
+
+def test_a_held_out_document_under_private_is_refused_as_held_out_first(tmp_path, private_document):
+    path = record(tmp_path, ("H9", SHA, "held_out"))
+
+    with pytest.raises(SendRefusal) as caught:
+        check_send(SHA, external=True, confirmed=True, assignments=path, path=private_document, private_approved=True)
+    assert caught.value.reason == "held_out"
+
+
+def test_a_document_outside_private_is_not_affected_and_a_provider_that_sends_nothing_is_never_checked(tmp_path, private_document):
+    elsewhere = tmp_path / "public.pdf"
+    elsewhere.write_bytes(b"%PDF-")
+    path = record(tmp_path, ("R9", SHA, "tuning"))
+
+    assert check_send(SHA, external=True, confirmed=False, assignments=path, path=elsewhere) == "tuning"
+    assert check_send(SHA, external=False, confirmed=False, assignments=path, path=private_document) == "local"
+
+
+def test_a_directory_that_is_merely_called_private_elsewhere_does_not_count(tmp_path):
+    other = tmp_path / "elsewhere"
+    (other / "private").mkdir(parents=True)
+    document = other / "private" / "report.pdf"
+    document.write_bytes(b"%PDF-")
+
+    assert check_send(SHA, external=True, confirmed=True, assignments=record(tmp_path), path=document) == "confirmed"
+
+
+def test_a_link_into_private_is_followed(tmp_path, private_document):
+    link = tmp_path / "innocent.pdf"
+    link.symlink_to(private_document)
+
+    with pytest.raises(SendRefusal) as caught:
+        check_send(SHA, external=True, confirmed=True, assignments=record(tmp_path), path=link)
+    assert caught.value.reason == "private_path"

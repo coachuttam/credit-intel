@@ -45,11 +45,22 @@ The command line enforces this as follows when the provider sends data off the m
 - a document recorded as **held out** in `tests/eval/assignments.jsonl` is never sent, whatever the options;
 - a document recorded as **tuning** is sent;
 - any other document is sent only if you pass `--confirm-public-document`, which says that you have checked that it is public;
-- if the record file exists but cannot be read, every document is refused.
+- if the record file exists but cannot be read, every document is refused;
+- a document in the project's `private/` folder is refused (`private_path`) unless it is recorded as tuning **and** you approved that run with `CREDIT_INTEL_PRIVATE_APPROVED=1` in its environment;
+- the same rule covers the optional page classifier below, when it sends pages.
 
-A refusal is a catalogued failure: `E-INPUT-SEND-REFUSED`, exit code 3, before any provider is built or any file is written. It names the reason (`held_out`, `not_recorded` or `record_unreadable`) and never the document's hash, path or ID.
+A refusal is a catalogued failure: `E-INPUT-SEND-REFUSED`, exit code 3, before any provider is built or any file is written. It names the reason (`held_out`, `not_recorded`, `record_unreadable` or `private_path`) and never the document's hash, path or ID.
 
 A notice is printed whenever pages may be sent. Run folders (`runs/`), the response cache (`.cache/`) and `private/` are ignored by git.
+
+## Optional page classification (Jev)
+
+Off by default. With `USE_JEV=true` in the environment, a hosted classifier (Jev, TypeSafe AI) labels each candidate page (balance sheet, profit and loss, cash flow, notes, other, and consolidated, standalone or unclear) before the extraction model runs, and pages it is confident are not needed are not sent. It can only remove pages: the extraction model still reads every value and every value is still verified against its page. Any doubt, error or timeout sends the page exactly as without it, and a failure of the classifier never fails a run. Pages you name with `--pages` are never filtered, and notes pages are never removed.
+
+- The key is read from `TYPESAFE_API_KEY` (or `JEV_API_KEY`) in the environment, never from a file. `USE_JEV` is read from the environment too; the settings are in the `[jev]` and `[steps]` tables of `config/settings.toml`.
+- It sends page text to a second hosted service, so the send rule above applies to it. TypeSafe's data-retention terms are not stated in its public documentation; read them before using it on anything.
+- With it on, `results.json` gains `extraction.page_filter` and `manifest.json` gains `page_filter` (per-page labels, confidence, fallback, latency, cost). With it off neither file mentions it.
+- To see what it would cost and whether it helps on a tuning report: `uv run python -m credit_intel.evaluation.jev_eval <pdf> [--pages R]` prints an estimate and calls nothing; its live option, which needs a maximum spend that covers the worst case, runs both ways and prints counts only.
 
 ## Command line
 
@@ -75,7 +86,7 @@ On success the command prints the run folder path and exits 0. On a failure it p
 | 0 | Success. |
 | 1 | An unexpected error. The message gives the run ID and no stack trace. |
 | 2 | A bad argument. |
-| 3 | The input is not acceptable: missing or unreadable file, not a PDF, too large, encrypted, bad page range, bad profile, or the document may not be sent (`E-INPUT-SEND-REFUSED`, with one reason word: `held_out`, `not_recorded` or `record_unreadable`). |
+| 3 | The input is not acceptable: missing or unreadable file, not a PDF, too large, encrypted, bad page range, bad profile, or the document may not be sent (`E-INPUT-SEND-REFUSED`, with one reason word: `held_out`, `not_recorded`, `record_unreadable` or `private_path`). |
 | 4 | The statements could not be located or the requested basis is not in the document. |
 | 5 | The model step failed: authentication, an unavailable provider, invalid output, or the token ceiling. |
 | 6 | The settings or rules file is invalid. |

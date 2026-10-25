@@ -89,7 +89,8 @@ def build_results(extraction: Any, metrics: MetricSet, rules: RuleSet, profile: 
     """The contents of ``results.json`` for one run, as plain JSON types."""
     field_set = extraction.field_set
     derived = [*metrics.derived, *metrics.derived_borrowings]
-    return {
+    page_filter = getattr(extraction, "page_filter", None)
+    results = {
         "schema_version": SCHEMA_VERSION,
         "document": {
             "file_name": extraction.source_document.file_name,
@@ -120,6 +121,9 @@ def build_results(extraction: Any, metrics: MetricSet, rules: RuleSet, profile: 
         "provisional_notice": rules.provisional_notice,
         "analyst_provided": {} if profile is None else {key: value for key, value in profile.items()},
     }
+    if page_filter is not None:  # only when the optional page classifier was switched on (PRD v0.4.31); a run without it is unchanged
+        results["extraction"]["page_filter"] = page_filter.to_results()
+    return results
 
 
 def _indicator(result: Any) -> dict[str, Any]:

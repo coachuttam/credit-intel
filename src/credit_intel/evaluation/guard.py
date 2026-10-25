@@ -12,14 +12,39 @@ tuning after inspection, O.2) takes effect.
 
 import hashlib
 import json
+from collections.abc import Mapping
 from pathlib import Path
 
-ASSIGNMENTS_PATH = Path(__file__).resolve().parents[3] / "tests" / "eval" / "assignments.jsonl"
+from credit_intel.config import ENV_PRIVATE_APPROVED
+
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+ASSIGNMENTS_PATH = PROJECT_ROOT / "tests" / "eval" / "assignments.jsonl"
 MEMBERS = ("document_id", "sha256", "set", "assigned_on", "event", "moved_from", "reason")
 
 
 class SendRefused(Exception):
     """The document may not be sent to the hosted API. The message holds no document content."""
+
+
+def is_private_path(path: Path) -> bool:
+    """Whether the document sits in the owner's ``private/`` folder (the project's, or the current directory's), links followed.
+
+    Only those two folders count, not any directory that happens to be called ``private`` (a system temporary directory
+    can be, on macOS), so the rule is about the owner's real documents and nothing else.
+    """
+    target = path.expanduser().resolve()
+    return any(target.is_relative_to((base / "private").resolve()) for base in (PROJECT_ROOT, Path.cwd()))
+
+
+def check_private_path(path: Path, env: Mapping[str, str]) -> None:
+    """Refuse a document under ``private/`` unless the owner approved this run (v0.4.31, SEC-10).
+
+    The two tuning reports live there, so a run on them needs ``CREDIT_INTEL_PRIVATE_APPROVED=1`` in the environment of that
+    run, set by the owner, and the document must also be recorded as tuning (``check_may_send``). Neither model is ever run on
+    a document under ``private/`` otherwise. The message holds no path.
+    """
+    if is_private_path(path) and env.get(ENV_PRIVATE_APPROVED) != "1":
+        raise SendRefused("a document under private/ may not be sent without the owner's approval of this run")
 
 
 def file_sha256(path: Path) -> str:

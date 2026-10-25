@@ -110,7 +110,7 @@ def build_manifest(
         recorded_assertion = None
     sha = input_sha256 if input_sha256 is not None else (extraction.source_document.sha256 if extraction else None)
     name = input_file_name if input_file_name is not None else (extraction.source_document.file_name if extraction else None)
-    return {
+    manifest = {
         "manifest_schema_version": MANIFEST_SCHEMA_VERSION,
         "results_schema_version": RESULTS_SCHEMA_VERSION,
         "run_id": run_id(events[0].at, sha) if sha is not None else None,
@@ -141,6 +141,10 @@ def build_manifest(
                    "llm_calls": stats.llm_calls, "retries": stats.llm_retries} if stats else None,  # fmt: skip
         "estimated_cost_usd": to_jsonable(stats.estimated_cost) if stats else None,
     }
+    page_filter = getattr(extraction, "page_filter", None)
+    if page_filter is not None:  # only when the optional page classifier was switched on (PRD v0.4.31): per-page labels, latency, cost
+        manifest["page_filter"] = page_filter.to_manifest()
+    return manifest
 
 
 def render_manifest(manifest: dict[str, Any]) -> str:

@@ -47,6 +47,7 @@ from credit_intel.llm.cache import DEFAULT_CACHE_DIR, ResponseCache
 from credit_intel.llm.cost import estimate_cost
 from credit_intel.llm.gateway import LLMGateway
 from credit_intel.llm.provider import LLMProvider
+from credit_intel.pagefilter.filter import PageFilterOutcome, PageFilterSetup, filter_candidates, unavailable_outcome
 from credit_intel.models import SourceDocument, StatementBasis, Status
 
 logger = logging.getLogger("credit_intel.pipeline")
@@ -72,6 +73,8 @@ class RunStats:
     input_tokens: int = 0  # as reported by the provider, over the calls made
     output_tokens: int = 0
     estimated_cost: Decimal | None = None  # USD, only if prices are configured (D-02)
+    cached_input_tokens: int = 0  # what the cache hits stand for: not billed, but the size of the request (comparing runs)
+    cached_output_tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,8 @@ class ExtractionRun:
     # The analyst's assertion of the basis for the pages of a ``--pages`` run, and where it was needed
     # (H.4.6, v0.4.24); ``None`` if none was given.
     basis_assertion: BasisAssertion | None = None
+    # What the optional page classifier did (PRD v0.4.31); ``None`` when it was not switched on.
+    page_filter: PageFilterOutcome | None = None
 
 
 def run_extraction(
@@ -111,6 +116,7 @@ def run_extraction(
     pricing: PricingSettings | None = None,
     assert_basis: StatementBasis | None = None,
     observer: Callable[[str, dict[str, object]], None] | None = None,
+    page_filter: PageFilterSetup | None = None,
 ) -> ExtractionRun:
     """Run the pipeline on one PDF and return its field set and statistics.
 
@@ -167,6 +173,18 @@ def run_extraction(
             located = drop_unknown_basis_pages({p.page_number: p for p in document.pages}, located, locator_settings)
         asserted = {"asserted_pages": len(assertion.applied_pages)} if assertion is not None else {}
         log(STATEMENTS_LOCATED, method=located.method, candidates=len(located.candidates), **asserted)
+
+        # PRD v0.4.31: the optional classifier may remove candidate pages (never add one); with it off nothing here runs.
+        page_filter_outcome = None
+        if page_filter is not None and page_filter.settings.enabled and located.candidates:
+            if page_filter.classifier is None:
+                candidate_pages = tuple(sorted(c.page_number for c in located.candidates))
+                page_filter_outcome = unavailable_outcome(page_filter.settings, page_filter.unavailable_reason or "unavailable", candidate_pages)
+            else:
+                located, page_filter_outcome = filter_candidates(
+                    located, {p.page_number: p.text for p in document.pages}, page_filter.classifier, page_filter.settings, basis,
+                    document_tag=document_tag, filter_page_ranges=page_filter.filter_page_ranges,
+                )
 
         stage = FIELDS_EXTRACTED
         extraction = extract_fields(
@@ -237,9 +255,12 @@ def run_extraction(
             gateway.input_tokens,
             gateway.output_tokens,
             estimate_cost(gateway.input_tokens, gateway.output_tokens, pricing) if pricing else None,
+            gateway.cached_input_tokens,
+            gateway.cached_output_tokens,
         ),
         attribute_basis_differs=(
             basis_attribute.status is Status.EXTRACTED and basis_attribute.normalised_value != basis.value
         ),
         basis_assertion=assertion,
+        page_filter=page_filter_outcome,
     )

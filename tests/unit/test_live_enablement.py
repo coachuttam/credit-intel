@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 
 from credit_intel.config import (
+    ENV_JEV_API_KEY,
+    ENV_JEV_PRICE_INPUT,
     ENV_LIVE,
     ENV_MAX_OUTPUT_TOKENS,
     ENV_OPENAI_API_KEY,
@@ -21,6 +23,8 @@ from credit_intel.config import (
     ENV_LLM_MODEL_ID,
     ENV_LLM_PROVIDER,
     ENV_TOKEN_CEILING,
+    ENV_TYPESAFE_API_KEY,
+    ENV_USE_JEV,
     LLMSettings,
     PricingSettings,
     load_pricing,
@@ -55,7 +59,7 @@ def test_env_example_names_every_variable_the_code_reads():
 
     assert names == {
         ENV_OPENAI_API_KEY, ENV_TOKEN_CEILING, ENV_LLM_PROVIDER, ENV_LLM_MODEL_ID, ENV_MAX_OUTPUT_TOKENS,
-        ENV_PRICE_INPUT, ENV_PRICE_OUTPUT, ENV_LIVE,
+        ENV_PRICE_INPUT, ENV_PRICE_OUTPUT, ENV_LIVE, ENV_USE_JEV, ENV_TYPESAFE_API_KEY, ENV_JEV_API_KEY, ENV_JEV_PRICE_INPUT,
     }  # fmt: skip
 
 

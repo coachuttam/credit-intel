@@ -295,6 +295,7 @@ ENV_OPENAI_API_KEY = "OPENAI_API_KEY"  # SEC-02, SEC-03: read from the process e
 ENV_PRICE_INPUT = "CREDIT_INTEL_PRICE_INPUT_PER_MILLION"
 ENV_PRICE_OUTPUT = "CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION"
 ENV_LIVE = "CREDIT_INTEL_LIVE"  # opt in to the live tests (value "1")
+ENV_PRIVATE_APPROVED = "CREDIT_INTEL_PRIVATE_APPROVED"  # "1" is the owner's approval of one run on a document under private/ (v0.4.31)
 
 
 @dataclass(frozen=True)
@@ -430,4 +431,149 @@ def load_pricing(
     return PricingSettings(
         input_per_million=_price(table.get("input_per_million"), env.get(ENV_PRICE_INPUT), "pricing.input_per_million"),
         output_per_million=_price(table.get("output_per_million"), env.get(ENV_PRICE_OUTPUT), "pricing.output_per_million"),
+    )
+
+
+# --- Page classification with Jev (PRD v0.4.31) ------------------------------------------------
+
+ENV_USE_JEV = "USE_JEV"  # "true" or "false"; absent or empty is false
+ENV_TYPESAFE_API_KEY = "TYPESAFE_API_KEY"  # SEC-02, SEC-03: read from the process environment only
+ENV_JEV_API_KEY = "JEV_API_KEY"  # accepted as an alternative name for the same key; TYPESAFE_API_KEY wins if both are set
+ENV_JEV_PRICE_INPUT = "CREDIT_INTEL_JEV_PRICE_INPUT_PER_MILLION"
+STEP_PROVIDERS = {"classify": ("jev",), "extract": LLM_PROVIDERS}
+JEV_SETTING_NAMES = (
+    "model",
+    "threshold",
+    "timeout_seconds",
+    "time_budget_seconds",
+    "state_lines",
+    "max_consecutive_failures",
+    "price_input_per_million",
+)
+
+
+@dataclass(frozen=True)
+class StepSettings:
+    """The provider that does each step (v0.4.31): ``classify`` runs only when ``USE_JEV`` is true; ``extract`` is the ``[llm]`` provider."""
+
+    classify: str = "jev"
+    extract: str = "openai"
+
+
+@dataclass(frozen=True)
+class JevSettings:
+    """Settings of the optional page-classification step. Provisional: tuned on the tuning set only (PRD O.2).
+
+    ``enabled`` is ``USE_JEV``. ``threshold`` is the confidence (0 to 1) a label needs before a page may be dropped.
+    ``timeout_seconds`` bounds each call; ``time_budget_seconds`` bounds all calls of one document; after
+    ``max_consecutive_failures`` failures in a row Jev is skipped for the rest of the run. ``state_lines`` is how many lines
+    from the top of a page Jev reads. ``price_input_per_million`` (USD) has no default (D-02): without it no Jev cost is estimated.
+    """
+
+    enabled: bool = False
+    model: str = "jev-latest"
+    threshold: float = 0.85
+    timeout_seconds: float = 10.0
+    time_budget_seconds: float = 60.0
+    state_lines: int = 40
+    max_consecutive_failures: int = 3
+    price_input_per_million: Decimal | None = None
+
+
+def typesafe_api_key(env: Mapping[str, str]) -> str | None:
+    """The Jev API key from ``TYPESAFE_API_KEY`` or, failing that, ``JEV_API_KEY``; ``None`` if neither is set. Never logged or stored."""
+    for name in (ENV_TYPESAFE_API_KEY, ENV_JEV_API_KEY):
+        value = env.get(name, "").strip()
+        if value:
+            return value
+    return None
+
+
+def _switch(value: str | None, setting: str) -> bool:
+    if value is None or value == "":
+        return False
+    folded = value.strip().casefold()
+    if folded not in ("true", "false"):
+        raise _invalid(setting)
+    return folded == "true"
+
+
+def _fraction(value: object, setting: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < float(value) <= 1:
+        raise _invalid(setting)
+    return float(value)
+
+
+def _positive_number(value: object, setting: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < float(value) < 100_000:
+        raise _invalid(setting)
+    return float(value)
+
+
+def _small_int(value: object, setting: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10_000:
+        raise _invalid(setting)
+    return value
+
+
+def _settings_table(path: Path, name: str) -> dict:
+    try:
+        data = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise _invalid("settings file") from exc
+    table = data.get(name, {})
+    if not isinstance(table, dict):
+        raise _invalid(name)
+    return table
+
+
+def load_step_settings(
+    path: Path = DEFAULT_SETTINGS_PATH, llm_provider: str = "openai"
+) -> StepSettings:
+    """The ``[steps]`` table: which provider does each step. ``extract`` must be the ``[llm]`` provider.
+
+    Raises ``IngestionError`` with ``E-CONFIG-INVALID`` (detail: the setting's name) for an unknown step or provider.
+    """
+    table = _settings_table(path, "steps")
+    for name in table:
+        if name not in STEP_PROVIDERS:
+            raise _invalid(f"steps.{name}")
+    classify = _text(table.get("classify", "jev"), "steps.classify")
+    extract = _text(table.get("extract", llm_provider), "steps.extract")
+    if classify not in STEP_PROVIDERS["classify"]:
+        raise _invalid("steps.classify")
+    if extract not in STEP_PROVIDERS["extract"] or extract != llm_provider:
+        raise _invalid("steps.extract")
+    return StepSettings(classify, extract)
+
+
+def load_jev_settings(
+    path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str] | None = None
+) -> JevSettings:
+    """The ``[jev]`` table of the settings file and ``USE_JEV``; with neither, Jev is off (v0.4.31).
+
+    The switch is read from ``USE_JEV`` only (``true`` or ``false``; absent or empty is false). The API key is never read
+    here (it is read from ``TYPESAFE_API_KEY`` when a client is built). An unknown or invalid setting fails with
+    ``E-CONFIG-INVALID`` naming the setting and never its value.
+    """
+    env = os.environ if env is None else env
+    if not _switch(env.get(ENV_USE_JEV), ENV_USE_JEV):
+        return JevSettings()  # off: the [jev] table is not even read, so a run without the step is exactly as before
+    table = _settings_table(path, "jev")
+    for name in table:
+        if name not in JEV_SETTING_NAMES:
+            raise _invalid(f"jev.{name}")
+    defaults = JevSettings()
+    price: Decimal | None = None
+    if ENV_JEV_PRICE_INPUT in env or "price_input_per_million" in table:
+        price = _price(table.get("price_input_per_million"), env.get(ENV_JEV_PRICE_INPUT), "jev.price_input_per_million")
+    return JevSettings(
+        enabled=True,
+        model=_text(table.get("model", defaults.model), "jev.model"),
+        threshold=_fraction(table.get("threshold", defaults.threshold), "jev.threshold"),
+        timeout_seconds=_positive_number(table.get("timeout_seconds", defaults.timeout_seconds), "jev.timeout_seconds"),
+        time_budget_seconds=_positive_number(table.get("time_budget_seconds", defaults.time_budget_seconds), "jev.time_budget_seconds"),
+        state_lines=_small_int(table.get("state_lines", defaults.state_lines), "jev.state_lines"),
+        max_consecutive_failures=_small_int(table.get("max_consecutive_failures", defaults.max_consecutive_failures), "jev.max_consecutive_failures"),
+        price_input_per_million=price,
     )

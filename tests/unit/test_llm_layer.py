@@ -384,3 +384,16 @@ def test_the_gateway_counts_only_the_provider_calls_it_makes(tmp_path):
         gw.complete(request(user="x" * 500), inputs(candidate_pages=(9,)))  # refused: none
 
     assert gw.calls == 1
+
+
+def test_a_hit_counts_the_cached_tokens_apart_from_the_billed_ones(tmp_path):
+    """So two runs can be compared by the size of their requests when one was served from the cache (PRD v0.4.31, evaluation)."""
+    provider = FakeProvider(script=[FakeReply("answer", 20, 5)])
+    gw, _, _ = gateway(tmp_path, provider)
+    gw.complete(request(), inputs())
+
+    second, _, _ = gateway(tmp_path, FakeProvider())
+    second.complete(request(), inputs())
+
+    assert (gw.input_tokens, gw.output_tokens, gw.cached_input_tokens, gw.cached_output_tokens) == (20, 5, 0, 0)
+    assert (second.calls, second.input_tokens, second.output_tokens, second.cached_input_tokens, second.cached_output_tokens) == (0, 0, 0, 20, 5)
