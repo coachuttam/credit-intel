@@ -107,12 +107,12 @@ def test_a_cached_run_that_extracts_all_six_values_passes_with_a_derived_total(p
 
 def test_a_reported_total_is_compared_by_the_same_rule(pdf, tmp_path, config):
     text = json.loads(reply(pdf))
-    text["fields"].remove(next(f for f in text["fields"] if f["field_name"] == "borrowings_current" and f["period_role"] == "current"))  # the derived 2025 total cannot be made
+    text["fields"].remove(next(f for f in text["fields"] if f["field_name"] == "borrowings_current" and f["period_role"] == "current"))  # the model omits it; the code reads the row (v0.4.39)
     fill_cache(pdf, tmp_path, json.dumps(text))
 
     report = replay(pdf, load_reference(reference_file(tmp_path, pdf, total="reported")), assignments=records(tmp_path, pdf), cache_dir=tmp_path / ".cache" / "llm", llm=settings_for(config))
 
-    assert not report["passed"] and report["counts"] == {"match": 5, "mismatch": 0, "missing": 1}
+    assert report["passed"] and report["counts"] == {"match": 6, "mismatch": 0, "missing": 0}
 
 
 def test_an_empty_cache_is_a_failure_to_replay_and_nothing_is_sent(pdf, tmp_path, config):

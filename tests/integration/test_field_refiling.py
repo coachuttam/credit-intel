@@ -89,15 +89,18 @@ def test_the_models_own_component_proposal_wins_and_the_figure_is_counted_once(t
         [("total_borrowings", "current", "300.00", "Long-term debt"), ("borrowings_non_current", "current", "300.00", "Long-term debt")],
     )
 
-    extracted = [key for key, f in fields.items() if f["status"] == "extracted"]
-    assert extracted == [("borrowings_non_current", "current")]
+    assert fields[("borrowings_non_current", "current")]["status"] == "extracted"
+    assert fields[("total_borrowings", "current")]["status"] == "not_found"
+    assert "field_scans" not in manifest or all(s["field"] != "borrowings_non_current" or s["period"] != "current" for s in manifest["field_scans"])
     assert "field_refilings" not in manifest
 
 
-def test_a_re_filed_figure_that_is_not_on_the_page_fails_its_own_check(tmp_path):
-    _, fields = run(tmp_path, [("total_borrowings", "current", "999.00", "Long-term debt")])
+def test_a_figure_that_is_not_on_the_page_is_not_re_filed_and_stays_unextracted(tmp_path):
+    manifest, fields = run(tmp_path, [("total_borrowings", "current", "999.00", "Long-term debt")])
 
-    assert fields[("borrowings_non_current", "current")]["status"] != "extracted"
+    assert fields[("total_borrowings", "current")]["status"] != "extracted"
+    assert "field_refilings" not in manifest  # the code reads the row itself instead (v0.4.39)
+    assert {s["field"] for s in manifest["field_scans"]} >= {"borrowings_non_current"}
 
 
 def test_the_page_recorded_is_the_page_the_figure_was_cited_on(tmp_path):

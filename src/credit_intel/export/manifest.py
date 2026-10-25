@@ -147,6 +147,9 @@ def build_manifest(
     refilings = getattr(extraction, "field_refilings", ())
     if refilings:  # PRD v0.4.38: a total_borrowings proposal that was verified as a borrowings component
         manifest["field_refilings"] = [{"proposed": r.proposed, "used": r.used, "page": r.page, "period": r.period} for r in refilings]
+    scans = getattr(extraction, "field_scans", ())
+    if scans:  # PRD v0.4.39: a borrowings component row the code read from the page because the model proposed none
+        manifest["field_scans"] = [{"field": s.field, "page": s.page, "period": s.period, "label": s.label} for s in scans]
     repairs = extraction.attributes.page_repairs if extraction is not None else ()
     if repairs:  # PRD v0.4.36: each currency or scale declaration verified on another page than the one the model cited
         manifest["attribute_page_repairs"] = [{"attribute": r.attribute, "cited_page": r.cited_page, "page_used": r.page_used} for r in repairs]

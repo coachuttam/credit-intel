@@ -615,8 +615,8 @@ def test_verify_all_checks_every_proposed_field_in_order(env):
 
     results = verifier.verify_all(ExtractionResponse(attributes=(), fields=fields))
 
-    assert [r.field.status for r in results] == [Status.EXTRACTED, Status.REQUIRES_REVIEW, Status.EXTRACTED]
-    assert [r.proposed for r in results] == list(fields)
+    assert [r.field.status for r in results[:3]] == [Status.EXTRACTED, Status.REQUIRES_REVIEW, Status.EXTRACTED]
+    assert [r.proposed for r in results[:3]] == list(fields)  # the model's proposals first, in order; then any row the code read (v0.4.39)
 
 
 def test_verification_is_repeatable_and_reuses_the_page_analysis(env):

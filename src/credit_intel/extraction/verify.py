@@ -36,11 +36,12 @@ from credit_intel.extraction.attributes import VerifiedAttributes, blocking_reas
 from credit_intel.extraction.bases import field_basis
 from credit_intel.extraction.columns import PageStructure, analyse_structure
 from credit_intel.extraction.declarations import check_currency, check_scale, check_sign
-from credit_intel.extraction.labels import LabelCheck, check_label, expense_table_heading
+from credit_intel.extraction.labels import LabelCheck, check_label, expense_table_heading, row_label
 from credit_intel.extraction.normalise import apply_scale, parse_value
 from credit_intel.extraction.periods import page_period_resolver
 from credit_intel.extraction.presence import check_presence
 from credit_intel.extraction.runs import statement_run_start
+from credit_intel.ingestion.locator import title_lines
 from credit_intel.ingestion.models import LocatorResult, PageText, PageWords
 from credit_intel.models import (
     BasisEvidence,
@@ -129,11 +130,22 @@ class FieldRefiling:
     period: str
 
 
+@dataclass(frozen=True)
+class FieldScan:
+    """A borrowings component the model did not propose, read from a balance-sheet page by the code (PRD v0.4.39)."""
+
+    field: str
+    page: int
+    period: str
+    label: str  # the row label as printed
+
+
 class FieldVerifier:
     def __init__(self, context: VerificationContext) -> None:
         self._ctx = context
         self._structures: dict[int, PageStructure | None] = {}
         self.refilings: tuple[FieldRefiling, ...] = ()
+        self.scans: tuple[FieldScan, ...] = ()
 
     def _structure(self, page_number: int) -> PageStructure | None:
         if page_number not in self._structures:
@@ -156,7 +168,71 @@ class FieldVerifier:
 
     def verify_all(self, response: ExtractionResponse) -> tuple[FieldVerification, ...]:
         proposals, self.refilings = self._refiled(response.fields)
-        return tuple(self.verify(proposed) for proposed in proposals)
+        added, self.scans = self._scanned(proposals)
+        return tuple(self.verify(proposed) for proposed in (*proposals, *added))
+
+    def _balance_sheet_pages(self) -> list[int]:
+        """The candidate pages of the balance sheet: located as one, or (a page range records no types) titled as one."""
+        ctx = self._ctx
+        located = {c.page_number: c.statement_types for c in ctx.located.candidates}
+        return [
+            number
+            for number, page in sorted(ctx.pages.items())
+            if "balance_sheet" in located.get(number, ())
+            or any(t.statement_type == "balance_sheet" for t in title_lines(page.text, ctx.locator_settings))
+        ]
+
+    def _scanned(self, proposals: Sequence[ProposedField]) -> tuple[tuple[ProposedField, ...], tuple[FieldScan, ...]]:
+        """PRD v0.4.39: a borrowings component row the model did not propose is proposed by the code, to the same checks.
+
+        Only a gap is filled: the model's proposal for a field and period always stands. A field with more than one
+        recognised line on the run, or a document whose currency or scale or period columns are not validated, adds nothing.
+        """
+        ctx = self._ctx
+        attributes = ctx.attributes
+        if attributes.scale.status is not Status.EXTRACTED or attributes.reporting_currency.status is not Status.EXTRACTED:
+            return (), ()
+        found: dict[str, list[tuple[int, PageStructure, object]]] = {name: [] for name in _BORROWING_COMPONENTS}
+        for number in self._balance_sheet_pages():
+            structure = self._structure(number)
+            if structure is None or not structure.valid:
+                continue
+            page_lines = [candidate.text for candidate in structure.lines]
+            for line in structure.lines:
+                for name in _BORROWING_COMPONENTS:
+                    if check_label(name, line.text, page_lines, line.index, ctx.label_settings).ok:
+                        found[name].append((number, structure, line))
+        taken = {(p.field_name.value, p.period_role) for p in proposals}
+        added: list[ProposedField] = []
+        scans: list[FieldScan] = []
+        for name, matches in found.items():
+            if len(matches) != 1:
+                continue
+            number, structure, line = matches[0]
+            for role in (PeriodRole.CURRENT, PeriodRole.COMPARATIVE):
+                period_end, valid = _period(attributes, role)
+                columns = [c for c in structure.columns if c.period_end == period_end]
+                if (name, role) in taken or not valid or not columns:
+                    continue
+                words = [w for w in line.words if w.x0 < columns[0].x1 and w.x1 > columns[0].x0]
+                if not words:
+                    continue
+                added.append(
+                    ProposedField.model_validate(
+                        {
+                            "field_name": name,
+                            "period_role": role.value,
+                            "raw_value": " ".join(w.text for w in words),
+                            "scale": attributes.scale.normalised_value,
+                            "currency": attributes.reporting_currency.normalised_value,
+                            "page_number": number,
+                            "evidence_quote": line.text,
+                            "line_item_label": row_label(line.text),
+                        }
+                    )
+                )
+                scans.append(FieldScan(name, number, role.value, row_label(line.text)))
+        return tuple(added), tuple(scans)
 
     def _component_for(self, proposed: ProposedField) -> str | None:
         """The one component field whose label rule the cited figure's row satisfies, if ``total_borrowings`` does not (v0.4.38)."""
