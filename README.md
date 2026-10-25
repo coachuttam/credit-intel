@@ -47,6 +47,8 @@ The command line enforces this as follows when the provider sends data off the m
 - any other document is sent only if you pass `--confirm-public-document`, which says that you have checked that it is public;
 - if the record file exists but cannot be read, every document is refused.
 
+A refusal is a catalogued failure: `E-INPUT-SEND-REFUSED`, exit code 3, before any provider is built or any file is written. It names the reason (`held_out`, `not_recorded` or `record_unreadable`) and never the document's hash, path or ID.
+
 A notice is printed whenever pages may be sent. Run folders (`runs/`), the response cache (`.cache/`) and `private/` are ignored by git.
 
 ## Command line
@@ -72,8 +74,8 @@ On success the command prints the run folder path and exits 0. On a failure it p
 |---|---|
 | 0 | Success. |
 | 1 | An unexpected error. The message gives the run ID and no stack trace. |
-| 2 | A bad argument, or a refusal to send the document. |
-| 3 | The input is not acceptable: missing or unreadable file, not a PDF, too large, encrypted, bad page range, bad profile. |
+| 2 | A bad argument. |
+| 3 | The input is not acceptable: missing or unreadable file, not a PDF, too large, encrypted, bad page range, bad profile, or the document may not be sent (`E-INPUT-SEND-REFUSED`, with one reason word: `held_out`, `not_recorded` or `record_unreadable`). |
 | 4 | The statements could not be located or the requested basis is not in the document. |
 | 5 | The model step failed: authentication, an unavailable provider, invalid output, or the token ceiling. |
 | 6 | The settings or rules file is invalid. |

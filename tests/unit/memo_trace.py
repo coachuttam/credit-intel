@@ -54,7 +54,7 @@ def problems(memo: str, results: dict) -> list[str]:
     found: list[str] = []
     fields, metrics = _known(results)
     all_source = {r["field_id"]: r for r in results["fields"]}
-    attribute_pages = {a["page_number"] for a in results["attributes"] if a["page_number"]}
+    attributes = {a["id"]: a for a in results["attributes"]}  # document-level attributes by ID (H.1.2, v0.4.27)
     calculated_ids = set(metrics) | {f for f, r in fields.items() if r["origin"] == "derived"} | set(results["comparisons"]) | TOP_LEVEL
     rule_ids = {i["id"] for i in results["indicators"]}
     profile = results["analyst_provided"]
@@ -113,6 +113,15 @@ def problems(memo: str, results: dict) -> list[str]:
         line_fields = [c for c in FIELD_ID.findall(" ".join(codes)) if c in fields]
         if line_fields:
             current_field = line_fields[0]
+        # attribute IDs written in section 1 exist, and the label agrees with the attribute's status
+        for code_text in codes:
+            if re.fullmatch(r"(?:entity_name|statement_basis|reporting_currency|scale|period_end\.\w+)", code_text) and code_text not in attributes:
+                found.append(f"{where}: unknown attribute ID {code_text}")
+        for code_text in codes:
+            if code_text in attributes and section == 1 and line.startswith("- **"):
+                extracted = attributes[code_text]["status"] == "extracted"
+                if ("[UNVERIFIED]" in line) == extracted:
+                    found.append(f"{where}: the label does not agree with the status of {code_text}")
         # labels
         if text.count("[") != len(LABEL.findall(text)) + text.count("\\["):
             found.append(f"{where}: a bracket that is not a label and not escaped")
@@ -126,12 +135,15 @@ def problems(memo: str, results: dict) -> list[str]:
             elif label.startswith("SOURCE: p."):
                 page = int(label[10:])
                 if section <= 1:
-                    ok = page in attribute_pages
+                    named = [attributes[c] for c in codes if c in attributes]
+                    if not named and section == 0:  # the header's Borrower line is the entity name
+                        named = [attributes["entity_name"]]
+                    ok = any(a["page_number"] == page for a in named)
                 else:
                     ids = line_fields or [current_field]
                     ok = any(page in (_pages_of(fields[i]) | _pages_of(all_source.get(i, fields[i]))) for i in ids if i in fields)
                 if not ok:
-                    found.append(f"{where}: [{label}] is not a page the field was read on")
+                    found.append(f"{where}: [{label}] is not a page the field or attribute beside it was read on")
             elif label == "ANALYST-PROVIDED" and not any(esc(v) in text for v in profile.values()):
                 if not (assertion is not None and any(marker in text for marker in ASSERTION_MARKERS)):
                     found.append(f"{where}: [ANALYST-PROVIDED] beside text the profile does not hold and no assertion records")

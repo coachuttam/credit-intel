@@ -26,6 +26,7 @@ class ErrorCode(StrEnum):
     LLM_AUTH = "E-LLM-AUTH"
     LLM_UNAVAILABLE = "E-LLM-UNAVAILABLE"
     PROFILE_INVALID = "E-INPUT-PROFILE-INVALID"
+    SEND_REFUSED = "E-INPUT-SEND-REFUSED"
     EXPORT_FAILED = "E-EXPORT-FAILED"
 
 
@@ -76,6 +77,9 @@ CATALOGUE: dict[ErrorCode, CatalogueEntry] = {
         _E(C.PROFILE_INVALID, "received",
            "The profile file is invalid: it must be a JSON object with only the keys borrower_name, industry, facility_requested and notes, each a string of at most 500 characters.",
            "Fix the profile file to the documented keys and limits.", EXIT_INPUT, "No"),
+        _E(C.SEND_REFUSED, "received",
+           "The document may not be sent to the hosted API: it is recorded as held out, or it is not on the assignment record and --confirm-public-document was not given, or the record cannot be read.",
+           "If the document is public and is not recorded as held out, re-run with --confirm-public-document; a held-out document cannot be sent.", EXIT_INPUT, "No"),
         _E(C.NO_STATEMENT_PAGES, "fields_extracted", "No candidate statement pages were found and no page range was supplied.",
            "Supply the statement pages with --pages.", EXIT_EXTRACT, "No"),
         _E(C.BASIS_UNAVAILABLE, "statements_located", "No financial statement of the configured basis was found.",

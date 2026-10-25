@@ -12,6 +12,10 @@ used on an analyst's own public report would meet that rule on every run, so the
 * a record that exists but cannot be read fails closed and refuses every document.
 
 The rule applies only when the configured provider sends data off the machine.
+
+A refusal is the catalogued failure ``E-INPUT-SEND-REFUSED`` (PRD v0.4.27). ``check_send`` raises ``SendRefusal`` with one of three fixed
+reason words, which the command line appends to the message: ``held_out``, ``not_recorded`` or ``record_unreadable``. Nothing else is
+carried, so a refusal can never show a hash, a path or a document's neutral ID.
 """
 
 from pathlib import Path
@@ -22,16 +26,31 @@ NOTICE = ("Notice: the candidate statement pages of this document will be sent t
           "Only public or synthetic documents may be sent (SEC-10).")  # fmt: skip
 
 
+REASONS = ("held_out", "not_recorded", "record_unreadable")
+
+
+class SendRefusal(SendRefused):
+    """A document may not be sent. ``reason`` is one of ``REASONS``; the message is the reason and nothing more."""
+
+    def __init__(self, reason: str) -> None:
+        if reason not in REASONS:
+            raise ValueError("an unknown reason for refusing to send")
+        super().__init__(reason)
+        self.reason = reason
+
+
 def check_send(sha256: str, *, external: bool, confirmed: bool, assignments: Path = ASSIGNMENTS_PATH) -> str:
-    """``"local"``, ``"tuning"`` or ``"confirmed"`` if the document may be sent, else ``SendRefused`` (no document content in its message)."""
+    """``"local"``, ``"tuning"`` or ``"confirmed"`` if the document may be sent, else ``SendRefusal`` with a fixed reason word."""
     if not external:
         return "local"
-    known = load_current_sets(assignments).get(sha256) if assignments.exists() else None
+    try:
+        known = load_current_sets(assignments).get(sha256) if assignments.exists() else None
+    except SendRefused as error:  # the record exists but cannot be read: the rule fails closed
+        raise SendRefusal("record_unreadable") from error
     if known is not None and known[1] == "held_out":
-        raise SendRefused(f"document {known[0]} is held out, so it may not be sent")
+        raise SendRefusal("held_out")
     if known is not None:
         return "tuning"
     if not confirmed:
-        raise SendRefused("this document is not on the assignment record; to send its statement pages to the hosted API, "
-                          "confirm that it is public with --confirm-public-document")  # fmt: skip
+        raise SendRefusal("not_recorded")
     return "confirmed"

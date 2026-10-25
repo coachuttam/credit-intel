@@ -8,7 +8,8 @@ One command runs one document through the whole pipeline and writes ``<output_di
   got far enough to be recorded, a run folder holding only ``manifest.json`` (state ``failed``, its stage and code)
   is also written on a best-effort basis, and named on standard error. A failure before ``received`` (bad
   settings, bad profile, missing file) has no recorded state and so no manifest.
-* A refusal to send a document (``send_rule``) or a bad argument: exit 2. Argument errors are argparse's.
+* A bad argument: exit 2 (argparse). A refusal to send a document (``send_rule``) is the catalogued failure ``E-INPUT-SEND-REFUSED``: exit 3,
+  a fixed reason word, nothing written.
 * Anything else: exit 1; the message gives the run ID and never a stack trace (FR-011.4).
 
 Standard output and standard error carry only those lines and the INFO stage log, which has counts and
@@ -26,7 +27,7 @@ from pathlib import Path
 from typing import IO, Any
 
 from credit_intel.config import DEFAULT_SETTINGS_PATH, LLMSettings, load_llm_settings, load_pricing
-from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, file_sha256
+from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, file_sha256
 from credit_intel.export.manifest import code_version, package_versions, run_id
 from credit_intel.export.run_export import export_failure, export_run
 from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, ErrorCode, IngestionError, exit_code
@@ -34,7 +35,7 @@ from credit_intel.llm.factory import build_provider
 from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
 from credit_intel.models import StatementBasis
 from credit_intel.run import run_pipeline
-from credit_intel.send_rule import NOTICE, check_send
+from credit_intel.send_rule import NOTICE, SendRefusal, check_send
 from credit_intel.states import Clock, Recorder, utc_now
 
 DEFAULT_OUTPUT_DIR = Path("runs")
@@ -128,7 +129,10 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     except OSError:
         raise IngestionError(ErrorCode.NOT_FOUND) from None
     external = llm.provider != "fake"
-    check_send(call.sha256, external=external, confirmed=args.confirm_public_document, assignments=assignments)
+    try:
+        check_send(call.sha256, external=external, confirmed=args.confirm_public_document, assignments=assignments)
+    except SendRefusal as refusal:  # a catalogued failure before `received`: exit 3, a fixed reason word, no failure record (G.1, v0.4.27)
+        raise IngestionError(ErrorCode.SEND_REFUSED, detail=refusal.reason) from None
     if external:
         print(NOTICE, file=err)
     basis = StatementBasis(args.basis)
@@ -174,9 +178,6 @@ def main(
     call = _Invocation(args, Recorder(clock))
     try:
         return _execute(call, provider_factory, out, err, assignments, environment)
-    except SendRefused as refusal:
-        print(f"Refused: {refusal}", file=err)
-        return EXIT_USAGE
     except IngestionError as error:
         print(str(error), file=err)
         _record_failure(call, err, error)

@@ -19,12 +19,12 @@
 
 ## 1. Borrower overview
 
-- **Entity name:** Acme Industries Limited [SOURCE: p.1]
-- **Reporting currency:** INR [SOURCE: p.1]
-- **Scale:** crore [SOURCE: p.1]
+- **Entity name** (`entity_name`): Acme Industries Limited [SOURCE: p.1]
+- **Reporting currency** (`reporting_currency`): INR [SOURCE: p.1]
+- **Scale** (`scale`): crore [SOURCE: p.1]
 - **Statement basis used:** consolidated [CALCULATED: extraction]
-- **Current period end:** 2025-03-31 [SOURCE: p.1]
-- **Comparative period end:** 2024-03-31 [SOURCE: p.1]
+- **Current period end** (`period_end.current`): 2025-03-31 [SOURCE: p.1]
+- **Comparative period end** (`period_end.comparative`): 2024-03-31 [SOURCE: p.1]
 
 **Analyst-provided profile**
 

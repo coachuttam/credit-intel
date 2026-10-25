@@ -80,8 +80,9 @@ def test_a_missing_entity_name_is_not_found_and_unverified(results):
 def test_section_1_shows_each_attribute_with_its_page_and_the_basis_used(results):
     text = memo(results)
 
-    for line in ("- **Reporting currency:** INR [SOURCE: p.1]", "- **Scale:** crore [SOURCE: p.1]",
-                 "- **Current period end:** 2025-03-31 [SOURCE: p.1]", "- **Comparative period end:** 2024-03-31 [SOURCE: p.1]",
+    for line in ("- **Reporting currency** (`reporting_currency`): INR [SOURCE: p.1]", "- **Scale** (`scale`): crore [SOURCE: p.1]",
+                 "- **Current period end** (`period_end.current`): 2025-03-31 [SOURCE: p.1]",
+                 "- **Comparative period end** (`period_end.comparative`): 2024-03-31 [SOURCE: p.1]",
                  "- **Statement basis used:** consolidated [CALCULATED: extraction]", "No borrower profile was supplied."):  # fmt: skip
         assert line in text
 
@@ -89,7 +90,7 @@ def test_section_1_shows_each_attribute_with_its_page_and_the_basis_used(results
 def test_an_attribute_that_is_not_extracted_is_labelled_unverified(results):
     next(a for a in results["attributes"] if a["attribute"] == "scale").update(status="requires_review")
 
-    assert "- **Scale:** requires review [UNVERIFIED]" in memo(results)
+    assert "- **Scale** (`scale`): requires review [UNVERIFIED]" in memo(results)
 
 
 def test_a_different_basis_stated_in_the_document_is_noted(results):

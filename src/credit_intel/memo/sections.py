@@ -40,6 +40,13 @@ def _attribute(results: dict[str, Any], name: str, role: str | None = None) -> d
     return None
 
 
+def _attribute_line(label: str, results: dict[str, Any], name: str, role: str | None = None) -> str:
+    """A section 1 line: the attribute's label, its ID in a code span (K.10, v0.4.27), then its value with its own origin label."""
+    attribute = _attribute(results, name, role)
+    identifier = attribute["id"] if attribute is not None else (f"{name}.{role}" if role else name)
+    return f"- **{label}** ({code(identifier)}): {_attribute_text(attribute)}"
+
+
 def _attribute_text(attribute: dict[str, Any] | None) -> str:
     """The attribute's value with its source label, or what is wrong with it, labelled ``[UNVERIFIED]``."""
     if attribute is None or attribute["status"] != "extracted":
@@ -98,12 +105,12 @@ def section_1(results: dict[str, Any]) -> list[str]:
     basis = results["extraction"]["configured_basis"]
     lines = ["## 1. Borrower overview", ""]
     lines += [
-        f"- **Entity name:** {_attribute_text(_attribute(results, 'entity_name'))}",
-        f"- **Reporting currency:** {_attribute_text(_attribute(results, 'reporting_currency'))}",
-        f"- **Scale:** {_attribute_text(_attribute(results, 'scale'))}",
+        _attribute_line("Entity name", results, "entity_name"),
+        _attribute_line("Reporting currency", results, "reporting_currency"),
+        _attribute_line("Scale", results, "scale"),
         f"- **Statement basis used:** {esc(basis)} {calculated('extraction')}",
-        f"- **Current period end:** {_attribute_text(_attribute(results, 'period_end', 'current'))}",
-        f"- **Comparative period end:** {_attribute_text(_attribute(results, 'period_end', 'comparative'))}",
+        _attribute_line("Current period end", results, "period_end", "current"),
+        _attribute_line("Comparative period end", results, "period_end", "comparative"),
     ]  # fmt: skip
     if basis_assertion(results) is not None:
         lines.append(f"- **Basis assertion:** {assertion_sentence(results)}")

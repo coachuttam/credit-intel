@@ -307,19 +307,25 @@ def sha_of(path):
     return file_sha256(path)
 
 
-def refused_before_anything(tmp_path, pdf, *argv, **kw):
+def refused_before_anything(tmp_path, pdf, reason, *argv, **kw):
+    """The refusal of PRD v0.4.27: the catalogued failure E-INPUT-SEND-REFUSED, exit 3, one fixed reason word, before any provider or file."""
+
     def no_provider(settings, env):
         raise AssertionError("nothing may be sent")
 
     code, out, err = call(tmp_path, str(pdf), *argv, factory=no_provider, provider="openai", **kw)
-    assert code == 2 and out == "" and err.startswith("Refused: ") and runs(tmp_path) == []
+    error_lines = [line for line in err.splitlines() if line.startswith("E-")]
+    assert code == 3 and out == "" and len(error_lines) == 1, err
+    assert error_lines[0].startswith("E-INPUT-SEND-REFUSED: ") and error_lines[0].endswith(f"({reason})"), error_lines[0]
+    assert runs(tmp_path) == [] and "Refused" not in err and "Traceback" not in err  # no failure record: nothing was received
+    assert sha_of(pdf)[:12] not in err and str(tmp_path) not in err and "H9" not in err and "R9" not in err  # no hash, no path, no neutral ID
     return err
 
 
 def test_a_document_not_on_the_record_is_not_sent_without_the_confirmation(pdf, tmp_path):
-    err = refused_before_anything(tmp_path, pdf, assignments=records(tmp_path))
+    err = refused_before_anything(tmp_path, pdf, "not_recorded", assignments=records(tmp_path))
 
-    assert "--confirm-public-document" in err and sha_of(pdf)[:12] not in err
+    assert "--confirm-public-document" in err  # the action says what to do
 
 
 def test_the_confirmation_lets_a_document_not_on_the_record_be_sent_and_a_notice_is_printed(pdf, tmp_path):
@@ -337,23 +343,30 @@ def test_a_tuning_document_is_sent_without_the_confirmation(pdf, tmp_path):
 def test_a_held_out_document_is_never_sent_even_with_the_confirmation(pdf, tmp_path):
     record = records(tmp_path, ("H9", sha_of(pdf), "held_out"))
 
-    err = refused_before_anything(tmp_path, pdf, assignments=record)
-    err_with_flag = refused_before_anything(tmp_path, pdf, "--confirm-public-document", assignments=record)
+    refused_before_anything(tmp_path, pdf, "held_out", assignments=record)
+    err = refused_before_anything(tmp_path, pdf, "held_out", "--confirm-public-document", assignments=record)
 
-    assert "document H9 is held out" in err and "document H9 is held out" in err_with_flag and sha_of(pdf)[:12] not in err_with_flag
+    assert "a held-out document cannot be sent" in err
 
 
 def test_a_record_that_cannot_be_read_refuses_every_document(pdf, tmp_path):
     bad = tmp_path / "assignments.jsonl"
     bad.write_text("{not json\n", encoding="utf-8")
 
-    err = refused_before_anything(tmp_path, pdf, "--confirm-public-document", assignments=bad)
-
-    assert "malformed" in err
+    refused_before_anything(tmp_path, pdf, "record_unreadable", "--confirm-public-document", assignments=bad)
 
 
 def test_with_no_record_file_a_document_needs_the_confirmation(pdf, tmp_path):
-    refused_before_anything(tmp_path, pdf)
+    refused_before_anything(tmp_path, pdf, "not_recorded")
+
+
+def test_a_refusal_is_a_catalogued_failure_that_scripts_can_tell_from_a_usage_error(pdf, tmp_path):
+    from credit_intel.ingestion.errors import CATALOGUE, ErrorCode
+
+    refused, _, _ = call(tmp_path, str(pdf), provider="openai", factory=lambda s, e: None)
+    usage, _, _ = call(tmp_path, str(pdf), "--assert-basis", "consolidated")
+
+    assert refused == CATALOGUE[ErrorCode.SEND_REFUSED].exit_code == 3 and usage == 2
 
 
 def test_nothing_is_checked_or_announced_when_the_provider_sends_nothing_off_the_machine(pdf, tmp_path):

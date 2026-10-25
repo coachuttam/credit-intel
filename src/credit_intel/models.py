@@ -17,6 +17,7 @@ from typing import Literal
 from pydantic import (
     BaseModel,
     ConfigDict,
+    computed_field,
     Field,
     JsonValue,
     StrictInt,
@@ -350,6 +351,13 @@ class ExtractedField(_Model):
 # --- Document-level attributes (H.1.2) ----------------------------------------
 
 
+def attribute_id(name: DocumentAttributeName, role: "PeriodRole | None") -> str:
+    """``period_end.current`` and ``period_end.comparative`` for the two period ends, else the attribute's own name."""
+    if name is DocumentAttributeName.PERIOD_END and role is not None:
+        return f"period_end.{role.value}"
+    return name.value
+
+
 class DocumentAttribute(_Model):
     """A document-level attribute with its evidence."""
 
@@ -364,6 +372,12 @@ class DocumentAttribute(_Model):
     # Only for ``statement_basis`` when it is extracted: ``title`` (verified from a title block) or
     # ``analyst_assertion`` (H.4.6, v0.4.24), which has no raw text, page or quote.
     basis_evidence: BasisEvidence | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def id(self) -> str:
+        """The attribute's stable ID in ``results.json`` and the memo (H.1.2, v0.4.27): ``period_end.current``, ``scale``, and so on."""
+        return attribute_id(self.attribute, self.period_role)
 
     @model_validator(mode="after")
     def _consistent(self) -> "DocumentAttribute":

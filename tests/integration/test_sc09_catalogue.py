@@ -1,7 +1,7 @@
 """SC-09: every catalogued failure scenario gives its documented code, a non-zero exit and no output that looks complete
 (PRD SC-09, FR-011.6, G.1, FR-014.3, Definition of Done item 6; Phase 5 step 5m; B-272).
 
-Each of the seventeen codes of the error catalogue is provoked through the command line with synthetic input and a fake
+Each of the eighteen codes of the error catalogue is provoked through the command line with synthetic input and a fake
 provider. A test fails if a code has no scenario, so a code added to the catalogue without one cannot go unnoticed.
 """
 
@@ -106,6 +106,10 @@ def no_text_layer(tmp_path):
     return invoke(tmp_path, path)
 
 
+def send_refused(tmp_path):
+    return invoke(tmp_path, balance_sheet(tmp_path), provider="openai", env={})  # not on the record, no confirmation: the refusal comes first
+
+
 def page_range(tmp_path):
     return invoke(tmp_path, balance_sheet(tmp_path), "--pages", "99")
 
@@ -166,6 +170,7 @@ SCENARIOS = {
     ErrorCode.TOO_MANY_PAGES: too_many_pages,
     ErrorCode.NO_TEXT_LAYER: no_text_layer,
     ErrorCode.PAGE_RANGE: page_range,
+    ErrorCode.SEND_REFUSED: send_refused,
     ErrorCode.PROFILE_INVALID: profile_invalid,
     ErrorCode.NO_STATEMENT_PAGES: no_statement_pages,
     ErrorCode.BASIS_UNAVAILABLE: basis_unavailable,
@@ -179,7 +184,7 @@ SCENARIOS = {
 
 
 def test_every_code_in_the_catalogue_has_a_scenario_and_no_scenario_is_for_an_unknown_code():
-    assert set(SCENARIOS) == set(CATALOGUE) == set(ErrorCode) and len(SCENARIOS) == 17
+    assert set(SCENARIOS) == set(CATALOGUE) == set(ErrorCode) and len(SCENARIOS) == 18
 
 
 @pytest.mark.parametrize("code", list(SCENARIOS), ids=[c.value for c in SCENARIOS])
