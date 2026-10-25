@@ -9,6 +9,7 @@ from datetime import date
 
 import pytest
 
+from credit_intel.config import ColumnSettings
 from credit_intel.extraction.columns import StructureProblem, analyse_structure, find_anchors, group_lines
 from credit_intel.extraction.periods import (
     Form,
@@ -272,7 +273,122 @@ def test_a_comparative_full_date_alone_does_not_make_the_current_year_valid():
 def test_the_current_period_is_the_latest_validated_one():
     result = resolve(["31 March 2025", "31 March 2024", "2023"], "")
 
+    assert result["2023"].evidence.period_end == D(2023, 3, 31)  # v0.4.29: consecutively earlier than a validated 2024, so an older period
+    assert result["2023"].evidence.method is Method.DERIVED_OLDER and result["2023"].evidence.derived_from == D(2025, 3, 31)
+
+
+def test_the_current_period_is_not_a_later_validated_one():
+    result = resolve(["31 March 2024", "31 March 2025", "2026"], "")
+
+    assert result["2026"].evidence is None and result["2026"].reason is Reason.NOT_ONE_YEAR_EARLIER
+
+
+# --- older year-columns (PRD v0.4.29, FR-005.9; Appendix B.6 rows 62 to 65) ------------------------------------------------
+
+
+def test_b6_row_62_a_three_year_header_validates_the_comparative_and_an_older_period():
+    result = resolve(["2026", "2025", "2024"], "Year ended March 31, 2026")
+
+    assert result["2025"].evidence.method is Method.DERIVED_COMPARATIVE and result["2025"].evidence.period_end == D(2025, 3, 31)
+    assert result["2024"].evidence.method is Method.DERIVED_OLDER and result["2024"].evidence.period_end == D(2024, 3, 31)
+    assert result["2024"].evidence.derived_from == D(2026, 3, 31) and result["2024"].evidence.raw_text == "2024"
+
+
+def test_b6_row_62_the_order_of_the_headers_does_not_matter():
+    result = resolve(["2024", "2025", "2026"], "Year ended March 31, 2026")
+
+    assert result["2024"].evidence.period_end == D(2024, 3, 31) and result["2025"].evidence.period_end == D(2025, 3, 31)
+
+
+def test_b6_row_63_a_gap_leaves_the_older_year_unvalidated():
+    result = resolve(["2026", "2025", "2023"], "Year ended March 31, 2026")
+
+    assert result["2025"].evidence is not None
     assert result["2023"].evidence is None and result["2023"].reason is Reason.NOT_ONE_YEAR_EARLIER
+
+
+def test_b6_row_64_an_older_year_without_the_comparative_is_not_validated():
+    result = resolve(["2026", "2024"], "Year ended March 31, 2026")
+
+    assert result["2024"].evidence is None and result["2024"].reason is Reason.NOT_ONE_YEAR_EARLIER
+
+
+def test_b6_row_65_at_most_two_older_periods_are_accepted_by_default():
+    result = resolve(["2026", "2025", "2024", "2023", "2022", "2021"], "Year ended March 31, 2026")
+
+    assert [y for y in result if result[y].evidence is not None] == ["2026", "2025", "2024", "2023"]
+    assert result["2022"].reason is Reason.TOO_MANY_OLDER_PERIODS and result["2021"].reason is Reason.TOO_MANY_OLDER_PERIODS
+
+
+@pytest.mark.parametrize(("extra", "valid"), [(0, ["2026", "2025"]), (1, ["2026", "2025", "2024"]), (3, ["2026", "2025", "2024", "2023", "2022"])])
+def test_the_number_of_older_periods_is_the_setting(extra, valid):
+    result = resolve_anchor_texts(["2026", "2025", "2024", "2023", "2022", "2021"], "Year ended March 31, 2026", None, extra)
+
+    assert [y for y in result if result[y].evidence is not None] == valid
+
+
+@pytest.mark.parametrize("ending", ["28 February 2026", "28 February 2024"])
+def test_a_february_ending_current_period_derives_no_older_period_either(ending):
+    year = int(ending[-4:])
+    result = resolve([str(year), str(year - 1), str(year - 2)], f"As at {ending}")
+
+    assert result[str(year - 1)].reason is Reason.CURRENT_ENDS_IN_FEBRUARY and result[str(year - 2)].reason is Reason.CURRENT_ENDS_IN_FEBRUARY
+
+
+def test_a_bare_year_equal_to_the_current_year_is_not_validated_as_a_period():
+    result = resolve(["31 March 2026", "2026"], "")
+
+    assert result["2026"].evidence is None and result["2026"].reason is Reason.NOT_ONE_YEAR_EARLIER
+
+
+def test_an_older_year_needs_a_validated_current_period():
+    result = resolve(["2026", "2025", "2024"], "Balance Sheet, no date here")
+
+    assert all(r.evidence is None for r in result.values())
+
+
+def test_financial_year_headers_also_run_back_in_consecutive_years():
+    result = resolve(["FY2025-26", "FY2024-25", "FY2023-24"], "As at 31 March 2026")
+
+    assert result["FY2023-24"].evidence.period_end == D(2024, 3, 31) and result["FY2023-24"].evidence.method is Method.DERIVED_OLDER
+    assert resolve(["FY2025-26", "FY2024-25", "FY2022-23"], "As at 31 March 2026")["FY2022-23"].evidence is None
+
+
+def test_the_same_year_twice_does_not_make_a_run():
+    result = resolve(["2026", "2024", "2024"], "Year ended March 31, 2026")
+
+    assert result["2024"].evidence is None
+
+
+THREE_HEADER = [("Note", 300), ("2026", 360), ("2025", 440), ("2024", 520)]
+THREE_FIGURES = [("Total", 72), ("assets", 110), ("14", 305), ("1,740.00", 358), ("1,600.00", 438), ("1,500.00", 518)]
+THREE_TEXT = "Consolidated Balance Sheet, year ended March 31, 2026\nNote 2026 2025 2024\nTotal assets 14 1,740.00 1,600.00 1,500.00"
+
+
+def test_b6_row_62_a_three_column_page_has_a_valid_structure_with_three_columns():
+    page = page_of(TITLE, THREE_HEADER, THREE_FIGURES)
+
+    structure = analyse_structure(page, page_period_resolver(page, THREE_TEXT))
+
+    assert structure.valid
+    assert [c.period_end for c in structure.columns] == [D(2026, 3, 31), D(2025, 3, 31), D(2024, 3, 31)]
+
+
+def test_a_three_column_page_is_invalid_when_the_third_header_is_a_gap():
+    header = [("Note", 300), ("2026", 360), ("2025", 440), ("2023", 520)]
+    page = page_of(TITLE, header, THREE_FIGURES)
+
+    structure = analyse_structure(page, page_period_resolver(page, THREE_TEXT))
+
+    assert StructureProblem.UNVALIDATED_ANCHOR in structure.problems and not structure.valid
+
+
+def test_a_three_column_page_is_invalid_when_the_setting_allows_no_older_period():
+    page = page_of(TITLE, THREE_HEADER, THREE_FIGURES)
+
+    structure = analyse_structure(page, page_period_resolver(page, THREE_TEXT, ColumnSettings(extra_period_columns=0)))
+
+    assert StructureProblem.UNVALIDATED_ANCHOR in structure.problems
 
 
 def test_financial_year_headers_are_derived_by_their_later_year():

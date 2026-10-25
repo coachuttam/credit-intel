@@ -129,6 +129,7 @@ class ColumnSettings:
 
     column_margin_pt: float = 3  # added each side of a period anchor's extent
     line_tolerance_pt: float = 3  # words whose vertical centres differ by at most this share a line
+    extra_period_columns: int = 2  # older year-columns accepted beyond the comparative (PRD FR-005.9, v0.4.29)
 
 
 @dataclass(frozen=True)

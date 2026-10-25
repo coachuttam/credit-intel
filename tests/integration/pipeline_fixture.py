@@ -86,6 +86,28 @@ def year_heading_pdf(path: Path) -> Path:
     return path
 
 
+def three_year_pdf(path: Path, headers=("2026", "2025", "2024")) -> Path:
+    """A balance sheet with three year columns under "As at March 31," (PRD v0.4.29, older year-columns): the first two are read, the third is recognised only."""
+    pdf = canvas.Canvas(str(path), invariant=1)
+    pdf.setFont("Helvetica", 10)
+    y = 780
+    for text in ("Acme Industries Limited", "Consolidated Balance Sheet", "(Rs. in crore)", "As at March 31,"):
+        pdf.drawString(72, y, text)
+        y -= 15
+    for x, header in zip((360, 440, 520), headers, strict=True):
+        pdf.drawCentredString(x, y, header)
+    y -= 15
+    for label, _note, current, comparative in ROWS:
+        pdf.drawString(72, y, label)
+        pdf.drawRightString(390, y, current)
+        pdf.drawRightString(470, y, comparative)
+        pdf.drawRightString(550, y, "111.11")
+        y -= 14
+    pdf.showPage()
+    pdf.save()
+    return path
+
+
 def blank_text_pdf(path: Path) -> Path:
     """A PDF with text that is not a financial statement."""
     pdf = canvas.Canvas(str(path), invariant=1)

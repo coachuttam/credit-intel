@@ -9,7 +9,7 @@ guessed. This module has no I/O and no dependency on a model's output:
   ``2024-25``, ``FY 2024-25``), reduced to its (later) year;
 - ``resolve_anchor_texts``: which anchors validate, and how (a full date; a year token
   matched by the one full date of that year in the page's title or column-header block; or the comparative derived
-  from the current period, v0.4.13);
+  from the current period, v0.4.13; or an older year-column of a statement with more than two periods, v0.4.29);
 - ``periods_are_consecutive``: the consecutive-period rule (H.1.1);
 - ``page_period_resolver``: the ``resolve_period`` callable the column check (6b) takes.
 """
@@ -25,6 +25,8 @@ from credit_intel.config import ColumnSettings, LocatorSettings
 from credit_intel.extraction.columns import PeriodAnchor, find_anchors, group_lines, header_block
 from credit_intel.ingestion.locator import is_figure_word, lines_of
 from credit_intel.ingestion.models import PageWords
+
+DEFAULT_EXTRA_PERIOD_COLUMNS = ColumnSettings().extra_period_columns
 
 _MONTH_NUMBERS = {
     name: number
@@ -78,6 +80,7 @@ class Method(StrEnum):
     FULL_DATE = "full_date"
     YEAR_WITH_PAGE_DATE = "year_with_page_date"
     DERIVED_COMPARATIVE = "derived_comparative"
+    DERIVED_OLDER = "derived_older"  # v0.4.29: an older year-column of a statement with more than two periods
 
 
 class Reason(StrEnum):
@@ -89,7 +92,8 @@ class Reason(StrEnum):
     BAD_FINANCIAL_YEAR = "bad_financial_year"
     AMBIGUOUS_PAGE_DATE = "ambiguous_page_date"
     NO_VALIDATED_CURRENT = "no_validated_current"
-    NOT_ONE_YEAR_EARLIER = "not_one_year_earlier"
+    NOT_ONE_YEAR_EARLIER = "not_one_year_earlier"  # a later year, or an earlier year that is not part of an unbroken run (v0.4.29)
+    TOO_MANY_OLDER_PERIODS = "too_many_older_periods"  # v0.4.29: beyond ``extra_period_columns`` older periods
     CURRENT_ENDS_IN_FEBRUARY = "current_ends_in_february"
 
 
@@ -284,7 +288,7 @@ _REASONS_BY_FORM = {
 
 
 def resolve_anchor_texts(
-    anchor_texts: Iterable[str], page_text: str, known_current: date | None = None
+    anchor_texts: Iterable[str], page_text: str, known_current: date | None = None, extra_period_columns: int = DEFAULT_EXTRA_PERIOD_COLUMNS
 ) -> dict[str, PeriodResolution]:
     """Validate each distinct anchor text of one statement page (FR-005.9).
 
@@ -294,6 +298,11 @@ def resolve_anchor_texts(
     is validated as the comparative, with the same month and day, unless the current
     period ends on 28 or 29 February. ``known_current`` is a current period-end already
     validated by a full date elsewhere (on another page); it counts as validated here.
+
+    Older year-columns (v0.4.29): a year token consecutively earlier than the comparative is
+    validated as an older period, with the same month and day, only when every year between it
+    and the current period is also on the page, and at most ``extra_period_columns`` such periods
+    are accepted. A gap, a repeat of a later year or a run that is too long stays unvalidated.
     """
     texts = list(dict.fromkeys(anchor_texts))
     page_dates = find_header_dates(page_text)  # v0.4.20: not a date elsewhere on the page
@@ -322,17 +331,23 @@ def resolve_anchor_texts(
 
     validated = [r.evidence.period_end for r in results.values() if r.evidence is not None]
     current = max([*validated, *([known_current] if known_current else [])], default=None)
+    present_years = {r.evidence.period_end.year for r in results.values() if r.evidence is not None} | set(pending.values())
     for text, year in pending.items():
+        back = current.year - year if current is not None else 0
         if current is None:
             results[text] = PeriodResolution(None, Reason.NO_VALIDATED_CURRENT)
-        elif year != current.year - 1:
+        elif back < 1:
             results[text] = PeriodResolution(None, Reason.NOT_ONE_YEAR_EARLIER)
+        elif back > 1 + extra_period_columns:
+            results[text] = PeriodResolution(None, Reason.TOO_MANY_OLDER_PERIODS)
+        elif any(current.year - m not in present_years for m in range(1, back)):
+            results[text] = PeriodResolution(None, Reason.NOT_ONE_YEAR_EARLIER)  # the run of consecutive years is broken
         elif _is_february_end(current):
             results[text] = PeriodResolution(None, Reason.CURRENT_ENDS_IN_FEBRUARY)
         else:
             derived = date(year, current.month, current.day)
-            evidence = PeriodEvidence(text, derived, Method.DERIVED_COMPARATIVE, derived_from=current)
-            results[text] = PeriodResolution(evidence)
+            method = Method.DERIVED_COMPARATIVE if back == 1 else Method.DERIVED_OLDER
+            results[text] = PeriodResolution(PeriodEvidence(text, derived, method, derived_from=current))
     return {text: results[text] for text in texts}
 
 
@@ -355,7 +370,7 @@ def page_period_resolver(
     lines = group_lines(page.words, settings.line_tolerance_pt)
     first, last = header_block(lines, locator_settings)
     resolutions = resolve_anchor_texts(
-        (anchor.text for anchor in find_anchors(lines[first:last])), page_text, known_current
+        (anchor.text for anchor in find_anchors(lines[first:last])), page_text, known_current, settings.extra_period_columns
     )
 
     def resolve(anchor: PeriodAnchor) -> date | None:

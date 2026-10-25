@@ -522,3 +522,49 @@ def test_a_page_with_full_date_headings_and_no_year_headings_derives_nothing(tmp
 
     assert result.attributes.comparative_period_end.status is Status.NOT_FOUND
     assert result.field_set.counts["extracted"] == 3  # the current-period fields only
+
+
+# --- older year-columns (PRD v0.4.29, FR-005.9; Appendix B.6 rows 62 and 63) ------------------------------------------------
+
+
+def three_year_reply(pdf):
+    reply = json.loads(fx.good_response(pdf, drop_attributes=("period_end",)))
+    quote = "As at March 31,\n2026 2025 2024"
+    reply["attributes"].append(fx.attribute(pdf, "period_end", "March 31, 2026", "2026-03-31", quote, "current"))
+    for entry in reply["fields"]:
+        entry["evidence_quote"] = fx.line_of(pdf, entry["line_item_label"])
+    return json.dumps(reply)
+
+
+def test_b6_row_62_a_three_year_statement_places_the_current_and_the_comparative_figures(tmp_path):
+    pdf = fx.three_year_pdf(tmp_path / "three.pdf")
+
+    result, _ = run(pdf, tmp_path, [three_year_reply(pdf)])
+
+    assert result.field_set.counts["extracted"] == 6 and result.field_set.unplaced == ()
+    current = result.field_set.get(FieldName.CURRENT_ASSETS, PeriodRole.CURRENT)
+    comparative = result.field_set.get(FieldName.CURRENT_ASSETS, PeriodRole.COMPARATIVE)
+    assert (current.raw_value, current.period_end.isoformat()) == ("1,482.30", "2026-03-31")
+    assert (comparative.raw_value, comparative.period_end.isoformat()) == ("1,356.75", "2025-03-31")
+
+
+def test_b6_row_62_the_older_column_is_never_taken_as_a_figure_of_either_period(tmp_path):
+    pdf = fx.three_year_pdf(tmp_path / "three.pdf")
+    reply = json.loads(three_year_reply(pdf))
+    reply["fields"][0]["raw_value"] = "111.11"  # the older column's figure, claimed as the current period's
+
+    result, _ = run(pdf, tmp_path, [json.dumps(reply)])
+
+    assert result.field_set.get(FieldName.CURRENT_ASSETS, PeriodRole.CURRENT).status is Status.REQUIRES_REVIEW
+    assert result.field_set.counts["extracted"] == 5
+
+
+def test_b6_row_63_a_gap_in_the_headers_makes_the_whole_page_unplaceable_as_before(tmp_path):
+    pdf = fx.three_year_pdf(tmp_path / "gap.pdf", headers=("2026", "2025", "2023"))
+
+    result, _ = run(pdf, tmp_path, [three_year_reply(pdf)])
+
+    assert result.field_set.counts["extracted"] == 0
+    reviewed = [f for f in result.field_set.fields if f.status is Status.REQUIRES_REVIEW]
+    assert reviewed and {f.status_reason for f in reviewed} <= {R.PERIOD_NOT_VERIFIED, R.PERIOD_MISMATCH}
+    assert not [f for f in result.field_set.fields if f.status is Status.EXTRACTED]
