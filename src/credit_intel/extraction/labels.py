@@ -1,7 +1,8 @@
 """Row-label check (PRD FR-005.10, D-10; H.3).
 
 The row's label is the text before its first figure, where a note reference counts
-as a figure (and so does a nil dash or the word nil). It is normalised as in FR-013
+as a figure (and so does a nil dash or the word nil); one currency symbol standing alone as its
+last word is not part of it (v0.4.29). It is normalised as in FR-013
 rule 1, leading item markers are removed, and the result must equal a configured
 phrase of the field (H.3). A bare "borrowings" is accepted only under the matching
 liabilities heading (the nearest preceding heading line on the page; a total of
@@ -35,6 +36,18 @@ def row_label(line_text: str) -> str:
             break
         words.append(word)
     return " ".join(words)
+
+
+def drop_currency_sign(label: str, symbols: Sequence[str]) -> str:
+    """Remove one currency symbol standing alone as the last word of a label (PRD FR-005.10, v0.4.29).
+
+    Only that one trailing word, only a symbol, and only when other words remain; a sign inside the label, or any other
+    trailing word, leaves the label as printed.
+    """
+    words = label.split()
+    if len(words) >= 2 and words[-1] in symbols:
+        return " ".join(words[:-1])
+    return label
 
 
 def strip_item_markers(folded: str) -> str:
@@ -85,7 +98,7 @@ def section_heading(
 @dataclass(frozen=True)
 class LabelCheck:
     ok: bool
-    label: str  # the text before the first figure, as printed
+    label: str  # the text before the first figure, as printed (a lone currency sign included)
     normalised: str
     matched_phrase: str | None
     section: str | None  # the heading found, for a sectioned phrase
@@ -105,7 +118,7 @@ def check_label(
     """
     settings = settings or LabelSettings()
     label = row_label(figure_line)
-    normalised = normalise_label(label)
+    normalised = normalise_label(drop_currency_sign(label, settings.currency_symbols))
     rule = settings.rules.get(field_name)
     if rule is None:
         return LabelCheck(False, label, normalised, None, None)

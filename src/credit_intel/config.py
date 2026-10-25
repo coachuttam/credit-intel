@@ -198,6 +198,11 @@ class LabelSettings:
             "total_equity": FieldLabelRule(("total equity", "total stockholders' equity")),
         }
     )
+    # A currency symbol standing alone as the last word before the first figure is not part of the row label
+    # (PRD FR-005.10 criterion 10, v0.4.29): the non-alphabetic entries of the currency tokens, never a name or a code.
+    currency_symbols: tuple[str, ...] = field(
+        default_factory=lambda: tuple(t for tokens in DeclarationSettings().currency_tokens.values() for t in tokens if not t[0].isalpha())
+    )
     section_headings: dict[str, tuple[str, ...]] = field(
         default_factory=lambda: {
             NON_CURRENT: ("non-current liabilities",),

@@ -568,3 +568,17 @@ def test_b6_row_63_a_gap_in_the_headers_makes_the_whole_page_unplaceable_as_befo
     reviewed = [f for f in result.field_set.fields if f.status is Status.REQUIRES_REVIEW]
     assert reviewed and {f.status_reason for f in reviewed} <= {R.PERIOD_NOT_VERIFIED, R.PERIOD_MISMATCH}
     assert not [f for f in result.field_set.fields if f.status is Status.EXTRACTED]
+
+
+# --- a currency sign before the first figure (PRD v0.4.29, FR-005.10 criterion 10; Appendix B.6 row 66) --------------------------
+
+
+def test_b6_row_66_a_row_with_a_currency_sign_after_its_label_is_extracted_and_kept_as_printed(tmp_path):
+    rows = [(label + (" $" if label == "Total equity" else ""), note, current, comparative) for label, note, current, comparative in fx.ROWS]
+    pdf = fx.balance_sheet_pdf(tmp_path / "sign.pdf", rows=rows)
+
+    result, _ = run(pdf, tmp_path, [fx.good_response(pdf)])
+
+    equity = result.field_set.get(FieldName.TOTAL_EQUITY, PeriodRole.CURRENT)
+    assert result.field_set.counts["extracted"] == 6 and equity.status is Status.EXTRACTED
+    assert "Total equity $" in equity.evidence_quote and equity.line_item_label == "Total equity"  # the model's own label is kept

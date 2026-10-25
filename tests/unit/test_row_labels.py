@@ -1,5 +1,7 @@
 """Row-label check (PRD FR-005.10, D-10; H.3; step 7b; B-212)."""
 
+from dataclasses import replace
+
 import pytest
 
 from credit_intel.config import CURRENT, NON_CURRENT, FieldLabelRule, LabelSettings
@@ -329,3 +331,63 @@ def test_the_singular_finance_cost_row_of_a_real_statement_is_accepted_and_look_
     assert not ok("interest_expense", "Finance income 416 470")
     assert not ok("interest_expense", "Finance costs and other charges 416 470")
     assert not ok("operating_profit", "Finance cost 416 470")
+
+
+# --- a lone currency sign before the first figure is not part of the label (PRD FR-005.10, v0.4.29; B.6 rows 66 and 67) --------
+
+
+@pytest.mark.parametrize("sign", ["$", "₹", "€", "£", "¥"])
+def test_b6_row_66_a_currency_sign_between_the_label_and_the_first_figure_is_not_part_of_the_label(sign):
+    result = check_label("net_profit", f"Net income {sign} 1,482.30 {sign} 1,356.75")
+
+    assert result.ok and result.matched_phrase == "net income"
+    assert result.label == f"Net income {sign}"  # the label as printed is kept for the record
+    assert result.normalised == "net income"
+
+
+def test_the_sign_is_dropped_for_every_field_that_has_a_phrase():
+    for field_name, phrases in H3.items():
+        for phrase in phrases:
+            assert check_label(field_name, f"{phrase.capitalize()} $ 1,482.30").ok, (field_name, phrase)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Net income $ before tax 1.00",  # the sign is not the last word
+        "Net income USD 1.00",  # a code is not a symbol
+        "Net income US$ 1.00",  # nor is a symbol that starts with letters
+        "Net income dollars 1.00",  # nor a name
+        "Net income Rs. 1.00",
+        "Net $ income 1.00",  # a sign inside the label
+        "$ Net income 1.00",  # a sign at the start
+        "Net income $ $ 1.00",  # only one trailing word is removed
+    ],
+)
+def test_b6_row_67_other_signs_and_trailing_words_leave_the_label_as_printed(line):
+    assert not check_label("net_profit", line).ok
+
+
+def test_a_label_that_is_only_a_sign_is_not_emptied():
+    result = check_label("revenue", "$ 1,482.30")
+
+    assert not result.ok and result.label == "$" and result.normalised == "$"
+
+
+def test_the_sign_rule_follows_the_settings():
+    result = check_label("net_profit", "Net income $ 1.00", settings=replace(LabelSettings(), currency_symbols=()))
+
+    assert not result.ok
+
+
+def test_the_currency_symbols_are_the_non_alphabetic_currency_tokens():
+    assert set(LabelSettings().currency_symbols) == {"$", "₹", "€", "£", "¥"}
+
+
+def test_a_section_heading_row_is_not_affected_by_the_sign_rule():
+    assert section_heading(["Current liabilities: $", "Borrowings 1.00"], 1, LabelSettings()) is None
+
+
+def test_the_sign_before_a_nil_dash_or_a_note_reference_is_dropped_too():
+    assert check_label("total_equity", "Total equity $ - 1.00").ok
+    assert check_label("total_equity", "Total equity 14 $ 600.00 $ 500.00").ok  # the note reference ends the label before any sign
