@@ -431,8 +431,8 @@ def test_a_field_cited_to_a_page_that_is_not_a_candidate_is_not_verified(env):
 # --- document-level attributes block fields (H.1.2) ----------------------------------------------------------------------------
 
 
-def test_a_missing_currency_attribute_blocks_every_field(tmp_path):
-    env = build(tmp_path / "c.pdf", attribute_changes={"currency": None})
+def test_a_currency_attribute_the_model_contradicts_blocks_every_field(tmp_path):
+    env = build(tmp_path / "c.pdf", attribute_changes={"currency": {"normalised_value": "USD"}})  # the page says Rs.
 
     result = verify(env, F.TOTAL_EQUITY, CUR, "600.00", "Total equity")
 
@@ -441,10 +441,20 @@ def test_a_missing_currency_attribute_blocks_every_field(tmp_path):
     assert result.field.validation.details["blocked_by"] == ["currency_not_verified"]
 
 
-def test_a_missing_scale_attribute_blocks_every_field(tmp_path):
-    env = build(tmp_path / "s2.pdf", attribute_changes={"scale": None})
+def test_a_scale_attribute_the_model_contradicts_blocks_every_field(tmp_path):
+    env = build(tmp_path / "s2.pdf", attribute_changes={"scale": {"raw_text": "in crore", "normalised_value": "lakh"}})  # the page says crore
 
     assert verify(env, F.TOTAL_EQUITY, CUR, "600.00", "Total equity").field.status_reason is R.SCALE_NOT_VERIFIED
+
+
+def test_a_missing_currency_or_scale_attribute_is_read_from_the_page_and_does_not_block(tmp_path):
+    """PRD v0.4.37: the page declares one currency and one scale and the model proposed neither, so the code reads them."""
+    for key in ("currency", "scale"):
+        env = build(tmp_path / f"{key}.pdf", attribute_changes={key: None})
+
+        result = verify(env, F.TOTAL_EQUITY, CUR, "600.00", "Total equity")
+
+        assert result.field.status is Status.EXTRACTED and result.field.validation.details["blocked_by"] == []
 
 
 def test_a_missing_basis_attribute_blocks_the_field_but_its_own_page_still_gives_it_a_basis(tmp_path):

@@ -35,7 +35,7 @@ from credit_intel.extraction.attributes import VerifiedAttributes, verify_attrib
 from credit_intel.extraction.extract import ExtractionResult, extract_fields
 from credit_intel.extraction.field_set import FieldSet, build_field_set
 from credit_intel.extraction.prompt import Prompt, load_prompt
-from credit_intel.extraction.verify import FieldVerification, FieldVerifier, VerificationContext
+from credit_intel.extraction.verify import FieldRefiling, FieldVerification, FieldVerifier, VerificationContext
 from credit_intel.extraction.bases import drop_unknown_basis_pages
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.extractor import TextExtractor, WordExtractor
@@ -96,6 +96,8 @@ class ExtractionRun:
     basis_assertion: BasisAssertion | None = None
     # What the optional page classifier did (PRD v0.4.31); ``None`` when it was not switched on.
     page_filter: PageFilterOutcome | None = None
+    # A total_borrowings proposal verified as a borrowings component because its row is one (PRD v0.4.38); empty if none.
+    field_refilings: tuple[FieldRefiling, ...] = ()
 
 
 def run_extraction(
@@ -263,4 +265,5 @@ def run_extraction(
         ),
         basis_assertion=assertion,
         page_filter=page_filter_outcome,
+        field_refilings=verifier.refilings,
     )

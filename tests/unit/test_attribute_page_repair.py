@@ -51,7 +51,8 @@ def test_a_cited_page_that_is_not_a_candidate_is_repaired_too():
 
 
 def test_b6_row_98_a_quote_that_is_on_no_candidate_page_is_still_not_verified():
-    result = verified([attr(Name.SCALE, "In billions", "billions", "(In billions)", 1), attr(Name.REPORTING_CURRENCY, "In billions", "USD", "(In billions)", 1)])
+    conflict = {1: P1, 2: P2, 3: "Acme Inc\nNOTE 4\n(In thousands)\nOther \u20b9 5"}  # two scales and two currencies: nothing is derived either (v0.4.37)
+    result = verified([attr(Name.SCALE, "In billions", "billions", "(In billions)", 1), attr(Name.REPORTING_CURRENCY, "In billions", "USD", "(In billions)", 1)], conflict)
 
     assert result.scale.status is Status.REQUIRES_REVIEW and result.scale.status_reason is Reason.EVIDENCE_NOT_VERIFIED
     assert result.reporting_currency.status_reason is Reason.EVIDENCE_NOT_VERIFIED and result.page_repairs == ()
@@ -66,7 +67,9 @@ def test_the_declaration_tests_still_apply_to_the_repaired_text():
 
 
 def test_the_raw_text_must_still_be_in_the_quote():
-    result = verified([attr(Name.SCALE, "In thousands", "millions", QUOTE, 1)])
+    conflict = {1: P1, 2: P2, 3: "Acme Inc\nNOTE 4\n(In thousands)\nOther \u20b9 5"}  # nothing derived, so the failure shows
+
+    result = verified([attr(Name.SCALE, "In thousands", "millions", QUOTE, 2)], conflict)  # cited on the page that holds the quote: no repair either
 
     assert result.scale.status_reason is Reason.VALUE_NOT_IN_EVIDENCE
 

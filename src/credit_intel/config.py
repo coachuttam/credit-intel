@@ -187,16 +187,20 @@ class LabelSettings:
             "current_assets": FieldLabelRule(("total current assets",)),
             "current_liabilities": FieldLabelRule(("total current liabilities",)),
             "total_borrowings": FieldLabelRule(("total borrowings",)),
+            # "long-term debt", "short-term debt" and "current portion of long-term debt" added 2026-10-25 from tuning-set evidence (PRD O.2,
+            # AC-E-7): the consolidated balance sheet of tuning document R2 (sha256 dfc1ed6c9bcd..., physical page 38) prints its debt on
+            # three rows with those captions and has no non-current liabilities heading. The owner approved them.
             "borrowings_non_current": FieldLabelRule(
-                ("non-current borrowings",), ("borrowings",), NON_CURRENT
+                ("non-current borrowings", "long-term debt"), ("borrowings",), NON_CURRENT
             ),
             "borrowings_current": FieldLabelRule(
-                ("current borrowings",), ("borrowings",), CURRENT
+                ("current borrowings", "short-term debt"), ("borrowings",), CURRENT
             ),
             "current_maturities_long_term_borrowings": FieldLabelRule(
                 (
                     "current maturities of long-term borrowings",
                     "current maturities of long-term debt",
+                    "current portion of long-term debt",
                 )
             ),
             "total_equity": FieldLabelRule(("total equity", "total stockholders' equity")),
@@ -247,8 +251,11 @@ class BorrowingSettings:
     provisional and may be extended only from tuning-set evidence (PRD O.2, AC-E-7).
     """
 
-    inclusion_phrases: tuple[str, ...] = ("including current maturities",)
-    exclusion_phrases: tuple[str, ...] = ("excluding current maturities",)
+    # Added 2026-10-25 from tuning-set evidence (R2, page 38; the owner approved option (a) and the guard): a current-maturities row captioned
+    # "current portion of long-term debt" is a separate component (exclusion); a current-borrowings caption that says "including current
+    # portion" already holds it (inclusion, checked first, so the row is not added twice).
+    inclusion_phrases: tuple[str, ...] = ("including current maturities", "including current portion")
+    exclusion_phrases: tuple[str, ...] = ("excluding current maturities", "current portion of long-term debt")
 
 
 @dataclass(frozen=True)

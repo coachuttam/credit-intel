@@ -131,13 +131,25 @@ def test_a_quote_that_is_not_on_the_page_is_not_verified(pdf, tmp_path):
     assert status(result, FieldName.TOTAL_EQUITY, CUR).status_reason is R.EVIDENCE_NOT_VERIFIED
 
 
-def test_a_missing_currency_attribute_blocks_every_field(pdf, tmp_path):
-    reply = fx.reply(fx.good_attributes(pdf, drop=("reporting_currency",)), fields_of(pdf))
+def test_a_currency_attribute_the_model_contradicts_blocks_every_field(pdf, tmp_path):
+    attributes = [dict(a, normalised_value="USD") if a["attribute"] == "reporting_currency" else a for a in fx.good_attributes(pdf)]  # the page says Rs.
 
-    result, _ = run(pdf, tmp_path, [reply])
+    result, _ = run(pdf, tmp_path, [fx.reply(attributes, fields_of(pdf))])
 
     assert result.field_set.counts["extracted"] == 0 and result.field_set.counts["requires_review"] == 6
     assert all(r.status_reason is R.CURRENCY_NOT_VERIFIED for r in result.field_set.fields if r.status is Status.REQUIRES_REVIEW)
+    assert result.attributes.derivations == ()  # a claim the page contradicts is never replaced
+
+
+def test_a_missing_currency_attribute_is_read_from_the_page_and_the_fields_extract(pdf, tmp_path):
+    """PRD v0.4.37, Appendix B.6 rows 102 and 103."""
+    reply = fx.reply(fx.good_attributes(pdf, drop=("reporting_currency", "scale")), fields_of(pdf))
+
+    result, _ = run(pdf, tmp_path, [reply])
+
+    assert result.field_set.counts["extracted"] == 6
+    assert result.attributes.reporting_currency.normalised_value == "INR" and result.attributes.scale.normalised_value == "crore"
+    assert [(d.attribute, d.page, d.why) for d in result.attributes.derivations] == [("reporting_currency", 1, "no_proposal"), ("scale", 1, "no_proposal")]
 
 
 def test_an_empty_reply_is_not_a_failure_everything_is_not_found(pdf, tmp_path):

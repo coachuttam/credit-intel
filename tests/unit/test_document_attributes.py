@@ -28,6 +28,9 @@ PAGE = (
     "Total current assets 14 1,482.30 1,356.75"
 )
 PAGES = {112: PAGE}
+# A second page that declares another scale and another currency: the pages then declare two of each, so the code derives neither (PRD v0.4.37).
+# The tests of what a failed proposal does use it, so they still see the failure and not the derivation.
+CONFLICT = {112: PAGE, 113: "Notes\n(Rs. in lakh)\n$ 5.00"}
 
 
 def attr(name, raw, norm, quote=None, role=None, page=112):
@@ -93,7 +96,7 @@ def test_period_evidence_records_how_each_period_was_validated():
 
 
 def test_attributes_that_are_not_proposed_are_not_found():
-    result = verify([])
+    result = verify([], CONFLICT)
 
     assert all(a.status is Status.NOT_FOUND and a.status_reason is None for a in result.all)
     assert result.current_period_end.period_role is CUR and result.comparative_period_end.period_role is COMP
@@ -113,7 +116,7 @@ def test_a_missing_comparative_is_not_found_and_the_current_stands():
 @pytest.mark.parametrize("original", ALL)
 def test_a_quote_that_is_not_on_the_page_is_not_verified(original):
     bad = replaced(original, evidence_quote="Text that is nowhere on the page", raw_text="Text that is nowhere")
-    result = verify([bad if a is original else a for a in ALL])
+    result = verify([bad if a is original else a for a in ALL], CONFLICT)
 
     record = {Name.ENTITY_NAME: result.entity_name, Name.STATEMENT_BASIS: result.statement_basis,
               Name.REPORTING_CURRENCY: result.reporting_currency, Name.SCALE: result.scale}.get(original.attribute)
@@ -125,7 +128,7 @@ def test_a_quote_that_is_not_on_the_page_is_not_verified(original):
 @pytest.mark.parametrize("original", [ENTITY, BASIS, CURRENCY, SCALE])
 def test_raw_text_outside_the_quote_is_not_in_evidence(original):
     bad = replaced(original, raw_text="somewhere else")
-    result = verify([bad if a is original else a for a in ALL])
+    result = verify([bad if a is original else a for a in ALL], CONFLICT)
 
     records = [result.entity_name, result.statement_basis, result.reporting_currency, result.scale]
     assert any(r.status_reason is Reason.VALUE_NOT_IN_EVIDENCE for r in records)
@@ -422,9 +425,11 @@ def test_the_other_conditions_still_apply_when_the_page_supports_the_currency():
     not_in_quote = replaced(UNIT_LINE, raw_text="$")  # the raw text is not in the quote
     off_page = replaced(UNIT_LINE, evidence_quote="(In billions)", raw_text="In billions")  # the quote is not on the page
 
-    assert verify([lower], {112: USD_PAGE}).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
-    assert verify([not_in_quote], {112: USD_PAGE}).reporting_currency.status_reason is Reason.VALUE_NOT_IN_EVIDENCE
-    assert verify([off_page], {112: USD_PAGE}).reporting_currency.status_reason is Reason.EVIDENCE_NOT_VERIFIED
+    pages = {112: USD_PAGE, 113: "Notes\n\u20b9 5.00"}  # a second currency on another page: nothing is derived (PRD v0.4.37)
+
+    assert verify([lower], pages).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+    assert verify([not_in_quote], pages).reporting_currency.status_reason is Reason.VALUE_NOT_IN_EVIDENCE
+    assert verify([off_page], pages).reporting_currency.status_reason is Reason.EVIDENCE_NOT_VERIFIED
 
 
 def test_a_page_that_names_two_currencies_still_does_not_let_two_proposals_disagree():
@@ -476,7 +481,7 @@ def test_if_none_is_verified_the_first_failure_is_reported():
     first = replaced(CURRENCY, evidence_quote="not on the page", raw_text="not on")
     second = replaced(CURRENCY, normalised_value="USD")
 
-    assert verify([first, second]).reporting_currency.status_reason is Reason.EVIDENCE_NOT_VERIFIED
+    assert verify([first, second], CONFLICT).reporting_currency.status_reason is Reason.EVIDENCE_NOT_VERIFIED
 
 
 # --- the dependency rule (H.1.2) --------------------------------------------------------------------------------------------
@@ -504,7 +509,7 @@ def test_a_missing_period_blocks_with_period_mismatch():
     [(BASIS, Reason.BASIS_UNKNOWN), (CURRENCY, Reason.CURRENCY_NOT_VERIFIED), (SCALE, Reason.SCALE_NOT_VERIFIED)],
 )
 def test_a_missing_or_failed_attribute_blocks_every_field_with_its_reason(missing, reason):
-    result = verify(without(missing))
+    result = verify(without(missing), CONFLICT)
 
     assert blocking_reason(result, CUR) is reason and blocking_reason(result, COMP) is reason
 
@@ -521,13 +526,13 @@ def test_the_entity_name_blocks_nothing():
 
 
 def test_blocking_reasons_follow_the_prd_order_period_then_basis_then_currency_then_scale():
-    result = verify([])
+    result = verify([], CONFLICT)
     assert blocking_reason(result, CUR) is Reason.PERIOD_MISMATCH
-    result = verify([CURRENT, COMPARATIVE])
+    result = verify([CURRENT, COMPARATIVE], CONFLICT)
     assert blocking_reason(result, CUR) is Reason.BASIS_UNKNOWN
-    result = verify([CURRENT, COMPARATIVE, BASIS])
+    result = verify([CURRENT, COMPARATIVE, BASIS], CONFLICT)
     assert blocking_reason(result, CUR) is Reason.CURRENCY_NOT_VERIFIED
-    result = verify([CURRENT, COMPARATIVE, BASIS, CURRENCY])
+    result = verify([CURRENT, COMPARATIVE, BASIS, CURRENCY], CONFLICT)
     assert blocking_reason(result, CUR) is Reason.SCALE_NOT_VERIFIED
 
 

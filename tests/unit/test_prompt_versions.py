@@ -19,9 +19,10 @@ V4 = (PROMPT_DIR / "extraction_v4.md").read_text(encoding="utf-8").splitlines()
 V5 = (PROMPT_DIR / "extraction_v5.md").read_text(encoding="utf-8").splitlines()
 V6 = (PROMPT_DIR / "extraction_v6.md").read_text(encoding="utf-8").splitlines()
 V7 = (PROMPT_DIR / "extraction_v7.md").read_text(encoding="utf-8").splitlines()
+V8 = (PROMPT_DIR / "extraction_v8.md").read_text(encoding="utf-8").splitlines()
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7", "extraction_v8"])
 def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     prompt = load_prompt(name)
 
@@ -29,7 +30,7 @@ def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     assert "{{schema}}" not in prompt.system and "{{fields}}" not in prompt.system  # filled in from the code
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7", "extraction_v8"])
 def test_each_prompt_lists_every_extractable_field_and_the_schema(name):
     system = load_prompt(name).system
 
@@ -232,3 +233,37 @@ def test_v7_differs_from_v5_only_in_its_version_and_one_page_number_rule():
 
 def test_v7_keeps_every_other_v5_line_in_order():
     assert [line for line in V7 if not line.startswith(("prompt-version", "- page_number, for a field"))] == [line for line in V5 if not line.startswith("prompt-version")]
+
+
+# --- extraction_v8: a draft that describes debt by what a row is, not by its heading (gate round, R2 total borrowings) -------------------
+
+
+def test_v8_is_a_draft_and_the_default_stays_version_five():
+    assert DEFAULT_PROMPT == "extraction_v5" and load_prompt("extraction_v8").version == "extraction-v8"
+
+
+def test_v8_is_v5_line_for_line_plus_one_note_after_the_field_list():
+    removed = [line for line in V5 if line not in V8]
+    added = [line for line in V8 if line not in V5]
+
+    assert removed == ["prompt-version: extraction-v5"] and added[0] == "prompt-version: extraction-v8"
+    assert V8[0] == "prompt-version: extraction-v8" and V8[1 : len(V5)] == V5[1:]
+    note = next(line for line in V8 if line.startswith("Note on borrowings:"))
+    assert V8.index(note) > V8.index("{{fields}}")
+
+
+def test_the_v8_note_names_the_debt_rows_the_exclusions_and_the_rule_against_adding_rows_up():
+    note = next(line for line in V8 if line.startswith("Note on borrowings:"))
+
+    for row in ("short-term debt", "commercial paper", "the current portion of long-term debt", "long-term debt"):
+        assert row in note
+    for never in ("Lease liabilities", "trade payables"):
+        assert never in note
+    assert "borrowings_current" in note and "current_maturities_long_term_borrowings" in note and "borrowings_non_current" in note
+    assert "not by the heading it sits under" in note and "Never add rows together yourself." in note
+
+
+def test_the_shared_field_descriptions_are_still_not_changed_by_v8():
+    from credit_intel.extraction.prompt import FIELD_DESCRIPTIONS
+
+    assert FIELD_DESCRIPTIONS["borrowings_non_current"] == "borrowings under the non-current liabilities heading"  # the note overrides it for v8 only

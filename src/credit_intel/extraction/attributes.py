@@ -62,6 +62,15 @@ class PageRepair:
 
 
 @dataclass(frozen=True)
+class AttributeDerivation:
+    """A currency or scale read by the code from the candidate pages because the model's proposal was missing or had no usable evidence (PRD v0.4.37)."""
+
+    attribute: str
+    page: int
+    why: str  # "no_proposal", or the reason the model's proposal failed (evidence_not_verified, value_not_in_evidence)
+
+
+@dataclass(frozen=True)
 class VerifiedAttributes:
     entity_name: DocumentAttribute
     current_period_end: DocumentAttribute
@@ -73,6 +82,8 @@ class VerifiedAttributes:
     period_evidence: Mapping[PeriodRole, PeriodEvidence] = field(default_factory=dict)
     # Each declaration verified on a page other than the cited one: the cited page and the page used (recorded in the manifest only).
     page_repairs: tuple[PageRepair, ...] = ()
+    # Each currency or scale the code read from the pages itself (recorded in the manifest only).
+    derivations: tuple[AttributeDerivation, ...] = ()
 
     @property
     def all(self) -> tuple[DocumentAttribute, ...]:
@@ -265,6 +276,55 @@ def _derived_comparative(
 
 
 _REPAIRABLE = (Name.REPORTING_CURRENCY, Name.SCALE)
+# The reasons that mean "the model gave nothing usable" (not "the model said something the pages contradict"): only these allow a derivation.
+_NO_USABLE_PROPOSAL = (None, StatusReason.EVIDENCE_NOT_VERIFIED, StatusReason.VALUE_NOT_IN_EVIDENCE)
+
+
+def _first_declaring_line(text: str, found_in_line) -> str | None:
+    """The first line of ``text`` that holds a declaration (by ``found_in_line``), stripped; ``None`` if no single line does."""
+    for line in text.splitlines():
+        if line.strip() and found_in_line(line):
+            return " ".join(line.split())
+    return None
+
+
+def _derived(
+    name: Name, current: DocumentAttribute, pages: Mapping[int, str], settings: DeclarationSettings | None
+) -> tuple[DocumentAttribute, AttributeDerivation] | None:
+    """The currency or scale the candidate pages declare, when the model gave none that is usable (PRD v0.4.37).
+
+    Only if the attribute is not ``extracted`` for want of a usable proposal (none, or no evidence for it), and the pages declare exactly one
+    value of it between them. The page is the lowest-numbered one that declares it and the quote is that page's first line that does. A
+    proposal that contradicts the pages, two declared values, or none at all gives nothing.
+    """
+    if current.status is Status.EXTRACTED or current.status_reason not in _NO_USABLE_PROPOSAL:
+        return None
+    if name is Name.SCALE:
+        declared = {number: find_scales(text, settings) for number, text in pages.items()}
+        values = frozenset().union(*declared.values())
+        finder = lambda line, value: value in find_scales(line, settings)  # noqa: E731
+    else:
+        declared = {number: find_currencies(text, settings) for number, text in pages.items()}
+        values = frozenset().union(*declared.values())
+        finder = lambda line, value: value in find_currencies(line, settings)  # noqa: E731
+    if len(values) != 1:
+        return None
+    (value,) = values
+    for number in sorted(pages):
+        if value in declared[number]:
+            line = _first_declaring_line(pages[number], lambda candidate: finder(candidate, value))
+            if line is None:
+                return None  # the declaration is not on one line: not quoted, so not derived
+            attribute = DocumentAttribute(
+                attribute=name,
+                raw_text=line,
+                normalised_value=value if isinstance(value, str) else value.value,
+                page_number=number,
+                evidence_quote=line,
+                status=Status.EXTRACTED,
+            )
+            return attribute, AttributeDerivation(name.value, number, current.status_reason.value if current.status_reason else "no_proposal")
+    return None
 
 
 def _declared_conflict(name: Name, pages: Mapping[int, str], settings: DeclarationSettings | None) -> bool:
@@ -355,6 +415,16 @@ def verify_attributes(
         Name.SCALE, lambda p: StatusReason.SCALE_AMBIGUOUS if id(p) in blocked else _scale_reason(p, pages, declaration_settings)
     )
 
+    derivations: list[AttributeDerivation] = []
+    for attribute_name in (Name.REPORTING_CURRENCY, Name.SCALE):
+        derived_pair = _derived(attribute_name, currency if attribute_name is Name.REPORTING_CURRENCY else scale, pages, declaration_settings)
+        if derived_pair is not None:
+            if attribute_name is Name.REPORTING_CURRENCY:
+                currency = derived_pair[0]
+            else:
+                scale = derived_pair[0]
+            derivations.append(derived_pair[1])
+
     # Periods: the current one first, so a comparative year can be derived from it.
     current_props = group(Name.PERIOD_END, PeriodRole.CURRENT)
     current, current_evidence = _choose(
@@ -409,7 +479,7 @@ def verify_attributes(
         evidence[PeriodRole.CURRENT] = current_evidence
     if comparative.status is Status.EXTRACTED and comparative_evidence is not None:
         evidence[PeriodRole.COMPARATIVE] = comparative_evidence
-    return VerifiedAttributes(entity, current, comparative, basis, currency, scale, evidence, tuple(repairs))
+    return VerifiedAttributes(entity, current, comparative, basis, currency, scale, evidence, tuple(repairs), tuple(derivations))
 
 
 def blocking_reasons(attributes: VerifiedAttributes, period_role: PeriodRole) -> tuple[StatusReason, ...]:

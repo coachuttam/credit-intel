@@ -30,11 +30,12 @@ H3 = {
     "current_assets": ["total current assets"],
     "current_liabilities": ["total current liabilities"],
     "total_borrowings": ["total borrowings"],
-    "borrowings_non_current": ["non-current borrowings"],
-    "borrowings_current": ["current borrowings"],
+    "borrowings_non_current": ["non-current borrowings", "long-term debt"],
+    "borrowings_current": ["current borrowings", "short-term debt"],
     "current_maturities_long_term_borrowings": [
         "current maturities of long-term borrowings",
         "current maturities of long-term debt",
+        "current portion of long-term debt",
     ],
     "total_equity": ["total equity", "total stockholders' equity"],
 }
@@ -437,3 +438,33 @@ def test_the_phrases_are_a_setting_and_an_empty_list_turns_the_rule_off():
     off = replace(LabelSettings(), expense_table_headings=())
 
     assert not expense_table_heading(NOTE, 4, off) and expense_table_heading(NOTE, 4)
+
+
+# --- the debt captions of R2 (tuning evidence, page 38) -----------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("field", "line"),
+    [
+        ("borrowings_non_current", "Long-term debt 40.00 42.00"),
+        ("borrowings_current", "Short-term debt 0 6.00"),
+        ("current_maturities_long_term_borrowings", "Current portion of long-term debt 3.00 2.00"),
+    ],
+)
+def test_r2_debt_captions_are_accepted_for_their_fields_with_no_heading(field, line):
+    assert check_label(field, line).ok
+
+
+@pytest.mark.parametrize(
+    ("field", "line"),
+    [
+        ("borrowings_non_current", "Total long-term debt 40.00"),
+        ("borrowings_non_current", "Long-term debt securities 40.00"),
+        ("borrowings_current", "Short-term debt and leases 1.00"),
+        ("borrowings_current", "Long-term debt 40.00"),  # a caption belongs to its own field only
+        ("current_maturities_long_term_borrowings", "Non-current portion of long-term debt 3.00"),
+        ("total_borrowings", "Long-term debt 40.00"),
+    ],
+)
+def test_other_debt_wordings_are_not_accepted_for_those_fields(field, line):
+    assert not check_label(field, line).ok

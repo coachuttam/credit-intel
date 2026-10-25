@@ -19,7 +19,7 @@ parsed raw value (with its sign) scaled exactly, in ``Decimal``.
 the field's ``status_reason`` is the first.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -115,10 +115,25 @@ def _period(attributes: VerifiedAttributes, role: PeriodRole) -> tuple[date | No
         return None, False
 
 
+# The component fields a failed ``total_borrowings`` proposal can be re-filed as (PRD v0.4.38).
+_BORROWING_COMPONENTS = ("borrowings_non_current", "borrowings_current", "current_maturities_long_term_borrowings")
+
+
+@dataclass(frozen=True)
+class FieldRefiling:
+    """A ``total_borrowings`` proposal whose row is a borrowings component, verified as that component (PRD v0.4.38)."""
+
+    proposed: str
+    used: str
+    page: int
+    period: str
+
+
 class FieldVerifier:
     def __init__(self, context: VerificationContext) -> None:
         self._ctx = context
         self._structures: dict[int, PageStructure | None] = {}
+        self.refilings: tuple[FieldRefiling, ...] = ()
 
     def _structure(self, page_number: int) -> PageStructure | None:
         if page_number not in self._structures:
@@ -140,7 +155,46 @@ class FieldVerifier:
         return self._structures[page_number]
 
     def verify_all(self, response: ExtractionResponse) -> tuple[FieldVerification, ...]:
-        return tuple(self.verify(proposed) for proposed in response.fields)
+        proposals, self.refilings = self._refiled(response.fields)
+        return tuple(self.verify(proposed) for proposed in proposals)
+
+    def _component_for(self, proposed: ProposedField) -> str | None:
+        """The one component field whose label rule the cited figure's row satisfies, if ``total_borrowings`` does not (v0.4.38)."""
+        structure = self._structure(proposed.page_number)
+        if structure is None:
+            return None
+        _, line = link_quote(proposed.raw_value, proposed.evidence_quote, structure)
+        if line is None:
+            return None
+        ctx = self._ctx
+        page_lines = [candidate.text for candidate in structure.lines]
+        if check_label("total_borrowings", line.text, page_lines, line.index, ctx.label_settings).ok:
+            return None
+        recognised = [
+            name
+            for name in _BORROWING_COMPONENTS
+            if check_label(name, line.text, page_lines, line.index, ctx.label_settings).ok
+        ]
+        return recognised[0] if len(recognised) == 1 else None
+
+    def _refiled(self, proposals: Sequence[ProposedField]) -> tuple[tuple[ProposedField, ...], tuple[FieldRefiling, ...]]:
+        """PRD v0.4.38: a ``total_borrowings`` proposal on a component row is verified as that component.
+
+        Only the field name changes. It is dropped, not added, if the model already proposed that component for the period.
+        """
+        taken = {(p.field_name.value, p.period_role) for p in proposals}
+        result: list[ProposedField] = []
+        refilings: list[FieldRefiling] = []
+        for proposed in proposals:
+            component = self._component_for(proposed) if proposed.field_name.value == FieldName.TOTAL_BORROWINGS.value else None
+            if component is None:
+                result.append(proposed)
+            elif (component, proposed.period_role) not in taken:
+                taken.add((component, proposed.period_role))
+                result.append(proposed.model_copy(update={"field_name": type(proposed.field_name)(component)}))
+                refilings.append(FieldRefiling(proposed.field_name.value, component, proposed.page_number, proposed.period_role.value))
+            # else: the model's own component proposal stands and this one is dropped, so the figure is counted once
+        return tuple(result), tuple(refilings)
 
     def verify(self, proposed: ProposedField) -> FieldVerification:
         ctx = self._ctx

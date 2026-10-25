@@ -283,3 +283,86 @@ def test_property_the_total_is_the_exact_sum_of_its_components_and_the_caveat_fo
             continue
         expected = nc + cur + (cm if case == SEPARATE_COMPONENT else 0)
         assert result.value == expected and (caveats_of(result) == (CAVEAT_NOT_PRESENTED,)) == (case == NOT_PRESENTED)
+
+
+# --- R2's layout and the guard (PRD D-12, tuning evidence from R2 page 38; B-309) ---------------------------------------------------------
+
+
+R2_LABELS = {"nc": "Long-term debt", "cur": "Short-term debt", "cm": "Current portion of long-term debt"}
+
+
+def r2_parts(nc="300", cur="100", cm="50", cur_label=None, cm_label=None):
+    return (
+        rec(NC, nc, label=R2_LABELS["nc"]),
+        rec(CURB, cur, label=cur_label or R2_LABELS["cur"]),
+        rec(CM, cm, label=cm_label or R2_LABELS["cm"]),
+    )
+
+
+def test_r2_layout_three_debt_rows_with_their_own_captions_are_added_as_a_separate_component():
+    nc, cur, cm = r2_parts()
+
+    result = derive_total_borrowings(nc, cur, cm)
+
+    assert classify_current_maturities(cur, cm) == SEPARATE_COMPONENT
+    assert result.status is Status.EXTRACTED and result.value == Decimal("450")  # 300 + 100 + 50, summed by the code
+    assert result.derivation.component_classification == SEPARATE_COMPONENT and caveats_of(result) == ()
+    assert result.derivation.formula.endswith("+ current_maturities_long_term_borrowings")
+
+
+def test_r2_layout_a_nil_short_term_debt_is_a_zero_not_a_missing_row():
+    nc, cur, cm = r2_parts(cur="0")
+
+    result = derive_total_borrowings(nc, cur, cm)
+
+    assert result.status is Status.EXTRACTED and result.value == Decimal("350")
+
+
+def test_r2_layout_the_total_belongs_to_each_period_on_its_own_rows():
+    for end, role, values in ((D25, CUR, ("300", "100", "50")), (D24, COMP, ("320", "90", "40"))):
+        nc, cur, cm = (rec(name, v, label=label, end=end, role=role) for name, v, label in zip((NC, CURB, CM), values, R2_LABELS.values(), strict=True))
+
+        assert derive_total_borrowings(nc, cur, cm).value == sum(Decimal(v) for v in values)
+
+
+def test_guard_a_current_borrowings_caption_that_says_it_includes_the_current_portion_is_not_added_twice():
+    nc, cur, cm = r2_parts(cur_label="Short-term debt (including current portion of long-term debt)")
+
+    result = derive_total_borrowings(nc, cur, cm)
+
+    assert classify_current_maturities(cur, cm) == INCLUDED_IN_CURRENT
+    assert result.value == Decimal("400") and result.derivation.component_classification == INCLUDED_IN_CURRENT  # 300 + 100: the row is not added
+
+
+@pytest.mark.parametrize("caption", ["Short-term debt including current portion", "Borrowings, including current portion of long-term debt", "SHORT-TERM DEBT INCLUDING CURRENT MATURITIES"])
+def test_guard_the_inclusion_wordings(caption):
+    _, cur, cm = r2_parts(cur_label=caption)
+
+    assert classify_current_maturities(cur, cm) == INCLUDED_IN_CURRENT
+
+
+def test_guard_inclusion_wins_over_the_exclusion_phrase_that_the_row_caption_itself_contains():
+    _, cur, cm = r2_parts(cur_label="Short-term debt including current portion", cm_label="Current portion of long-term debt")
+
+    assert classify_current_maturities(cur, cm) == INCLUDED_IN_CURRENT  # both phrases are present: no double count
+
+
+def test_a_current_portion_caption_is_only_a_separate_component_when_the_row_is_presented():
+    _, cur, _ = r2_parts()
+
+    assert classify_current_maturities(cur, None) == NOT_PRESENTED  # no row, no addition (OD-9)
+
+
+def test_a_row_with_another_caption_is_still_unresolved():
+    _, cur, cm = r2_parts(cm_label="Current maturities")
+
+    assert classify_current_maturities(cur, cm) == UNRESOLVED  # no phrase was added for it
+
+
+def test_the_new_phrases_are_the_defaults_and_stay_configurable():
+    defaults = BorrowingSettings()
+
+    assert "current portion of long-term debt" in defaults.exclusion_phrases and "including current portion" in defaults.inclusion_phrases
+    off = BorrowingSettings(inclusion_phrases=(), exclusion_phrases=())
+    _, cur, cm = r2_parts()
+    assert classify_current_maturities(cur, cm, off) == UNRESOLVED
