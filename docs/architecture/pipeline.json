@@ -1,0 +1,451 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Credit-intel extraction pipeline",
+    "output": "docs/architecture/pipeline.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "git@local.invalid:ai-credit-intelligence.git",
+      "link_mode": "local-only",
+      "revision": "d0a9dc5ce526cbf995d4d3542fb0051aa471cb71"
+    }
+  },
+  "components": [
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "Send rule",
+      "sublabel": "held-out · private/",
+      "tag": "GUARD",
+      "pos": [
+        40,
+        40
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/send_rule.py",
+          "line": 44,
+          "label": "check_send"
+        },
+        {
+          "path": "src/credit_intel/evaluation/guard.py",
+          "line": 29,
+          "end_line": 45,
+          "label": "private/ folder check"
+        },
+        {
+          "path": "src/credit_intel/evaluation/guard.py",
+          "line": 104,
+          "label": "refuse_if_held_out"
+        }
+      ]
+    },
+    {
+      "id": "dryrun",
+      "type": "frontend",
+      "label": "Dry-run tool",
+      "sublabel": "estimates, no model",
+      "tag": "OFFLINE",
+      "pos": [
+        580,
+        40
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/evaluation/dry_run.py",
+          "line": 34,
+          "label": "dry_run"
+        },
+        {
+          "path": "src/credit_intel/evaluation/dry_run.py",
+          "line": 60,
+          "end_line": 63,
+          "label": "ingest and locate"
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "credit-intel CLI",
+      "sublabel": "one PDF per run",
+      "pos": [
+        40,
+        190
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/cli.py",
+          "line": 147,
+          "label": "_execute"
+        },
+        {
+          "path": "src/credit_intel/cli.py",
+          "line": 178,
+          "label": "main"
+        }
+      ]
+    },
+    {
+      "id": "ingest",
+      "type": "backend",
+      "label": "PDF ingestion",
+      "sublabel": "validate · text layer",
+      "pos": [
+        310,
+        190
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/ingestion/ingest.py",
+          "line": 17,
+          "end_line": 46,
+          "label": "ingest, no text layer"
+        },
+        {
+          "path": "src/credit_intel/ingestion/validation.py",
+          "line": 34,
+          "label": "validate_pdf"
+        }
+      ]
+    },
+    {
+      "id": "select",
+      "type": "backend",
+      "label": "Candidate pages",
+      "sublabel": "keyword locator",
+      "pos": [
+        580,
+        190
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/ingestion/locator.py",
+          "line": 337,
+          "label": "locate_statements"
+        },
+        {
+          "path": "src/credit_intel/extraction/pipeline.py",
+          "line": 164,
+          "label": "called in run_extraction"
+        }
+      ]
+    },
+    {
+      "id": "gate",
+      "type": "backend",
+      "label": "Basis gate",
+      "sublabel": "configured basis present",
+      "pos": [
+        850,
+        190
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/ingestion/locator.py",
+          "line": 439,
+          "label": "check_statement_basis"
+        },
+        {
+          "path": "src/credit_intel/extraction/bases.py",
+          "line": 96,
+          "label": "drop_unknown_basis_pages"
+        },
+        {
+          "path": "src/credit_intel/extraction/pipeline.py",
+          "line": 171,
+          "end_line": 173,
+          "label": "gate, then drop"
+        }
+      ]
+    },
+    {
+      "id": "jev",
+      "type": "cloud",
+      "label": "Jev classifier",
+      "sublabel": "may remove pages only",
+      "tag": "USE_JEV · OFF",
+      "pos": [
+        1120,
+        190
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/pagefilter/filter.py",
+          "line": 146,
+          "label": "filter_candidates"
+        },
+        {
+          "path": "src/credit_intel/pagefilter/jev.py",
+          "line": 98,
+          "label": "JevClassifier"
+        },
+        {
+          "path": "src/credit_intel/extraction/pipeline.py",
+          "line": 180,
+          "end_line": 188,
+          "label": "hook after the gate"
+        }
+      ]
+    },
+    {
+      "id": "extract",
+      "type": "backend",
+      "label": "OpenAI extraction",
+      "sublabel": "gateway · cache · ceiling",
+      "tag": "hosted API",
+      "pos": [
+        850,
+        340
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/extraction/extract.py",
+          "line": 87,
+          "label": "extract_fields"
+        },
+        {
+          "path": "src/credit_intel/llm/gateway.py",
+          "line": 10,
+          "label": "LLMGateway"
+        },
+        {
+          "path": "src/credit_intel/llm/openai_provider.py",
+          "line": 47,
+          "label": "OpenAIProvider"
+        }
+      ]
+    },
+    {
+      "id": "verify",
+      "type": "backend",
+      "label": "Deterministic checks",
+      "sublabel": "evidence · period · sign",
+      "pos": [
+        580,
+        340
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/extraction/verify.py",
+          "line": 118,
+          "end_line": 145,
+          "label": "FieldVerifier"
+        },
+        {
+          "path": "src/credit_intel/extraction/plausibility.py",
+          "line": 36,
+          "label": "apply_plausibility"
+        },
+        {
+          "path": "src/credit_intel/extraction/field_set.py",
+          "line": 53,
+          "label": "build_field_set"
+        }
+      ]
+    },
+    {
+      "id": "calc",
+      "type": "backend",
+      "label": "Metrics and rules",
+      "sublabel": "Decimal, no model",
+      "pos": [
+        310,
+        340
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/run.py",
+          "line": 81,
+          "end_line": 87,
+          "label": "run_pipeline"
+        },
+        {
+          "path": "src/credit_intel/calculations/calculate.py",
+          "line": 89,
+          "label": "calculate_metrics"
+        },
+        {
+          "path": "src/credit_intel/risk/evaluate.py",
+          "line": 33,
+          "label": "evaluate_rules"
+        }
+      ]
+    },
+    {
+      "id": "export",
+      "type": "database",
+      "label": "Run folder",
+      "sublabel": "results · manifest · memo",
+      "pos": [
+        40,
+        340
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "sources": [
+        {
+          "path": "src/credit_intel/export/run_export.py",
+          "line": 30,
+          "end_line": 55,
+          "label": "export_run"
+        },
+        {
+          "path": "src/credit_intel/export/results.py",
+          "line": 88,
+          "label": "build_results"
+        },
+        {
+          "path": "src/credit_intel/export/manifest.py",
+          "line": 79,
+          "label": "build_manifest"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "cli-to-ingest",
+      "from": "cli",
+      "to": "ingest",
+      "label": "PDF path",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ingest-to-select",
+      "from": "ingest",
+      "to": "select",
+      "label": "page text"
+    },
+    {
+      "id": "select-to-gate",
+      "from": "select",
+      "to": "gate",
+      "label": "candidates"
+    },
+    {
+      "id": "gate-to-extract",
+      "from": "gate",
+      "to": "extract",
+      "label": "candidate pages",
+      "variant": "emphasis"
+    },
+    {
+      "id": "extract-to-verify",
+      "from": "extract",
+      "to": "verify",
+      "label": "proposed fields"
+    },
+    {
+      "id": "verify-to-calc",
+      "from": "verify",
+      "to": "calc",
+      "label": "verified fields"
+    },
+    {
+      "id": "calc-to-export",
+      "from": "calc",
+      "to": "export",
+      "label": "results"
+    },
+    {
+      "id": "gate-to-jev",
+      "from": "gate",
+      "to": "jev",
+      "label": "USE_JEV=true",
+      "variant": "dashed"
+    },
+    {
+      "id": "jev-to-extract",
+      "from": "jev",
+      "to": "extract",
+      "label": "fewer pages, or all",
+      "variant": "dashed"
+    },
+    {
+      "id": "cli-to-guard",
+      "from": "cli",
+      "to": "guard",
+      "label": "may it be sent?",
+      "variant": "security"
+    },
+    {
+      "id": "dryrun-to-select",
+      "from": "dryrun",
+      "to": "select",
+      "label": "offline estimate",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Primary path, as the code runs it",
+      "items": [
+        "Ingest (validate, text layer), then locate candidates, then the basis gate, then extract",
+        "A page range skips keyword location but is still gated",
+        "Only verified fields reach the metrics and rules, which are plain Decimal Python"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Optional and guard paths",
+      "items": [
+        "Jev (USE_JEV, off by default) can only remove candidate pages; any doubt, error or missing key sends every page",
+        "The send rule runs before any provider is built: held-out is refused; private/ needs a recorded tuning document and the owner's per-run approval",
+        "The dry-run tool ingests, locates and gates offline, estimates tokens and cost, and calls no model"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Outputs",
+      "items": [
+        "results.json is deterministic; manifest.json is the run record",
+        "memo.md is a template, checked against the results before anything is written"
+      ]
+    }
+  ]
+}
