@@ -23,6 +23,18 @@ def esc(value: object) -> str:
     return "".join("\\" + ch if ch in _SPECIAL else ch for ch in text)
 
 
+def esc_start(value: object) -> str:
+    """``esc`` for text that begins a line of a block (a quote line): a leading ``-``, ``=`` or list number (``1.`` or ``1)``) is escaped too.
+
+    Inside a paragraph those characters are only text, but at the start of a line they make a list item, a rule or a setext heading, so
+    text from a document could change the structure of the memo.
+    """
+    text = esc(value)
+    if text[:1] in ("-", "="):
+        return "\\" + text
+    return re.sub(r"^(\d{1,9})([.)])", r"\1\\\2", text)
+
+
 def code(value: object) -> str:
     """An identifier in a code span. The ID formats contain no backtick, and one that did is refused."""
     text = str(value)

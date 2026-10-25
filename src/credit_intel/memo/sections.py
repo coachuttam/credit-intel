@@ -11,7 +11,7 @@ from typing import Any
 
 from credit_intel.memo.rule_text import condition_text
 from credit_intel.memo.text import (
-    ANALYST_LABEL, DASH, UNVERIFIED_LABEL, calculated, code, esc, grouped, page_phrase, rounded, rule, source, table,
+    ANALYST_LABEL, DASH, UNVERIFIED_LABEL, calculated, code, esc, esc_start, grouped, page_phrase, rounded, rule, source, table,
 )  # fmt: skip
 
 DRAFT_STATEMENT = "DRAFT — generated for human review. Not a credit decision. Verify all figures against the cited sources."
@@ -357,7 +357,7 @@ def _evidence_lines(evidence: dict[str, Any], label: str | None = None) -> list[
     source label; evidence that is not verified (a candidate, a field to review) passes ``[UNVERIFIED]``."""
     page = f"page {evidence['page_number']}" + (f", page label {esc(evidence['page_label'])}" if evidence["page_label"] else "")
     return [f"{page}, line item “{esc(evidence['line_item_label'])}”, value as printed {esc(evidence['raw_value'])} {label or source(evidence['page_number'])}",
-            "", f"> {esc(evidence['evidence_quote'])}"]  # fmt: skip
+            "", f"> {esc_start(evidence['evidence_quote'])}"]  # fmt: skip
 
 
 def section_6(results: dict[str, Any]) -> list[str]:
@@ -401,9 +401,9 @@ def section_7(results: dict[str, Any]) -> list[str]:
             reason = f" — {esc(words(record['status_reason']))}" if record["status_reason"] else ""
             lines.append(f"- {code(record['field_id'])}{reason} {UNVERIFIED_LABEL}")
             for candidate in record["candidates"]:
-                lines += ["", f"  Candidate {esc(candidate['raw_value'])}: " + _evidence_lines(candidate, UNVERIFIED_LABEL)[0], "", f"  > {esc(candidate['evidence_quote'])}"]
+                lines += ["", f"  Candidate {esc(candidate['raw_value'])}: " + _evidence_lines(candidate, UNVERIFIED_LABEL)[0], "", f"  > {esc_start(candidate['evidence_quote'])}"]
             if status == "requires_review" and record["evidence_quote"] is not None:
-                lines += ["", "  Evidence: " + _evidence_lines({k: record[k] for k in ("page_number", "page_label", "line_item_label", "raw_value", "evidence_quote")}, UNVERIFIED_LABEL)[0], "", f"  > {esc(record['evidence_quote'])}"]
+                lines += ["", "  Evidence: " + _evidence_lines({k: record[k] for k in ("page_number", "page_label", "line_item_label", "raw_value", "evidence_quote")}, UNVERIFIED_LABEL)[0], "", f"  > {esc_start(record['evidence_quote'])}"]
             if record["candidates"] or (status == "requires_review" and record["evidence_quote"] is not None):
                 lines.append("")
         lines.append("")

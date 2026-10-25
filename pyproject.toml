@@ -13,6 +13,7 @@ credit-intel = "credit_intel.cli:run"
 
 [dependency-groups]
 dev = [
+    "markdown-it-py>=4.2.0",
     "pytest>=9.1.1",
     "reportlab>=5.0.1",
 ]
