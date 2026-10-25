@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Status | **A draft for the owner's review. It changes nothing in `docs/PRD.md` and no code.** Applied only on the owner's word, as v0.4.29, with the examples in section 6. |
+| Status | **Adopted by the owner on 2026-10-25 ("adopt A and B, prompt only") and applied to `docs/PRD.md` as v0.4.29.** Kept as the record of the reasoning. The prompt file `extraction_v4` is a tuning change, not the default. |
 | Drafted | 2026-10-25 |
 | Evidence | Live round R2-1 and its free replays on tuning document R2 (`PROGRESS.md`, counts only), pages 36 to 38. Tuning set only (O.2). Nothing from H1 or H2. |
 | Changes | A. FR-005.9 and FR-005.7: older year-columns of a statement with more than two periods (closes the "three-year statements" item deferred in FR-005.7 and in Section U, OD-1). B. FR-005.10, criterion 10: a lone currency sign after the label is not part of the label. C. FR-005.8 / prompt: no PRD change; a new prompt file, `extraction_v4`, for the owner's review. Appendix B.6 examples 62 to 67, Section U, Revision History. |
