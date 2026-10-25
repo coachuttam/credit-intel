@@ -131,7 +131,7 @@ def test_the_stop_summary_is_counts_only():
     summary = summarise_stop(IngestionError(ErrorCode.NO_STATEMENT_PAGES), "R2", "ab" * 32)
 
     assert summary == {"outcome": "stopped", "document_id": "R2", "sha256_prefix": "abababababab",
-                       "error_code": "E-EXTRACT-NO-STATEMENT-PAGES", "detail": None}  # fmt: skip
+                       "error_code": "E-EXTRACT-NO-STATEMENT-PAGES", "detail": None, "asserted_basis": None}  # fmt: skip
 
 
 def test_an_unreadable_file_is_a_catalogued_error_not_a_result(tmp_path):

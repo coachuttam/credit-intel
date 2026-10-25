@@ -25,7 +25,7 @@ Please fill the first column for each of the six values per report as you write 
 - **Runs on a real report:** `tests/live/test_live_tuning.py` (the same harness as G5 runs 1 to 3). It is skipped unless `CREDIT_INTEL_LIVE=1`, refuses any document not recorded as tuning, prints **one line of counts**, and keeps the model's reply in the git-ignored cache `.cache/llm`.
 - **Offline, free:** `evaluation.dry_run` (which pages would be sent, estimated tokens and worst-case cost), `evaluation.diagnose` (why each check passed or failed, by counts, from a cached reply), and `evaluation.gate` (the comparison with your references).
 - **Gap: `--assert-basis`.** The live test, the tuning runner and the dry run take `--pages` but not the assertion, so R2 cannot be run live under v0.4.24 through them. The product command `credit-intel` can, but it writes a full memo and results into `runs/` (figures and quotes on your disk, never shown to me), which is not the counts-only route.
-- **Therefore step L0 below:** add `assert_basis` to the runner, the live test (`CREDIT_INTEL_ASSERT_BASIS`) and the dry run, and show the assertion and the `basis_evidence` counts in the counts-only line. Small, offline, tested, unstaged until you approve. **No live run of R2 is possible before it.**
+- **Step L0 closes the gap (built 2026-10-25 at the owner's word; offline, tested):** `assert_basis` now goes through the runner, the live test (`CREDIT_INTEL_ASSERT_BASIS`, which needs `CREDIT_INTEL_PAGES`) and the dry run (`--assert-basis`, which needs `--pages`), and the counts-only line shows the assertion (basis, pages, pages it was applied to) and how many records rest on it (`basis_evidence`). The command templates in section 6 work as written.
 
 ## 3. The rounds
 
@@ -33,7 +33,7 @@ Each round is one live call per report (about $0.001 to $0.002; the five calls s
 
 | Step | Who | What | Cost | Needs |
 |---|---|---|---|---|
-| **L0** | me | `assert_basis` through the runner, live test and dry run; counts line shows the assertion and evidence counts | none | your word to build |
+| **L0** | me | `assert_basis` through the runner, live test and dry run; counts line shows the assertion and evidence counts | none | **built 2026-10-25** |
 | **G1** | you | the two reference files in `private/eval/`, checked with `--check-reference` | none | section 1 answers |
 | **Token ceiling** | you | set it for the run, in your terminal (for example `CREDIT_INTEL_TOKEN_CEILING=30000`, as in runs 2 and 3) | none | OD-8 stays "no default" |
 | **L1 (optional)** | me, your authorisation | baseline replay of R1 from the cache that run 2 left: `gate --report` on R1 | none | authorisation to read the R1 PDF, counts only |
@@ -92,7 +92,7 @@ CREDIT_INTEL_PAGES=274-277 CREDIT_INTEL_PROMPT=extraction-v2 \
 uv run --locked pytest tests/live/test_live_tuning.py -q -s
 ```
 
-R2, one live round (**after L0**; the pages are an example and must match the reference file):
+R2, one live round (the pages are an example and must match the reference file):
 
 ```
 CREDIT_INTEL_DOCUMENT=private/R2_microsoft_2025.pdf CREDIT_INTEL_LIVE=1 \
@@ -129,7 +129,7 @@ Before each live round I would also give you the dry-run line for that exact con
 
 ## 9. Decisions needed from the owner
 
-1. Build step **L0** (the assertion through the runner, the live test and the dry run)? It is the only code this plan needs.
+1. ~~Build step **L0**~~ Done at your word on 2026-10-25. It was the only code this plan needs.
 2. Your answers to the section 1 checks, as you write the reference files, especially R1's borrowings and R2's interest expense and debt layout.
 3. The limits: per round $0.03, a total of $0.15, ceiling 30,000, output limit 8,192, the three-rounds stop rule. Keep or change.
 4. Whether to start with the free steps (L1 baseline replay of R1, L2 dry run of R2). Each needs your explicit authorisation to read that report, counts only.

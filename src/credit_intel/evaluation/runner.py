@@ -5,6 +5,7 @@ counts-only summary. A catalogued stop (for example ``E-EXTRACT-BASIS-UNAVAILABL
 returned as a result, not raised, because it is a finding. Any other error is raised.
 """
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from credit_intel.config import LLMSettings, PricingSettings
@@ -16,6 +17,25 @@ from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR
 from credit_intel.llm.provider import LLMProvider
 from credit_intel.models import StatementBasis
+
+
+def tuning_options(env: Mapping[str, str]) -> dict:
+    """The run options named in the environment of a live tuning run (``tests/live/test_live_tuning.py``).
+
+    ``CREDIT_INTEL_BASIS`` (default consolidated), ``CREDIT_INTEL_PAGES`` (a page range) and ``CREDIT_INTEL_ASSERT_BASIS``
+    (consolidated or standalone; H.4.6, v0.4.24), which needs ``CREDIT_INTEL_PAGES``. Raises ``ValueError`` for a value that
+    is not allowed, naming the variable and never its value.
+    """
+    basis = env.get("CREDIT_INTEL_BASIS", "consolidated").strip() or "consolidated"
+    pages = env.get("CREDIT_INTEL_PAGES", "").strip() or None
+    asserted = env.get("CREDIT_INTEL_ASSERT_BASIS", "").strip() or None
+    if basis not in ("consolidated", "standalone"):
+        raise ValueError("CREDIT_INTEL_BASIS must be consolidated or standalone")
+    if asserted is not None and asserted not in ("consolidated", "standalone"):
+        raise ValueError("CREDIT_INTEL_ASSERT_BASIS must be consolidated or standalone")
+    if asserted is not None and pages is None:
+        raise ValueError("CREDIT_INTEL_ASSERT_BASIS needs CREDIT_INTEL_PAGES")
+    return {"basis": StatementBasis(basis), "page_range": pages, "assert_basis": StatementBasis(asserted) if asserted else None}
 
 
 def run_tuning_document(
@@ -30,6 +50,7 @@ def run_tuning_document(
     cache_dir: Path = DEFAULT_CACHE_DIR,
     synthetic: bool = False,
     prompt: Prompt | None = None,
+    assert_basis: StatementBasis | None = None,
 ) -> dict:
     try:
         sha256 = file_sha256(path)
@@ -38,8 +59,9 @@ def run_tuning_document(
     document_id = check_may_send(sha256, assignments, synthetic=synthetic)  # raises SendRefused
     try:
         run = run_extraction(
-            path, provider, llm, basis=basis, page_range=page_range, cache_dir=cache_dir, pricing=pricing, prompt=prompt
-        )
+            path, provider, llm, basis=basis, page_range=page_range, cache_dir=cache_dir, pricing=pricing, prompt=prompt,
+            assert_basis=assert_basis,
+        )  # fmt: skip
     except IngestionError as error:
-        return summarise_stop(error, document_id, sha256)
+        return summarise_stop(error, document_id, sha256, assert_basis.value if assert_basis else None)
     return summarise_run(run, document_id)

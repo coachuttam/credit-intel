@@ -19,6 +19,14 @@ def _name(attribute) -> str:
     return f"{attribute.attribute.value}{role}"
 
 
+def _assertion(run: ExtractionRun) -> dict | None:
+    """The analyst's assertion of the basis and the pages it was applied to: page numbers and an enum, nothing else."""
+    assertion = run.basis_assertion
+    if assertion is None:
+        return None
+    return {"basis": assertion.basis.value, "pages": list(assertion.pages), "applied_pages": list(assertion.applied_pages)}
+
+
 def summarise_run(run: ExtractionRun, document_id: str) -> dict:
     records = run.field_set.fields
     present = [r for r in records if r.status is not Status.NOT_FOUND]
@@ -51,6 +59,8 @@ def summarise_run(run: ExtractionRun, document_id: str) -> dict:
             for a in run.attributes.all
         },
         "attribute_basis_differs": run.attribute_basis_differs,
+        "basis_assertion": _assertion(run),
+        "basis_evidence": dict(sorted(Counter(r.basis_evidence.value for r in present).items())),  # how many records rest on the assertion
         "attempts": run.extraction.attempts,
         "prompt_version": run.extraction.prompt_version,
         "llm_calls": stats.llm_calls,
@@ -62,14 +72,18 @@ def summarise_run(run: ExtractionRun, document_id: str) -> dict:
     }
 
 
-def summarise_stop(error: IngestionError, document_id: str, sha256: str) -> dict:
-    """A run that stopped on a catalogued error, before or during the model call."""
+def summarise_stop(error: IngestionError, document_id: str, sha256: str, asserted_basis: str | None = None) -> dict:
+    """A run that stopped on a catalogued error, before or during the model call.
+
+    ``asserted_basis`` is the basis the analyst asked to assert (H.4.6, v0.4.24), if any; the pages are not known yet.
+    """
     return {
         "outcome": "stopped",
         "document_id": document_id,
         "sha256_prefix": sha256[:12],
         "error_code": error.code.value,
         "detail": error.detail,  # setting names, bases found, counts: never document content
+        "asserted_basis": asserted_basis,
     }
 
 
