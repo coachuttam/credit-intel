@@ -111,3 +111,16 @@ def refuse_if_held_out(sha256: str, assignments: Path = ASSIGNMENTS_PATH) -> Non
     known = load_current_sets(assignments).get(sha256)
     if known is not None and known[1] == "held_out":
         raise SendRefused(f"document {known[0]} is held out, so it may not be inspected before the held-out run")
+
+
+def allow_held_out_send(sha256: str, assignments: Path = ASSIGNMENTS_PATH) -> str:
+    """The neutral ID of a document recorded as held out, so that the held-out run tool may send it (PRD v0.4.41, O.2).
+
+    This is the only way to send a held-out document and **one module calls it**: ``credit_intel.evaluation.heldout``
+    (a test fails if any other module does). ``check_may_send`` keeps refusing a held-out document whatever the options.
+    A document recorded as tuning, or not on the record, is refused here, so a held-out run never mislabels a tuning one.
+    """
+    known = load_current_sets(assignments).get(sha256)
+    if known is None or known[1] != "held_out":
+        raise SendRefused("the document is not recorded as held out")
+    return known[0]

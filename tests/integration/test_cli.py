@@ -340,6 +340,14 @@ def test_a_tuning_document_is_sent_without_the_confirmation(pdf, tmp_path):
     assert code == 0 and Path(out.strip()).is_dir()
 
 
+def test_b6_139_the_held_out_tool_variables_do_not_open_the_ordinary_command_line(pdf, tmp_path):
+    record = records(tmp_path, ("H9", sha_of(pdf), "held_out"))
+    env = {"CREDIT_INTEL_HELD_OUT_APPROVED": "0123456789abcdef0123", "CREDIT_INTEL_PRIVATE_APPROVED": "1"}  # the tool's approval, read only by the tool
+
+    refused_before_anything(tmp_path, pdf, "held_out", assignments=record, env=env)
+    refused_before_anything(tmp_path, pdf, "held_out", "--confirm-public-document", assignments=record, env=env)
+
+
 def test_a_held_out_document_is_never_sent_even_with_the_confirmation(pdf, tmp_path):
     record = records(tmp_path, ("H9", sha_of(pdf), "held_out"))
 

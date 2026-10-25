@@ -69,5 +69,5 @@ def run_tuning_document(
             assert_basis=assert_basis, page_filter=page_filter,
         )  # fmt: skip
     except IngestionError as error:
-        return summarise_stop(error, document_id, sha256, assert_basis.value if assert_basis else None)
-    return summarise_run(run, document_id)
+        return {"set": "tuning", **summarise_stop(error, document_id, sha256, assert_basis.value if assert_basis else None)}
+    return {"set": "tuning", **summarise_run(run, document_id)}

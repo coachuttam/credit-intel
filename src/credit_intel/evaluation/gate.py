@@ -268,7 +268,7 @@ def replay(
     if sha256 != reference.sha256 or document_id != reference.document_id:
         raise GateReferenceError("the reference was not written for this document")
     llm = llm or load_llm_settings(config, {**os.environ, ENV_TOKEN_CEILING: os.environ.get(ENV_TOKEN_CEILING, "1000000")})
-    failed = {"document_id": document_id, "replayed": False, "passed": False, "counts": {"match": 0, "mismatch": 0, "missing": len(reference.entries)}}
+    failed = {"set": "tuning", "document_id": document_id, "replayed": False, "passed": False, "counts": {"match": 0, "mismatch": 0, "missing": len(reference.entries)}}
     try:
         run = run_extraction(
             path, _NoCallProvider(), llm, basis=reference.basis, cache_dir=cache_dir, prompt=prompt,
@@ -278,7 +278,7 @@ def replay(
         return {**failed, "reason": "cache_miss"}
     except IngestionError as error:
         return {**failed, "reason": error.code.value}
-    report = compare(reference, run.field_set)
+    report = {"set": "tuning", **compare(reference, run.field_set)}
     assertion = run.basis_assertion
     report["basis_assertion"] = None if assertion is None else {"basis": assertion.basis.value, "pages": list(assertion.pages), "applied_pages": list(assertion.applied_pages)}
     return report
