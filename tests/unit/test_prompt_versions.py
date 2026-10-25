@@ -15,9 +15,10 @@ from credit_intel.extraction.prompt import DEFAULT_PROMPT, FIELD_DESCRIPTIONS, P
 V1 = (PROMPT_DIR / "extraction_v1.md").read_text(encoding="utf-8").splitlines()
 V2 = (PROMPT_DIR / "extraction_v2.md").read_text(encoding="utf-8").splitlines()
 V3 = (PROMPT_DIR / "extraction_v3.md").read_text(encoding="utf-8").splitlines()
+V4 = (PROMPT_DIR / "extraction_v4.md").read_text(encoding="utf-8").splitlines()
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4"])
 def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     prompt = load_prompt(name)
 
@@ -25,7 +26,7 @@ def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     assert "{{schema}}" not in prompt.system and "{{fields}}" not in prompt.system  # filled in from the code
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4"])
 def test_each_prompt_lists_every_extractable_field_and_the_schema(name):
     system = load_prompt(name).system
 
@@ -134,3 +135,27 @@ def test_the_tuning_live_test_can_choose_the_prompt_from_the_environment():
     text = (Path(__file__).resolve().parent.parent / "live" / "test_live_tuning.py").read_text(encoding="utf-8")
 
     assert 'os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT)' in text and "prompt=load_prompt(" in text
+
+
+# --- extraction_v4: a draft that asks for a currency quote that carries the sign (PRD v0.4.29 draft; tuning lever 1) -----------
+
+
+def test_v4_is_a_draft_and_the_default_stays_version_two():
+    assert DEFAULT_PROMPT == "extraction_v2" and load_prompt("extraction_v4").version == "extraction-v4"
+
+
+def test_v4_differs_from_v2_only_in_its_version_and_one_reporting_currency_rule():
+    added = [line for line in V4 if line not in V2]
+    removed = [line for line in V2 if line not in V4]
+
+    assert removed == ["prompt-version: extraction-v2"]
+    assert added[0] == "prompt-version: extraction-v4" and len(added) == 2 and len(V4) == len(V2) + 1
+    rule = added[1]
+    assert rule.startswith("- reporting_currency:") and "evidence_quote must itself contain the currency sign or code" in rule
+    assert "only the unit" in rule and "leave reporting_currency out" in rule
+
+
+def test_v4_keeps_every_other_v2_rule_in_place():
+    assert [line for line in V4 if line not in ("prompt-version: extraction-v4",) and not line.startswith("- reporting_currency:")] == [
+        line for line in V2 if line != "prompt-version: extraction-v2"
+    ]
