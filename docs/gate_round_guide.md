@@ -62,7 +62,14 @@ Rules:
 - All six entries are required, once each. `field` is `profit_before_tax`, `interest_expense` or `total_borrowings`; `period` is `current` or `comparative`; `period_end` is the ISO date of that column.
 - `printed` is the figure as it appears: thousands separators are fine, brackets mean negative, and a dash or `nil` means a reported zero. `scale` is one of `units`, `thousands`, `lakh`, `millions`, `crore`, `billions`.
 - `parts` (for `total_borrowings` only) replaces `printed`, `scale` and `page`, and lists at least two components, each with its own `printed`, `scale` and `page`.
+- `presented` (for `total_borrowings` only, PRD v0.4.32) replaces `printed`, `scale`, `page` and `parts`, and is `false` when you checked that the report **presents no borrowings** at all (a balance sheet with only lease liabilities, for example). Lease liabilities are not borrowings. The gate then expects the total to be `not_found` with no borrowing component extracted: that is a `match`. Any total or component the pipeline extracts, a zero included, is a `mismatch`; a component the pipeline could not decide (held back for review, or conflicting) is `missing`.
 - There is no free-text field. Put no quote, label or note in the file.
+
+```json
+{"field": "total_borrowings", "period": "current", "period_end": "2025-03-31", "presented": false}
+```
+
+(That is an entry, to sit among the six; a period that does present a figure uses `printed` as above.)
 
 ## 4. Check a file before using it
 

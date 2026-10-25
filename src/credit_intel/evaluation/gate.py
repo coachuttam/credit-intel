@@ -53,7 +53,7 @@ ROLES = (PeriodRole.CURRENT, PeriodRole.COMPARATIVE)
 MAX_BYTES = 64 * 1024
 REQUIRED_KEYS = ("document_id", "sha256", "basis", "entries")
 TOP_KEYS = ("document_id", "sha256", "basis", "pages", "assert_basis", "entries")  # the canonical order; pages and assert_basis are optional
-ENTRY_KEYS = {"field", "period", "period_end", "page", "printed", "scale", "parts"}
+ENTRY_KEYS = {"field", "period", "period_end", "page", "printed", "scale", "parts", "presented"}
 PART_KEYS = {"printed", "scale", "page"}
 SHA = re.compile(r"[0-9a-f]{64}")
 
@@ -67,8 +67,9 @@ class Entry:
     field: FieldName
     role: PeriodRole
     period_end: date
-    expected: Decimal
+    expected: Decimal | None  # ``None`` for a total the report does not present (PRD v0.4.32)
     pages: tuple[int, ...]  # the pages the owner read the value (or its parts) from
+    presented: bool = True  # ``False``: the owner checked that the report presents no borrowings (total_borrowings only)
 
 
 @dataclass(frozen=True)
@@ -118,6 +119,10 @@ def _entry(raw: object, index: int) -> Entry:
         period_end = date.fromisoformat(raw.get("period_end"))  # type: ignore[arg-type]
     except (TypeError, ValueError):
         raise GateReferenceError(f"{where}: period_end must be an ISO date") from None
+    if "presented" in raw:
+        if field is not FieldName.TOTAL_BORROWINGS or raw["presented"] is not False or any(k in raw for k in ("printed", "scale", "page", "parts")):
+            raise GateReferenceError(f"{where}: presented is for total_borrowings only, must be false, and replaces printed, scale, page and parts")
+        return Entry(field, role, period_end, None, (), False)
     if "parts" in raw:
         if field is not FieldName.TOTAL_BORROWINGS or any(k in raw for k in ("printed", "scale", "page")):
             raise GateReferenceError(f"{where}: parts are for total_borrowings only and replace printed, scale and page")
@@ -190,6 +195,21 @@ def _record(field_set: FieldSet, entry: Entry) -> ExtractedField | None:
     return field_set.get(entry.field, entry.role)
 
 
+COMPONENTS = (FieldName.BORROWINGS_NON_CURRENT, FieldName.BORROWINGS_CURRENT, FieldName.CURRENT_MATURITIES_LONG_TERM_BORROWINGS)
+
+
+def _not_presented(field_set: FieldSet, entry: Entry) -> tuple[str, str | None]:
+    """The owner says the report presents no borrowings (PRD v0.4.32): ``match`` if the total is ``not_found`` and no component is
+    extracted; ``mismatch`` if any total or component is extracted, a zero included; ``missing`` if the pipeline could not decide."""
+    records = [r for r in (_record(field_set, entry), *(field_set.get(name, entry.role) for name in COMPONENTS)) if r is not None]
+    if any(r.status is Status.EXTRACTED for r in records):
+        return "mismatch", "value_present"
+    undecided = [r for r in records if r.status in (Status.CONFLICTING, Status.REQUIRES_REVIEW)]
+    if undecided:
+        return "missing", undecided[0].status_reason.value if undecided[0].status_reason else undecided[0].status.value
+    return "match", None
+
+
 def compare(reference: Reference, field_set: FieldSet) -> dict:
     """Counts only: per entry ``match``, ``mismatch`` or ``missing``, with a reason code or a flag, never a value.
 
@@ -200,8 +220,12 @@ def compare(reference: Reference, field_set: FieldSet) -> dict:
         raise ValueError("the field set is of another statement basis than the reference")
     results = []
     for entry in reference.entries:
-        record = _record(field_set, entry)
         out = {"field": entry.field.value, "period": entry.role.value, "origin": None, "reason": None, "page_agrees": None, "basis_evidence": None}
+        if not entry.presented:
+            out["outcome"], out["reason"] = _not_presented(field_set, entry)
+            results.append(out)
+            continue
+        record = _record(field_set, entry)
         if record is None or record.status is not Status.EXTRACTED:
             out["outcome"] = "missing"
             out["reason"] = "no_record" if record is None else (record.status_reason.value if record.status_reason else record.status.value)

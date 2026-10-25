@@ -70,3 +70,17 @@ def test_the_guide_keeps_real_figures_out_of_git_and_says_so():
 def test_the_guide_records_how_the_two_points_were_settled():
     assert "(a) R2 — settled 2026-10-25: option 3" in GUIDE and "(b) What \"borrowings\" means." in GUIDE
     assert "`basis_evidence`" in GUIDE and "--assert-basis consolidated" in GUIDE
+
+
+def test_the_guides_none_presented_entry_is_valid_among_the_six(tmp_path):
+    blocks = re.findall(r"```json\n(.*?)```", GUIDE, re.S)
+    entry = json.loads(blocks[-1])
+    data = json.loads(blocks[0])
+    data["entries"] = [e for e in data["entries"] if not (e["field"] == "total_borrowings" and e["period"] == "current")] + [entry]
+    path = tmp_path / "none_presented.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reference = load_reference(path)
+
+    assert entry == {"field": "total_borrowings", "period": "current", "period_end": "2025-03-31", "presented": False}
+    assert any(not e.presented for e in reference.entries) and sum(e.presented for e in reference.entries) == 5

@@ -9,7 +9,7 @@ from decimal import Decimal
 
 import pytest
 
-from calc_records import CUR, D24, D25, rec
+from calc_records import CUR, D24, D25, conflicting, rec
 from credit_intel.evaluation import gate
 from credit_intel.evaluation.gate import GateReferenceError, compare, evaluate_gate, load_reference
 from credit_intel.evaluation.guard import MEMBERS
@@ -361,3 +361,131 @@ def test_a_missing_value_has_no_basis_evidence(tmp_path):
     report = compare(reference(tmp_path), field_set({(F.INTEREST_EXPENSE, CUR): None}))
 
     assert {(e["field"], e["period"]): e["basis_evidence"] for e in report["entries"]}[("interest_expense", "current")] is None
+
+
+# --- a total that the report does not present (PRD v0.4.32; B-301) ------------------------------------------------------------------------------
+
+
+def none_presented(data, periods=("current", "comparative")):
+    ends = {"current": "2025-03-31", "comparative": "2024-03-31"}
+    data["entries"] = [e for e in data["entries"] if not (e["field"] == "total_borrowings")]
+    data["entries"] += [{"field": "total_borrowings", "period": p, "period_end": ends[p], "presented": False} for p in periods]
+    return data
+
+
+def not_presented_set(components=(), total=None):
+    """A field set with no total (or the given one) and the given component records."""
+    overrides = {(F.TOTAL_BORROWINGS, CUR): total, (F.TOTAL_BORROWINGS, COMP): total}
+    return field_set(overrides, extra=tuple(components))
+
+
+def none_outcomes(reference, fs):
+    return {(e["field"], e["period"]): (e["outcome"], e["reason"]) for e in compare(reference, fs)["entries"]}
+
+
+def test_the_none_presented_form_is_read_and_has_no_value(tmp_path):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+
+    entry_ = next(e for e in reference.entries if e.field is F.TOTAL_BORROWINGS and e.role is CUR)
+    assert not entry_.presented and entry_.expected is None and entry_.pages == () and entry_.period_end == date(2025, 3, 31)
+    assert all(e.presented for e in reference.entries if e.field is not F.TOTAL_BORROWINGS)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"presented": True},  # only false says anything
+        {"presented": "no"},
+        {"presented": 0},
+        {"presented": False, "printed": "1", "scale": "units", "page": 3},
+        {"presented": False, "printed": "1"},
+        {"presented": False, "parts": [{"printed": "1", "scale": "units", "page": 3}, {"printed": "2", "scale": "units", "page": 3}]},
+    ],
+)
+def test_the_none_presented_form_is_refused_when_it_is_malformed(tmp_path, change):
+    data = none_presented(base())
+    data["entries"][-2].update(change)
+
+    with pytest.raises(GateReferenceError) as caught:
+        load_reference(write(tmp_path, data))
+
+    assert "presented" in str(caught.value) and "999" not in str(caught.value)
+
+
+@pytest.mark.parametrize("name", ["profit_before_tax", "interest_expense"])
+def test_only_total_borrowings_can_be_none_presented(tmp_path, name):
+    data = base()
+    data["entries"][0] = {"field": name, "period": "current", "period_end": "2025-03-31", "presented": False}
+
+    with pytest.raises(GateReferenceError):
+        load_reference(write(tmp_path, data))
+
+
+def test_a_period_may_be_none_presented_on_its_own_and_the_other_a_figure(tmp_path):
+    data = none_presented(base(), periods=("comparative",))
+    data["entries"].append(entry("total_borrowings", "current", "550.00", "2025-03-31"))
+
+    by = {(e.field, e.role): e for e in load_reference(write(tmp_path, data)).entries}
+
+    assert by[(F.TOTAL_BORROWINGS, COMP)].presented is False and by[(F.TOTAL_BORROWINGS, CUR)].presented is True
+
+
+def test_b6_row_72_no_total_and_no_component_matches_none_presented(tmp_path):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+
+    report = compare(reference, not_presented_set())
+
+    assert none_outcomes(reference, not_presented_set())[("total_borrowings", "current")] == ("match", None)
+    assert none_outcomes(reference, not_presented_set())[("total_borrowings", "comparative")] == ("match", None)
+    assert report["counts"] == {"match": 6, "mismatch": 0, "missing": 0} and report["passed"]
+
+
+@pytest.mark.parametrize("name", [F.BORROWINGS_NON_CURRENT, F.BORROWINGS_CURRENT, F.CURRENT_MATURITIES_LONG_TERM_BORROWINGS])
+@pytest.mark.parametrize("value", ["0", "12.5"])
+def test_b6_row_73_any_extracted_component_is_a_mismatch_a_zero_included(tmp_path, name, value):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+
+    result = none_outcomes(reference, not_presented_set([rec(name, value, role=CUR, end=D25)]))
+
+    assert result[("total_borrowings", "current")] == ("mismatch", "value_present")
+    assert result[("total_borrowings", "comparative")] == ("match", None)  # the other period is judged on its own records
+
+
+def test_b6_row_73_a_reported_total_of_any_size_is_a_mismatch(tmp_path):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+
+    assert none_outcomes(reference, not_presented_set(total="0"))[("total_borrowings", "current")] == ("mismatch", "value_present")
+    assert none_outcomes(reference, not_presented_set(total="550.00"))[("total_borrowings", "comparative")] == ("mismatch", "value_present")
+
+
+@pytest.mark.parametrize("status", [Status.REQUIRES_REVIEW, Status.CONFLICTING])
+def test_b6_row_74_an_undecided_component_is_missing_not_a_match(tmp_path, status):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+    component = conflicting(F.BORROWINGS_CURRENT, ["1", "2"]) if status is Status.CONFLICTING else rec(F.BORROWINGS_CURRENT, status=status, role=CUR, end=D25)
+
+    result = none_outcomes(reference, not_presented_set([component]))[("total_borrowings", "current")]
+
+    assert result[0] == "missing" and result[1]
+
+
+def test_a_not_found_component_does_not_spoil_a_match(tmp_path):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+    component = rec(F.BORROWINGS_CURRENT, status=Status.NOT_FOUND, role=CUR, end=D25)
+
+    assert none_outcomes(reference, not_presented_set([component]))[("total_borrowings", "current")] == ("match", None)
+
+
+def test_a_none_presented_entry_does_not_hide_a_wrong_other_entry(tmp_path):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+
+    report = compare(reference, field_set({(F.PROFIT_BEFORE_TAX, CUR): "999.00", (F.TOTAL_BORROWINGS, CUR): None, (F.TOTAL_BORROWINGS, COMP): None}))
+
+    assert report["counts"] == {"match": 5, "mismatch": 1, "missing": 0} and not report["passed"]
+
+
+def test_the_report_of_a_none_presented_entry_holds_no_figure_and_no_page(tmp_path):
+    reference = load_reference(write(tmp_path, none_presented(base())))
+
+    text = json.dumps(compare(reference, not_presented_set([rec(F.BORROWINGS_CURRENT, "777.77", role=CUR, end=D25)])))
+
+    assert "777.77" not in text and "550" not in text
