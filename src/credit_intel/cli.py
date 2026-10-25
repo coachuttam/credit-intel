@@ -76,6 +76,8 @@ def build_parser(stream: IO[str]) -> argparse.ArgumentParser:
     p.add_argument("pdf_path", type=Path, help="the PDF to analyse")
     p.add_argument("--pages", metavar="RANGE", help="statement pages, such as 110-115,120 (replaces the locator)")
     p.add_argument("--basis", choices=BASES, default=StatementBasis.CONSOLIDATED.value, help="statement basis (default: consolidated)")
+    p.add_argument("--assert-basis", choices=BASES, metavar="BASIS",
+                   help="state the basis (consolidated or standalone) of the pages of --pages whose titles name none; requires --pages")  # fmt: skip
     p.add_argument("--profile", type=Path, metavar="PROFILE_JSON", help="analyst-provided borrower profile (JSON)")
     p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, metavar="DIR", help="where run folders are written (default: runs)")
     p.add_argument("--config", type=Path, default=DEFAULT_SETTINGS_PATH, metavar="SETTINGS_TOML", help="settings file (default: config/settings.toml)")
@@ -132,6 +134,7 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     result = run_pipeline(
         args.pdf_path, LazyProvider(lambda: factory(llm, env)), llm, recorder=call.recorder, basis=basis, page_range=args.pages,
         pricing=pricing, profile_path=args.profile,
+        assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None,
     )  # fmt: skip
     path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),
                       profile_file_name=args.profile.name if args.profile else None)  # fmt: skip
@@ -153,7 +156,10 @@ def main(
     out, err = stdout or sys.stdout, stderr or sys.stderr
     environment = os.environ if env is None else env
     try:
-        args = build_parser(err).parse_args(argv)
+        parser = build_parser(err)
+        args = parser.parse_args(argv)
+        if args.assert_basis and not args.pages:
+            parser.error("--assert-basis requires --pages")  # exit code 2 (FR-014.4)
     except SystemExit as stop:  # argparse has printed its message; its code is 2 for a bad argument and 0 for --help
         return stop.code if isinstance(stop.code, int) else EXIT_USAGE
 

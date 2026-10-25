@@ -441,8 +441,13 @@ def check_statement_basis(
     result: LocatorResult,
     basis: str,
     settings: LocatorSettings | None = None,
+    asserted_basis: str | None = None,
 ) -> tuple[str, ...]:
     """Stop unless a candidate page has a title line of ``basis`` (H.4.6, P1-3).
+
+    ``asserted_basis`` is the basis the analyst asserted for pages that had none (H.4.6, v0.4.24), given only
+    when the assertion applied to at least one page. Such a page counts as a page of that basis for this check;
+    the bases found then include it, marked ``(asserted)`` in the message when no title names it.
 
     A statement's basis comes from the title block of a title line
     (``_title_blocks``): exactly one basis named gives that basis; none or
@@ -461,8 +466,13 @@ def check_statement_basis(
     for candidate in result.candidates:
         found.update(name for _, name in title_block_bases(by_number[candidate.page_number].text, settings))
 
+    marked: set[str] = set()
+    if asserted_basis is not None and asserted_basis not in found:
+        marked.add(asserted_basis)
+        found.add(asserted_basis)
     if basis not in found:
-        listed = ", ".join(sorted(found)) or "none"
+        names = sorted(name + (" (asserted)" if name in marked else "") for name in found)
+        listed = ", ".join(names) or "none"
         raise IngestionError(
             ErrorCode.BASIS_UNAVAILABLE, detail=f"configured basis: {basis}; bases found: {listed}"
         )

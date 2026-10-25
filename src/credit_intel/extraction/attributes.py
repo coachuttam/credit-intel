@@ -31,14 +31,17 @@ from credit_intel.extraction.periods import (
     periods_are_consecutive,
     resolve_anchor_texts,
 )
+from credit_intel.extraction.assertion import BasisAssertion
 from credit_intel.extraction.presence import check_presence, normalise_for_match
 from credit_intel.ingestion.locator import fold_phrase, is_figure_word, lines_of, title_block_bases
 from credit_intel.models import (
+    BasisEvidence,
     DocumentAttribute,
     DocumentAttributeName,
     PeriodRole,
     ProposedAttribute,
     Scale,
+    StatementBasis,
     Status,
     StatusReason,
 )
@@ -253,10 +256,16 @@ def verify_attributes(
     pages: Mapping[int, str],
     locator_settings: LocatorSettings | None = None,
     declaration_settings: DeclarationSettings | None = None,
+    assertion: BasisAssertion | None = None,
+    configured_basis: StatementBasis | None = None,
 ) -> VerifiedAttributes:
     """Verify the proposed document-level attributes against the candidate pages.
 
-    ``pages`` maps the candidate page numbers to their text.
+    ``pages`` maps the candidate page numbers to their text. ``assertion`` is the analyst's assertion of the
+    basis for a ``--pages`` run (H.4.6, v0.4.24): if it was applied to a page and asserts ``configured_basis``,
+    a ``statement_basis`` that is not verified from a title block is ``extracted`` by the assertion instead
+    (no raw text, page or quote; what the model proposed is neither needed nor used). A ``statement_basis``
+    verified from a title block is unchanged and has ``basis_evidence = title``.
     """
 
     def group(name: Name, role: PeriodRole | None = None) -> list[ProposedAttribute]:
@@ -273,6 +282,15 @@ def verify_attributes(
 
     entity = simple(Name.ENTITY_NAME, lambda p: _presence_reason(p, pages))
     basis = simple(Name.STATEMENT_BASIS, lambda p: _basis_reason(p, pages, locator_settings))
+    if basis.status is Status.EXTRACTED:
+        basis = basis.model_copy(update={"basis_evidence": BasisEvidence.TITLE})
+    elif assertion is not None and assertion.applied_pages and configured_basis is not None and assertion.basis is configured_basis:
+        basis = DocumentAttribute(
+            attribute=Name.STATEMENT_BASIS,
+            normalised_value=assertion.basis.value,
+            status=Status.EXTRACTED,
+            basis_evidence=BasisEvidence.ANALYST_ASSERTION,
+        )
     currency = simple(Name.REPORTING_CURRENCY, lambda p: _currency_reason(p, pages, declaration_settings))
     scale = simple(Name.SCALE, lambda p: _scale_reason(p, pages, declaration_settings))
 

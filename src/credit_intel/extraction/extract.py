@@ -92,10 +92,13 @@ def extract_fields(
     prompt: Prompt,
     basis: str,
     locator_settings: LocatorSettings | None = None,
+    asserted_basis: str | None = None,
 ) -> ExtractionResult:
     if not located.candidates:
         raise IngestionError(ErrorCode.NO_STATEMENT_PAGES)
-    check_statement_basis(document.pages, located, basis, locator_settings)
+    # The gate is checked again here so that no send can happen without it; ``asserted_basis`` is the basis the analyst
+    # asserted for pages that name none, given only when the assertion applied to a page (H.4.6, v0.4.24).
+    check_statement_basis(document.pages, located, basis, locator_settings, asserted_basis=asserted_basis)
 
     pages = tuple(sorted(c.page_number for c in located.candidates))
     user = render_pages(document, pages)

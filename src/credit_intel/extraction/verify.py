@@ -30,6 +30,7 @@ from credit_intel.config import (
     LabelSettings,
     LocatorSettings,
 )
+from credit_intel.extraction.assertion import BasisAssertion
 from credit_intel.extraction.assignment import ColumnCheck, ColumnClaim, Outcome, check_column, link_quote
 from credit_intel.extraction.attributes import VerifiedAttributes, blocking_reasons
 from credit_intel.extraction.bases import field_basis
@@ -42,6 +43,7 @@ from credit_intel.extraction.presence import check_presence
 from credit_intel.extraction.runs import statement_run_start
 from credit_intel.ingestion.models import LocatorResult, PageText, PageWords
 from credit_intel.models import (
+    BasisEvidence,
     ExtractedField,
     ExtractionResponse,
     FieldName,
@@ -58,6 +60,7 @@ from credit_intel.models import (
 )
 
 R = StatusReason
+ASSERTION_SOURCE = "analyst_assertion"  # `details.basis.read_from` for a basis the analyst asserted
 # FR-005.3 order. basis_unknown is placed with the other attribute-derived reason.
 _ORDER = (
     R.EVIDENCE_NOT_VERIFIED,
@@ -87,6 +90,7 @@ class VerificationContext:
     declaration_settings: DeclarationSettings | None = None
     column_settings: ColumnSettings | None = None
     locator_settings: LocatorSettings | None = None
+    assertion: BasisAssertion | None = None  # the analyst's assertion of the basis (H.4.6, v0.4.24)
 
 
 @dataclass(frozen=True)
@@ -159,6 +163,14 @@ class FieldVerifier:
         failing.update(blockers)
 
         basis_info = field_basis(name.value, proposed.page_number, ctx.pages, ctx.located, ctx.locator_settings)
+        basis_evidence = BasisEvidence.TITLE
+        if (
+            basis_info[0] is StatementBasis.UNKNOWN
+            and ctx.assertion is not None
+            and proposed.page_number in ctx.assertion.applied_pages
+        ):  # the assertion fills a page whose own evidence gives no basis (H.4.6, v0.4.24); it never replaces a known one
+            basis_info = (ctx.assertion.basis, ASSERTION_SOURCE)
+            basis_evidence = BasisEvidence.ANALYST_ASSERTION
         if basis_info[0] is StatementBasis.UNKNOWN:
             failing.add(R.BASIS_UNKNOWN)
 
@@ -243,6 +255,7 @@ class FieldVerifier:
             period_length_months=12,
             period_role=role,
             statement_basis=basis,
+            basis_evidence=basis_evidence,
             status=Status.EXTRACTED if extracted else Status.REQUIRES_REVIEW,
             status_reason=None if extracted else reasons[0],
             value=apply_scale(parsed.value, proposed.scale) if extracted and parsed is not None else None,

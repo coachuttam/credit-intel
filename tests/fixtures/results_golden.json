@@ -3,6 +3,7 @@
   "attributes": [
     {
       "attribute": "entity_name",
+      "basis_evidence": null,
       "evidence_quote": "Acme Industries Limited",
       "normalised_value": "Acme Industries Limited",
       "page_number": 1,
@@ -13,6 +14,7 @@
     },
     {
       "attribute": "period_end",
+      "basis_evidence": null,
       "evidence_quote": "Note 31 March 2025 31 March 2024",
       "normalised_value": "2025-03-31",
       "page_number": 1,
@@ -23,6 +25,7 @@
     },
     {
       "attribute": "period_end",
+      "basis_evidence": null,
       "evidence_quote": "Note 31 March 2025 31 March 2024",
       "normalised_value": "2024-03-31",
       "page_number": 1,
@@ -33,6 +36,7 @@
     },
     {
       "attribute": "statement_basis",
+      "basis_evidence": "title",
       "evidence_quote": "Consolidated Balance Sheet",
       "normalised_value": "consolidated",
       "page_number": 1,
@@ -43,6 +47,7 @@
     },
     {
       "attribute": "reporting_currency",
+      "basis_evidence": null,
       "evidence_quote": "(Rs. in crore)",
       "normalised_value": "INR",
       "page_number": 1,
@@ -53,6 +58,7 @@
     },
     {
       "attribute": "scale",
+      "basis_evidence": null,
       "evidence_quote": "(Rs. in crore)",
       "normalised_value": "crore",
       "page_number": 1,
@@ -90,6 +96,7 @@
   },
   "derived_fields": [
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -123,6 +130,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -156,6 +164,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -189,6 +198,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -243,6 +253,7 @@
   },
   "fields": [
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -271,6 +282,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -299,6 +311,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -327,6 +340,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -355,6 +369,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -383,6 +398,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -411,6 +427,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -439,6 +456,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -467,6 +485,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -495,6 +514,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -523,6 +543,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": "INR",
@@ -626,6 +647,7 @@
       "value_interpretation": "number"
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": "INR",
@@ -729,6 +751,7 @@
       "value_interpretation": "number"
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": "INR",
@@ -832,6 +855,7 @@
       "value_interpretation": "number"
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": "INR",
@@ -935,6 +959,7 @@
       "value_interpretation": "number"
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -963,6 +988,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -991,6 +1017,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -1019,6 +1046,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -1047,6 +1075,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -1075,6 +1104,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -1103,6 +1133,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -1131,6 +1162,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": null,
@@ -1159,6 +1191,7 @@
       "value_interpretation": null
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": "INR",
@@ -1262,6 +1295,7 @@
       "value_interpretation": "number"
     },
     {
+      "basis_evidence": "title",
       "candidates": [],
       "corroborating_evidence": [],
       "currency": "INR",

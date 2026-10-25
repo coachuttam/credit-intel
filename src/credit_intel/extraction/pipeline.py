@@ -30,6 +30,7 @@ from credit_intel.config import (
     LocatorSettings,
     PricingSettings,
 )
+from credit_intel.extraction.assertion import BasisAssertion, apply_assertion
 from credit_intel.extraction.attributes import VerifiedAttributes, verify_attributes
 from credit_intel.extraction.extract import ExtractionResult, extract_fields
 from credit_intel.extraction.field_set import FieldSet, build_field_set
@@ -87,6 +88,9 @@ class ExtractionRun:
     # The model's verified basis attribute names another basis than the configured one.
     # Nothing is blocked (each field carries its own page's basis); the analyst can see it.
     attribute_basis_differs: bool
+    # The analyst's assertion of the basis for the pages of a ``--pages`` run, and where it was needed
+    # (H.4.6, v0.4.24); ``None`` if none was given.
+    basis_assertion: BasisAssertion | None = None
 
 
 def run_extraction(
@@ -105,6 +109,7 @@ def run_extraction(
     declaration_settings: DeclarationSettings | None = None,
     column_settings: ColumnSettings | None = None,
     pricing: PricingSettings | None = None,
+    assert_basis: StatementBasis | None = None,
     observer: Callable[[str, dict[str, object]], None] | None = None,
 ) -> ExtractionRun:
     """Run the pipeline on one PDF and return its field set and statistics.
@@ -115,6 +120,8 @@ def run_extraction(
     """
     if basis not in (StatementBasis.CONSOLIDATED, StatementBasis.STANDALONE):
         raise ValueError("the configured basis is consolidated or standalone")
+    if assert_basis is not None and page_range is None:
+        raise ValueError("an assertion of the basis needs a page range (H.4.6)")
     prompt = prompt or load_prompt()
     if extractor is None:
         from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
@@ -149,15 +156,21 @@ def run_extraction(
 
         stage = STATEMENTS_LOCATED
         located = locate_statements(document.pages, locator_settings, page_range)
+        assertion = None
+        asserted_basis = None
         if located.candidates:  # a missing basis is a statements_located failure (G.1); no pages is fields_extracted
-            check_statement_basis(document.pages, located, basis.value, locator_settings)
+            if assert_basis is not None:  # H.4.6 (v0.4.24): a conflicting page stops the run here, before any model call
+                assertion = apply_assertion({p.page_number: p for p in document.pages}, located, assert_basis, locator_settings)
+            asserted_basis = assertion.basis.value if assertion is not None and assertion.applied_pages else None
+            check_statement_basis(document.pages, located, basis.value, locator_settings, asserted_basis=asserted_basis)
             # H.4.6 (v0.4.21): pages whose basis is unknown are not sent (not for a page range).
             located = drop_unknown_basis_pages({p.page_number: p for p in document.pages}, located, locator_settings)
-        log(STATEMENTS_LOCATED, method=located.method, candidates=len(located.candidates))
+        asserted = {"asserted_pages": len(assertion.applied_pages)} if assertion is not None else {}
+        log(STATEMENTS_LOCATED, method=located.method, candidates=len(located.candidates), **asserted)
 
         stage = FIELDS_EXTRACTED
         extraction = extract_fields(
-            document, located, gateway, llm, prompt, basis.value, locator_settings
+            document, located, gateway, llm, prompt, basis.value, locator_settings, asserted_basis
         )
         log(
             FIELDS_EXTRACTED,
@@ -181,6 +194,8 @@ def run_extraction(
             {n: p.text for n, p in pages.items()},
             locator_settings,
             declaration_settings,
+            assertion,
+            basis,
         )
         verifier = FieldVerifier(
             VerificationContext(
@@ -193,6 +208,7 @@ def run_extraction(
                 declaration_settings=declaration_settings,
                 column_settings=column_settings,
                 locator_settings=locator_settings,
+                assertion=assertion,
             )
         )
         verifications = verifier.verify_all(extraction.response)
@@ -225,4 +241,5 @@ def run_extraction(
         attribute_basis_differs=(
             basis_attribute.status is Status.EXTRACTED and basis_attribute.normalised_value != basis.value
         ),
+        basis_assertion=assertion,
     )

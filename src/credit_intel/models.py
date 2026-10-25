@@ -226,6 +226,13 @@ class Derivation(_Model):
 # --- The extracted field record (H.1) -----------------------------------------
 
 
+class BasisEvidence(StrEnum):
+    """How the basis of a field or of the ``statement_basis`` attribute was established (H.1, H.4.6, v0.4.24)."""
+
+    TITLE = "title"  # a title block of its own page, or of the first page of its statement run
+    ANALYST_ASSERTION = "analyst_assertion"  # asserted by the analyst for a ``--pages`` run
+
+
 class ExtractedField(_Model):
     """One field for one period and basis (H.1).
 
@@ -249,6 +256,7 @@ class ExtractedField(_Model):
     period_length_months: Literal[12]  # Release 1 supports 12-month periods only
     period_role: PeriodRole
     statement_basis: StatementBasis
+    basis_evidence: BasisEvidence = BasisEvidence.TITLE
     status: Status
     status_reason: StatusReason | None = None
     value: Decimal | None = None
@@ -353,9 +361,22 @@ class DocumentAttribute(_Model):
     evidence_quote: StrictStr | None = Field(default=None, min_length=1)
     status: Literal[Status.EXTRACTED, Status.NOT_FOUND, Status.REQUIRES_REVIEW]
     status_reason: StatusReason | None = None
+    # Only for ``statement_basis`` when it is extracted: ``title`` (verified from a title block) or
+    # ``analyst_assertion`` (H.4.6, v0.4.24), which has no raw text, page or quote.
+    basis_evidence: BasisEvidence | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> "DocumentAttribute":
+        if self.basis_evidence is not None and (
+            self.attribute is not DocumentAttributeName.STATEMENT_BASIS or self.status is not Status.EXTRACTED
+        ):
+            raise ValueError("only an extracted statement_basis has a basis_evidence")
+        if self.basis_evidence is BasisEvidence.ANALYST_ASSERTION:
+            if self.normalised_value is None:
+                raise ValueError("an asserted basis needs its value")
+            if any(getattr(self, name) is not None for name in ("raw_text", "page_number", "evidence_quote")):
+                raise ValueError("an asserted basis has no raw text, page or quote")
+            return self
         is_period = self.attribute is DocumentAttributeName.PERIOD_END
         if is_period and self.period_role is None:
             raise ValueError("period_end needs a period_role")

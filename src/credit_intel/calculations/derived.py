@@ -20,6 +20,7 @@ from itertools import product
 
 from credit_intel.extraction.field_set import FieldSet
 from credit_intel.models import (
+    BasisEvidence,
     Candidate,
     Derivation,
     ExtractedField,
@@ -101,6 +102,8 @@ def _derive(
     first = anchors[0]
     if any(r.statement_basis is not first.statement_basis or r.period_role is not first.period_role for r in [*present, *anchors]):
         raise ValueError("a derived value uses inputs of one basis and one period role")
+    # A value derived from an input whose basis the analyst asserted rests on that assertion too (H.4.6, v0.4.24).
+    asserted = any(r.basis_evidence is BasisEvidence.ANALYST_ASSERTION for r in present)
     ids = tuple(make_field_id(field, first.period_end, first.statement_basis) for field in (record_inputs or wanted))
     derivation = Derivation(method_id=method_id, formula=formula, input_field_ids=ids, component_classification=classification)
 
@@ -111,6 +114,7 @@ def _derive(
             field_name=name, origin=Origin.DERIVED, period_end=first.period_end, period_length_months=12,
             period_role=first.period_role, statement_basis=first.statement_basis, status=status,
             status_reason=reason, value=value, currency=currency, derivation=derivation, candidates=candidates,
+            basis_evidence=BasisEvidence.ANALYST_ASSERTION if asserted else BasisEvidence.TITLE,
         )  # fmt: skip
 
     statuses = [record.status if record is not None else Status.NOT_FOUND for record in given]

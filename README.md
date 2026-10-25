@@ -52,14 +52,15 @@ A notice is printed whenever pages may be sent. Run folders (`runs/`), the respo
 ## Command line
 
 ```
-credit-intel <pdf_path> [--pages RANGE] [--basis consolidated|standalone] [--profile PROFILE_JSON]
-             [--output-dir DIR] [--config SETTINGS_TOML] [--confirm-public-document]
+credit-intel <pdf_path> [--pages RANGE] [--basis consolidated|standalone] [--assert-basis consolidated|standalone]
+             [--profile PROFILE_JSON] [--output-dir DIR] [--config SETTINGS_TOML] [--confirm-public-document]
 ```
 
 | Option | Meaning |
 |---|---|
 | `--pages RANGE` | Statement pages such as `110-115,120`. Replaces the automatic page locator. |
 | `--basis` | Statement basis, `consolidated` (default) or `standalone`. The basis is never switched automatically. |
+| `--assert-basis` | Requires `--pages`. States the basis (`consolidated` or `standalone`) of the pages of that range whose titles name none, for a document that never names it. It never overrides a page whose title names a basis: a page naming the other basis stops the run with `E-EXTRACT-BASIS-UNAVAILABLE`. The assertion is disclosed in the results and the memo and is not evidence. *(PRD v0.4.24; being implemented in steps: at present it is checked, counted by the basis gate, and fields on asserted pages are accepted and marked `analyst_assertion`; recording it in `results.json` and `manifest.json` and disclosing it in the memo come next.)* |
 | `--profile PROFILE_JSON` | An optional JSON object with the keys `borrower_name`, `industry`, `facility_requested` and `notes`, each a string of at most 500 characters. The values appear in the memo labelled `[ANALYST-PROVIDED]` and are never used as evidence, in calculations or in rules. |
 | `--output-dir DIR` | Where run folders are written. Default `runs`. |
 | `--config SETTINGS_TOML` | The settings file. Default `config/settings.toml`. |
