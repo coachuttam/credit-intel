@@ -120,6 +120,10 @@ def _period(attributes: VerifiedAttributes, role: PeriodRole) -> tuple[date | No
 _BORROWING_COMPONENTS = ("borrowings_non_current", "borrowings_current", "current_maturities_long_term_borrowings")
 
 
+# The fields the code reads when the model proposed none, and the statement each is read from (PRD v0.4.39, v0.4.40).
+_SCANNED_FIELDS = {**{name: "balance_sheet" for name in _BORROWING_COMPONENTS}, "interest_expense": "income_statement"}
+
+
 @dataclass(frozen=True)
 class FieldRefiling:
     """A ``total_borrowings`` proposal whose row is a borrowings component, verified as that component (PRD v0.4.38)."""
@@ -132,7 +136,7 @@ class FieldRefiling:
 
 @dataclass(frozen=True)
 class FieldScan:
-    """A borrowings component the model did not propose, read from a balance-sheet page by the code (PRD v0.4.39)."""
+    """A borrowings component or interest-expense row the model did not propose, read from its statement's page by the code (PRD v0.4.39, v0.4.40)."""
 
     field: str
     page: int
@@ -171,15 +175,15 @@ class FieldVerifier:
         added, self.scans = self._scanned(proposals)
         return tuple(self.verify(proposed) for proposed in (*proposals, *added))
 
-    def _balance_sheet_pages(self) -> list[int]:
-        """The candidate pages of the balance sheet: located as one, or (a page range records no types) titled as one."""
+    def _statement_pages(self, statement_type: str) -> list[int]:
+        """The candidate pages of a statement: located as one, or (a page range records no types) titled as one."""
         ctx = self._ctx
         located = {c.page_number: c.statement_types for c in ctx.located.candidates}
         return [
             number
             for number, page in sorted(ctx.pages.items())
-            if "balance_sheet" in located.get(number, ())
-            or any(t.statement_type == "balance_sheet" for t in title_lines(page.text, ctx.locator_settings))
+            if statement_type in located.get(number, ())
+            or any(t.statement_type == statement_type for t in title_lines(page.text, ctx.locator_settings))
         ]
 
     def _scanned(self, proposals: Sequence[ProposedField]) -> tuple[tuple[ProposedField, ...], tuple[FieldScan, ...]]:
@@ -192,16 +196,18 @@ class FieldVerifier:
         attributes = ctx.attributes
         if attributes.scale.status is not Status.EXTRACTED or attributes.reporting_currency.status is not Status.EXTRACTED:
             return (), ()
-        found: dict[str, list[tuple[int, PageStructure, object]]] = {name: [] for name in _BORROWING_COMPONENTS}
-        for number in self._balance_sheet_pages():
-            structure = self._structure(number)
-            if structure is None or not structure.valid:
-                continue
-            page_lines = [candidate.text for candidate in structure.lines]
-            for line in structure.lines:
-                for name in _BORROWING_COMPONENTS:
-                    if check_label(name, line.text, page_lines, line.index, ctx.label_settings).ok:
-                        found[name].append((number, structure, line))
+        found: dict[str, list[tuple[int, PageStructure, object]]] = {name: [] for name in _SCANNED_FIELDS}
+        for statement_type in sorted(set(_SCANNED_FIELDS.values())):
+            names = [name for name, kind in _SCANNED_FIELDS.items() if kind == statement_type]
+            for number in self._statement_pages(statement_type):
+                structure = self._structure(number)
+                if structure is None or not structure.valid:
+                    continue
+                page_lines = [candidate.text for candidate in structure.lines]
+                for line in structure.lines:
+                    for name in names:
+                        if check_label(name, line.text, page_lines, line.index, ctx.label_settings).ok:
+                            found[name].append((number, structure, line))
         taken = {(p.field_name.value, p.period_role) for p in proposals}
         added: list[ProposedField] = []
         scans: list[FieldScan] = []
