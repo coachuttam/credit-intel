@@ -17,9 +17,11 @@ V2 = (PROMPT_DIR / "extraction_v2.md").read_text(encoding="utf-8").splitlines()
 V3 = (PROMPT_DIR / "extraction_v3.md").read_text(encoding="utf-8").splitlines()
 V4 = (PROMPT_DIR / "extraction_v4.md").read_text(encoding="utf-8").splitlines()
 V5 = (PROMPT_DIR / "extraction_v5.md").read_text(encoding="utf-8").splitlines()
+V6 = (PROMPT_DIR / "extraction_v6.md").read_text(encoding="utf-8").splitlines()
+V7 = (PROMPT_DIR / "extraction_v7.md").read_text(encoding="utf-8").splitlines()
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7"])
 def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     prompt = load_prompt(name)
 
@@ -27,7 +29,7 @@ def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     assert "{{schema}}" not in prompt.system and "{{fields}}" not in prompt.system  # filled in from the code
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7"])
 def test_each_prompt_lists_every_extractable_field_and_the_schema(name):
     system = load_prompt(name).system
 
@@ -184,3 +186,49 @@ def test_v5_keeps_every_other_v2_rule_in_place_and_in_order():
     rest_v5 = [line for line in V5 if not line.startswith(("prompt-version", "- profit_before_tax is"))]
 
     assert rest_v5 == [line for line in V2 if not line.startswith("prompt-version")]
+
+
+# --- extraction_v6: a draft that names "Finance cost(s)" as interest expense (gate round, R1 finance cost) -----------------------------
+
+
+def test_v6_is_a_draft_and_the_default_stays_version_five():
+    assert DEFAULT_PROMPT == "extraction_v5" and load_prompt("extraction_v6").version == "extraction-v6"
+
+
+def test_v6_differs_from_v5_only_in_its_version_and_one_note_after_the_field_list():
+    removed = [line for line in V5 if line not in V6]
+    added = [line for line in V6 if line not in V5]
+
+    assert removed == ["prompt-version: extraction-v5"] and added[0] == "prompt-version: extraction-v6" and len(added) == 2
+    assert added[1].startswith("Note on interest_expense:") and '"Finance cost"' in added[1] and '"Finance costs"' in added[1]
+    assert V6.index(added[1]) > V6.index("{{fields}}")  # after the list: the shared field descriptions are not edited
+
+
+def test_v6_keeps_every_v5_line_in_order():
+    assert V6[1 : len(V5)] == V5[1:] and V6[0] == "prompt-version: extraction-v6"  # the v5 text, line for line; the note is appended after it
+
+
+def test_the_shared_field_descriptions_are_not_changed_by_v6():
+    from credit_intel.extraction.prompt import FIELD_DESCRIPTIONS
+
+    assert FIELD_DESCRIPTIONS["interest_expense"] == "finance costs or interest expense"  # a change here would alter v1 to v5 without a new version
+
+
+# --- extraction_v7: a draft that says page_number is the page that holds the quote (gate round, R2 page 49 added) --------------------------
+
+
+def test_v7_is_a_draft_and_the_default_stays_version_five():
+    assert DEFAULT_PROMPT == "extraction_v5" and load_prompt("extraction_v7").version == "extraction-v7"
+
+
+def test_v7_differs_from_v5_only_in_its_version_and_one_page_number_rule():
+    removed = [line for line in V5 if line not in V7]
+    added = [line for line in V7 if line not in V5]
+
+    assert removed == ["prompt-version: extraction-v5"] and len(V7) == len(V5) + 1 and added[0] == "prompt-version: extraction-v7" and len(added) == 2
+    assert added[1].startswith("- page_number, for a field and for an attribute alike, is the page whose text contains the evidence_quote exactly.")
+    assert V7.index(added[1]) == next(i for i, line in enumerate(V7) if line.startswith("- Document-level attributes go in")) + 1
+
+
+def test_v7_keeps_every_other_v5_line_in_order():
+    assert [line for line in V7 if not line.startswith(("prompt-version", "- page_number, for a field"))] == [line for line in V5 if not line.startswith("prompt-version")]
