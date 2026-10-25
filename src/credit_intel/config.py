@@ -158,18 +158,22 @@ class LabelSettings:
 
     rules: dict[str, FieldLabelRule] = field(
         default_factory=lambda: {
-            "revenue": FieldLabelRule(("revenue from operations", "revenue", "turnover")),
+            # Added 2026-10-25 from tuning-set evidence (PRD O.2): the income statement and balance sheet of tuning document
+            # R2 (sha256 dfc1ed6c9bcd..., physical pages 36 and 38) print "Total revenue", "Operating income", "Income before
+            # income taxes", "Net income" and "Total stockholders' equity". The owner approved the five phrases ("yes to all four").
+            "revenue": FieldLabelRule(("revenue from operations", "revenue", "turnover", "total revenue")),
             "net_profit": FieldLabelRule(
                 (
                     "profit/(loss) for the year",
                     "profit for the year",
                     "profit/(loss) for the period",
                     "profit for the period",
+                    "net income",
                 )
             ),
-            "operating_profit": FieldLabelRule(("operating profit", "ebit")),
+            "operating_profit": FieldLabelRule(("operating profit", "ebit", "operating income")),
             "profit_before_tax": FieldLabelRule(
-                ("profit/(loss) before tax", "profit before tax")
+                ("profit/(loss) before tax", "profit before tax", "income before income taxes")
             ),
             # "finance cost" (singular) added 2026-10-22 from tuning-set evidence (PRD O.2, AC-E-7): the
             # consolidated statement of profit and loss of tuning document R1 (sha256 a2b9acdfbe79...,
@@ -190,7 +194,7 @@ class LabelSettings:
                     "current maturities of long-term debt",
                 )
             ),
-            "total_equity": FieldLabelRule(("total equity",)),
+            "total_equity": FieldLabelRule(("total equity", "total stockholders' equity")),
         }
     )
     section_headings: dict[str, tuple[str, ...]] = field(

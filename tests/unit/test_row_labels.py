@@ -13,15 +13,16 @@ from credit_intel.extraction.labels import (
 
 # The H.3 table, spelt out: any change to the initial phrases must change this too.
 H3 = {
-    "revenue": ["revenue from operations", "revenue", "turnover"],
+    "revenue": ["revenue from operations", "revenue", "turnover", "total revenue"],  # "total revenue" and the four phrases below: tuning evidence R2, 2026-10-25
     "net_profit": [
         "profit/(loss) for the year",
         "profit for the year",
         "profit/(loss) for the period",
         "profit for the period",
+        "net income",
     ],
-    "operating_profit": ["operating profit", "ebit"],
-    "profit_before_tax": ["profit/(loss) before tax", "profit before tax"],
+    "operating_profit": ["operating profit", "ebit", "operating income"],
+    "profit_before_tax": ["profit/(loss) before tax", "profit before tax", "income before income taxes"],
     "interest_expense": ["finance costs", "finance cost", "interest expense"],  # "finance cost" from tuning evidence, 2026-10-22
     "current_assets": ["total current assets"],
     "current_liabilities": ["total current liabilities"],
@@ -32,7 +33,7 @@ H3 = {
         "current maturities of long-term borrowings",
         "current maturities of long-term debt",
     ],
-    "total_equity": ["total equity"],
+    "total_equity": ["total equity", "total stockholders' equity"],
 }
 
 
@@ -65,7 +66,11 @@ def test_every_h3_phrase_is_accepted_for_its_field(field, phrase):
     [
         ("revenue", "Other income 1,482.30"),
         ("revenue", "Total income 1,482.30"),
-        ("revenue", "Total revenue 1,482.30"),
+        ("revenue", "Total revenue and other income 1,482.30"),
+        ("net_profit", "Net income before tax 1.00"),
+        ("operating_profit", "Operating income and other 1.00"),
+        ("profit_before_tax", "Income before income taxes and other 1.00"),
+        ("total_equity", "Total stockholders' equity and liabilities 1.00"),
         ("revenue", "Revenue from operations (Refer note 28) 1,482.30"),
         ("revenue", "Revenue from operations and other income 1,482.30"),
         ("net_profit", "Profit before tax 1.00"),
@@ -83,6 +88,11 @@ def test_every_h3_phrase_is_accepted_for_its_field(field, phrase):
 )
 def test_other_labels_are_not_accepted(field, line):
     assert not ok(field, line)
+
+
+@pytest.mark.parametrize("apostrophe", ["'", "\u2019"])
+def test_the_stockholders_equity_label_is_accepted_with_a_straight_or_a_curly_apostrophe(apostrophe):
+    assert ok("total_equity", f"Total stockholders{apostrophe} equity 1,482.30 1,356.75")
 
 
 def test_a_label_is_not_accepted_for_a_different_field():
