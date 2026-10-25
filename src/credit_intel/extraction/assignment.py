@@ -13,9 +13,12 @@ so the caller (step 7) can merge them with the other checks. Sign (FR-005.6) is 
 checked here: brackets and an attached minus are ignored when comparing values.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import date
 from enum import StrEnum
+
+from credit_intel.config import ColumnSettings
 
 from credit_intel.extraction.columns import (
     Column,
@@ -94,10 +97,67 @@ class ColumnCheck:
     region_words: tuple[Word, ...] = ()
     token: Word | None = None  # the assigned token, only when the outcome is PASS
     parsed: ParsedValue | None = None
+    # Split figures (PRD FR-005.7, v0.4.35): the pieces of each figure joined in the claimed column, and the model's raw value read
+    # with the spaces between those pieces removed (``None`` when nothing was joined in it).
+    joined_pieces: tuple[tuple[str, ...], ...] = ()
+    raw_figure: str | None = None
 
 
 def _overlaps(word: Word, x0: float, x1: float) -> bool:
     return word.x0 < x1 and word.x1 > x0
+
+
+DEFAULT_SPLIT_FIGURE_GAP_PT = ColumnSettings().split_figure_gap_pt
+OVERLAP_TOLERANCE_PT = 0.5  # pieces that overlap by more than this are not neighbours of one figure
+
+
+def join_split_figures(
+    words: Sequence[Word], region_x0: float, region_x1: float, gap_pt: float
+) -> tuple[tuple[Word, ...], tuple[tuple[str, ...], ...]]:
+    """Join the pieces of a figure the PDF library reported as several words (PRD FR-005.7, v0.4.35).
+
+    Words are taken left to right. Consecutive words are joined only if every one of them overlaps the claimed column's region
+    (``region_x0`` to ``region_x1``: words of another column are never joined, whatever the gap), each gap is at most ``gap_pt`` and the words do not overlap by more than half a point,
+    each is a numeric token, the text gathered so far is not yet a complete figure (so two complete figures, or a figure and a
+    footnote mark after it, are never joined), and the whole chain parses as one figure. A chain that does not parse is left as it
+    was. Returns the words and the pieces of each join (the original texts). ``gap_pt`` of 0 or less joins nothing.
+    """
+    ordered = sorted(words, key=lambda w: (w.x0, w.text))
+    if gap_pt <= 0:
+        return tuple(ordered), ()
+    out: list[Word] = []
+    pieces: list[tuple[str, ...]] = []
+    i = 0
+    while i < len(ordered):
+        first = ordered[i]
+        j, text = i, first.text
+        if _overlaps(first, region_x0, region_x1) and is_numeric_token(first.text):
+            while j + 1 < len(ordered) and parse_value(text) is None:
+                before, after = ordered[j], ordered[j + 1]
+                gap = after.x0 - before.x1
+                if not -OVERLAP_TOLERANCE_PT <= gap <= gap_pt or not (_overlaps(after, region_x0, region_x1) and is_numeric_token(after.text)):
+                    break
+                text += after.text
+                j += 1
+        if j > i and parse_value(text) is not None:
+            last = ordered[j]
+            out.append(Word(text, first.x0, last.x1, min(w.top for w in ordered[i : j + 1]), max(w.bottom for w in ordered[i : j + 1])))
+            pieces.append(tuple(w.text for w in ordered[i : j + 1]))
+            i = j + 1
+        else:
+            out.append(first)
+            i += 1
+    return tuple(out), tuple(pieces)
+
+
+def _raw_without_join_spaces(raw: str, pieces: Sequence[tuple[str, ...]]) -> str | None:
+    """The model's raw value with the spaces between joined pieces removed, if it shows any of those pieces as printed."""
+    text, changed = clean_text(raw), False
+    for chain in pieces:
+        spaced = " ".join(chain)
+        if spaced in text:
+            text, changed = text.replace(spaced, "".join(chain)), True
+    return text if changed else None
 
 
 def _is_value_like(text: str) -> bool:
@@ -132,7 +192,7 @@ def _same_value(proposed: ParsedValue | None, token: ParsedValue | None) -> bool
     )
 
 
-def check_column(structure: PageStructure, claim: ColumnClaim) -> ColumnCheck:
+def check_column(structure: PageStructure, claim: ColumnClaim, split_figure_gap_pt: float = DEFAULT_SPLIT_FIGURE_GAP_PT) -> ColumnCheck:
     """Evaluate the period-column conditions for one proposed value (3.6, 3.7)."""
     label_reasons = () if claim.label_ok else (StatusReason.LABEL_NOT_RECOGNISED,)
 
@@ -181,7 +241,9 @@ def check_column(structure: PageStructure, claim: ColumnClaim) -> ColumnCheck:
         if _is_value_like(w.text) and w.x1 > structure.label_limit
     )
 
-    in_region = tuple(w for w in line.words if _overlaps(w, column.x0, column.x1))
+    words, joined = join_split_figures(line.words, column.x0, column.x1, split_figure_gap_pt)  # v0.4.35: only inside the claimed region
+    raw_figure = _raw_without_join_spaces(claim.raw_value, joined)
+    in_region = tuple(w for w in words if _overlaps(w, column.x0, column.x1))
     candidates = [
         w for w in in_region if _is_value_like(w.text) or any(ch.isdigit() for ch in w.text)
     ]
@@ -194,7 +256,7 @@ def check_column(structure: PageStructure, claim: ColumnClaim) -> ColumnCheck:
     number = (
         token is not None and _is_value_like(token.text) and token_parsed is not None
     )
-    matches = number and _same_value(parse_value(claim.raw_value), token_parsed)
+    matches = number and _same_value(parse_value(raw_figure if raw_figure is not None else claim.raw_value), token_parsed)
 
     conditions = Conditions(
         structure=True,
@@ -210,6 +272,8 @@ def check_column(structure: PageStructure, claim: ColumnClaim) -> ColumnCheck:
         "column": column,
         "anchors": column.anchors,
         "region_words": in_region,
+        "joined_pieces": joined,
+        "raw_figure": raw_figure,
     }
     if not boundary:
         return result(Failure.LINE_UNVERIFIED, conditions, **details)

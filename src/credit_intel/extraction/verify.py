@@ -198,13 +198,17 @@ class FieldVerifier:
             if structure is None:
                 column_verified = False
             else:
-                column = check_column(structure, ColumnClaim(period_end, proposed.raw_value, proposed.evidence_quote, True))
+                column = check_column(
+                    structure, ColumnClaim(period_end, proposed.raw_value, proposed.evidence_quote, True),
+                    (ctx.column_settings or ColumnSettings()).split_figure_gap_pt,
+                )  # fmt: skip
                 column_verified = column.outcome is Outcome.PASS
             if not column_verified:
                 failing.add(R.PERIOD_NOT_VERIFIED)
 
         # FR-005.6, sign
-        parsed = parse_value(proposed.raw_value)
+        # A figure the PDF library reported in pieces is read as the joined figure (PRD v0.4.35): the raw value, as printed, has the pieces' spaces.
+        parsed = parse_value(column.raw_figure if column is not None and column.raw_figure is not None else proposed.raw_value)
         sign = None
         if column is not None and column_verified and column.parsed is not None and parsed is not None:
             sign = check_sign(parsed, column.parsed)
@@ -323,6 +327,7 @@ class FieldVerifier:
                 "figure_line_index": column.figure_line.index if column.figure_line else None,
                 "region": None if column.column is None else [column.column.x0, column.column.x1],
                 "anchor_quotes": [a.text for a in column.anchors],
+                **({"joined_pieces": [list(chain) for chain in column.joined_pieces]} if column.joined_pieces else {}),  # only when a join happened (v0.4.35)
                 "region_words": [w.text for w in column.region_words],
                 "token": None
                 if token is None

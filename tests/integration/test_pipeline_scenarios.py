@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 import pipeline_fixture as fx
-from credit_intel.config import CONSOLIDATED, LocatorSettings
+from credit_intel.config import CONSOLIDATED, ColumnSettings, LocatorSettings
 from credit_intel.extraction.pipeline import ExtractionRun, run_extraction
 from credit_intel.extraction.prompt import Prompt, load_prompt
 from credit_intel.ingestion.errors import ErrorCode, IngestionError, InvalidOutputError
@@ -693,3 +693,61 @@ def test_the_sign_check_still_comes_first_a_model_that_drops_the_bracket_is_refu
     record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
     assert record.status is Status.REQUIRES_REVIEW and record.status_reason is not None and record.status_reason is not R.IMPLAUSIBLE_VALUE
 
+
+# --- a figure the PDF reader reports in pieces (PRD v0.4.35, FR-005.7; Appendix B.6 rows 86, 87, 94 and 95) -------------------------------------
+
+
+WIDE = ColumnSettings(split_figure_gap_pt=5.0)  # the synthetic pieces are 3.6 pt apart; the shipped setting (2.0) is for the real reports
+
+
+def split_run(pdf, tmp_path, reply, settings=WIDE):
+    return run(pdf, tmp_path, [reply], page_range="1", assert_basis=StatementBasis.CONSOLIDATED, column_settings=settings)[0]
+
+
+def test_b6_rows_86_and_87_a_split_bracketed_expense_is_one_figure_and_then_a_positive_expense(tmp_path):
+    pdf = fx.split_figure_pdf(tmp_path / "split.pdf", [("Interest expense", ["(2,385", ")"], ["(2,935", ")"])])
+
+    result = split_run(pdf, tmp_path, expense_reply(pdf, current="(2,385 )", comparative="(2,935 )"))
+
+    current, comparative = (result.field_set.get(FieldName.INTEREST_EXPENSE, role) for role in (CUR, COMP))
+    assert (current.status, comparative.status) == (Status.EXTRACTED, Status.EXTRACTED)
+    assert (current.value, comparative.value) == (Decimal("23850000000.00"), Decimal("29350000000.00"))  # the joined figure, as a positive expense
+    assert current.raw_value == "(2,385 )"  # as the model returned it, as printed
+    assert current.validation.details["column"]["joined_pieces"] == [["(2,385", ")"]] and current.validation.details["sign"]["expense_table_rule"] is True
+
+
+def test_a_split_thousands_group_is_joined_for_an_ordinary_row(tmp_path):
+    pdf = fx.split_figure_pdf(tmp_path / "revenue.pdf", [("Revenue", ["8,", "136"], ["7,", "361"])], heading="Statement of profit and loss")
+
+    result = split_run(pdf, tmp_path, expense_reply(pdf, name="revenue", label="Revenue", current="8, 136", comparative="7, 361"))
+
+    record = result.field_set.get(FieldName.REVENUE, CUR)
+    assert record.status is Status.EXTRACTED and record.value == Decimal("81360000000.00") and record.raw_value == "8, 136"
+
+
+def test_b6_row_94_after_the_join_a_value_whose_bracket_the_model_dropped_still_fails_the_sign_check(tmp_path):
+    pdf = fx.split_figure_pdf(tmp_path / "dropped.pdf", [("Interest expense", ["(2,385", ")"], ["(2,935", ")"])])
+
+    result = split_run(pdf, tmp_path, expense_reply(pdf, current="2,385"))
+
+    record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
+    assert record.status is Status.REQUIRES_REVIEW and record.status_reason is R.SIGN_MISMATCH and record.value is None
+
+
+def test_b6_row_95_a_footnote_mark_touching_a_split_figure_is_not_joined_and_the_cell_is_not_unique(tmp_path):
+    pdf = fx.split_figure_pdf(tmp_path / "mark.pdf", [("Revenue", ["8,", "136", "1"], ["7,", "361"])], heading="Statement of profit and loss")
+
+    result = split_run(pdf, tmp_path, expense_reply(pdf, name="revenue", label="Revenue", current="8, 136 1", comparative="7, 361"))
+
+    record = result.field_set.get(FieldName.REVENUE, CUR)
+    assert record.status is Status.REQUIRES_REVIEW and record.status_reason is R.PERIOD_NOT_VERIFIED
+    assert record.validation.details["column"]["failure"] == "cell_not_unique" and record.validation.details["column"]["joined_pieces"] == [["8,", "136"]]
+
+
+def test_the_shipped_setting_does_not_join_pieces_that_are_further_apart_than_it_allows(tmp_path):
+    pdf = fx.split_figure_pdf(tmp_path / "far.pdf", [("Interest expense", ["(2,385", ")"], ["(2,935", ")"])])  # 3.6 pt apart
+
+    result = split_run(pdf, tmp_path, expense_reply(pdf, current="(2,385 )", comparative="(2,935 )"), settings=ColumnSettings())
+
+    record = result.field_set.get(FieldName.INTEREST_EXPENSE, CUR)
+    assert record.status_reason is R.PERIOD_NOT_VERIFIED and record.validation.details["column"]["failure"] == "cell_not_unique"

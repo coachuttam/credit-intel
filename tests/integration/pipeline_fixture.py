@@ -133,6 +133,34 @@ def income_expense_pdf(path: Path, heading: str = "Other income (expense), net",
     return path
 
 
+def split_figure_pdf(path: Path, rows, heading: str = "Other income (expense), net", gap: float = 3.6) -> Path:
+    """Like ``income_expense_pdf``, but each figure is a list of pieces drawn ``gap`` points apart, which the PDF reader reports as separate words.
+
+    ``rows`` are (label, current pieces, comparative pieces); a figure given as one piece is drawn whole. Right-aligned at the right edge of each year heading's region.
+    """
+    pdf = canvas.Canvas(str(path), invariant=1)
+    pdf.setFont("Helvetica", 10)
+    y = 780
+    for text in ("Acme Industries Limited", heading, "(Rs. in crore)", "Year ended March 31,"):
+        pdf.drawString(72, y, text)
+        y -= 15
+    pdf.drawCentredString(400, y, "2025")
+    pdf.drawCentredString(480, y, "2024")
+    y -= 15
+    for label, current, comparative in rows:
+        pdf.drawString(72, y, label)
+        for pieces, right in ((current, 416), (comparative, 496)):  # right edges inside the year headings' regions, so every piece sits in its column
+            widths = [pdf.stringWidth(piece, "Helvetica", 10) for piece in pieces]
+            x = right - sum(widths) - gap * (len(pieces) - 1)
+            for piece, width in zip(pieces, widths, strict=True):
+                pdf.drawString(x, y, piece)
+                x += width + gap
+        y -= 14
+    pdf.showPage()
+    pdf.save()
+    return path
+
+
 def blank_text_pdf(path: Path) -> Path:
     """A PDF with text that is not a financial statement."""
     pdf = canvas.Canvas(str(path), invariant=1)

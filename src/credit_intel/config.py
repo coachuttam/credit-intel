@@ -130,6 +130,10 @@ class ColumnSettings:
     column_margin_pt: float = 3  # added each side of a period anchor's extent
     line_tolerance_pt: float = 3  # words whose vertical centres differ by at most this share a line
     extra_period_columns: int = 2  # older year-columns accepted beyond the comparative (PRD FR-005.9, v0.4.29)
+    # Words of one figure the PDF library reported apart are joined when they are at most this far apart (PRD FR-005.7, v0.4.35).
+    # A tuning-set setting, set from R2: the splits seen there are 0.0 to 0.96 pt wide and the nearest figure of a neighbouring
+    # column is 14.9 pt away. 0 turns joining off. Extended only from tuning-set evidence (O.2).
+    split_figure_gap_pt: float = 2.0
 
 
 @dataclass(frozen=True)
