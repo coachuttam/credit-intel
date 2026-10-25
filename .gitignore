@@ -44,3 +44,6 @@ uploads/
 
 # --- Local LLM response cache (FR-003.5) ---
 .cache/
+
+# --- Run folders: memo.md, results.json and manifest.json hold financial figures and quotes (FR-010) ---
+runs/

@@ -8,6 +8,9 @@ dependencies = [
     "pydantic>=2.14.1",
 ]
 
+[project.scripts]
+credit-intel = "credit_intel.cli:run"
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
