@@ -252,3 +252,92 @@ def test_the_module_runs_as_a_command(tmp_path):
     done = subprocess.run([sys.executable, "-m", "credit_intel.evaluation.gate", "--check-reference", str(tmp_path / "none.json")], capture_output=True, cwd=tmp_path)
 
     assert done.returncode == 2 and b"gate: refused" in done.stderr and done.stdout == b""
+
+
+# --- a document that never names its basis (R2-like), with the live run's pages and assertion (v0.4.24; step A4) ------------------------------------------
+
+
+@pytest.fixture
+def untitled(tmp_path):
+    return fx.balance_sheet_pdf(tmp_path / "untitled.pdf", rows=ROWS, title="Balance Sheet")
+
+
+def untitled_reply(pdf):
+    return reply(pdf).replace("Consolidated Balance Sheet", "Balance Sheet")
+
+
+def fill_untitled(pdf, tmp_path):
+    from credit_intel.extraction.prompt import load_prompt
+    from credit_intel.models import StatementBasis
+
+    run_extraction(pdf, FakeProvider(script=[untitled_reply(pdf)]), fx.LLM.__class__(provider="fake", model_id="m", token_ceiling=1_000_000, max_output_tokens=2000),
+                   cache_dir=tmp_path / ".cache" / "llm", prompt=load_prompt(), page_range="1", assert_basis=StatementBasis.CONSOLIDATED)  # fmt: skip
+
+
+def with_options(pdf, **options):
+    data = reference_data(pdf)
+    ordered = {"document_id": data["document_id"], "sha256": data["sha256"], "basis": data["basis"], **options, "entries": data["entries"]}
+    return ordered
+
+
+def write_reference(tmp_path, pdf, **options):
+    path = tmp_path / "ref.json"
+    path.write_text(json.dumps(with_options(pdf, **options)), encoding="utf-8")
+    return path
+
+
+def test_the_replay_uses_the_pages_and_the_assertion_of_the_live_run_and_reports_which_values_rest_on_it(untitled, tmp_path, config):
+    fill_untitled(untitled, tmp_path)
+    reference = load_reference(write_reference(tmp_path, untitled, pages="1", assert_basis="consolidated"))
+
+    report = replay(untitled, reference, assignments=records(tmp_path, untitled), cache_dir=tmp_path / ".cache" / "llm", llm=settings_for(config))
+
+    assert report["passed"] and report["counts"] == {"match": 6, "mismatch": 0, "missing": 0}
+    assert report["basis_assertion"] == {"basis": "consolidated", "pages": [1], "applied_pages": [1]}
+    assert {e["basis_evidence"] for e in report["entries"]} == {"analyst_assertion"}
+
+
+def test_without_the_assertion_in_the_reference_an_untitled_document_stops_at_the_basis_gate(untitled, tmp_path, config):
+    fill_untitled(untitled, tmp_path)
+
+    report = replay(untitled, load_reference(write_reference(tmp_path, untitled, pages="1")), assignments=records(tmp_path, untitled),
+                    cache_dir=tmp_path / ".cache" / "llm", llm=settings_for(config))  # fmt: skip
+
+    assert not report["passed"] and report["reason"] == "E-EXTRACT-BASIS-UNAVAILABLE" and report["counts"]["missing"] == 6
+
+
+def test_pages_other_than_the_live_runs_are_a_cache_miss_not_a_pass(untitled, tmp_path, config):
+    fill_untitled(untitled, tmp_path)
+    two_pages = fx.balance_sheet_pdf(tmp_path / "two.pdf", rows=ROWS, title="Balance Sheet", narrative_page="The directors report.")
+    reference = load_reference(write_reference(tmp_path, two_pages, pages="1-2", assert_basis="consolidated"))
+
+    report = replay(two_pages, reference, assignments=records(tmp_path, two_pages), cache_dir=tmp_path / ".cache" / "llm", llm=settings_for(config))
+
+    assert report["replayed"] is False and report["reason"] == "cache_miss"
+
+
+def test_a_conflict_with_the_asserted_basis_is_reported_as_the_stop_it_is(tmp_path, config):
+    pdf = fx.two_basis_pdf(tmp_path / "two.pdf")
+    path = tmp_path / "ref.json"
+    path.write_text(json.dumps(with_options(pdf, pages="1-2", assert_basis="consolidated")), encoding="utf-8")
+
+    report = replay(pdf, load_reference(path), assignments=records(tmp_path, pdf), llm=settings_for(config))
+
+    assert report["reason"] == "E-EXTRACT-BASIS-UNAVAILABLE" and not report["passed"]
+
+
+def test_the_command_passes_an_untitled_document_with_its_assertion_and_prints_no_value(untitled, tmp_path, config, capsys):
+    fill_untitled(untitled, tmp_path)
+    code, out, err = run_main(capsys, "--report", untitled, write_reference(tmp_path, untitled, pages="1", assert_basis="consolidated"),
+                              "--assignments", records(tmp_path, untitled), "--config", config)  # fmt: skip
+
+    assert code == 0 and out.strip().endswith("GATE: PASS") and err == ""
+    assert '"basis_evidence": "analyst_assertion"' in out and '"applied_pages": [1]' in out
+    for forbidden in ("352.70", "38.50", "400.00", "Finance costs", "Acme", "untitled.pdf", str(tmp_path)):
+        assert forbidden not in out
+
+
+def test_check_reference_shows_the_pages_and_the_assertion_without_a_document(untitled, tmp_path, capsys):
+    code, out, _ = run_main(capsys, "--check-reference", write_reference(tmp_path, untitled, pages="1", assert_basis="consolidated"))
+
+    assert code == 0 and '"pages": "1"' in out and '"assert_basis": "consolidated"' in out and "352.70" not in out

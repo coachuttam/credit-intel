@@ -10,6 +10,9 @@ field); an extracted value that differs from its reference **fails the gate**.
   checks its shape and never repeats a value in a message.
 * ``replay`` reads the model's reply from the response cache (nothing is sent: the provider refuses to be called),
   verifies it as a normal run would, and compares. A cache miss is a failure to replay, not a pass.
+* A reference may name the `pages` and the `assert_basis` of the live run it was written for (H.4.6, v0.4.24). The cache key covers the
+  page set, so a replay must use the same pages, and a document that never names its basis (tuning report R2) passes the basis gate only
+  with the same assertion. The report then shows, per value, whether its basis came from a title or from the assertion.
 * "Borrowings" is the **total** the metrics use: the reported total, or the sum of non-current and current
   borrowings derived by ``BORR-SUM``. A reference for a total that the report does not print gives the parts, and the
   expected total is their sum.
@@ -40,6 +43,7 @@ from credit_intel.extraction.normalise import apply_scale, parse_value
 from credit_intel.extraction.pipeline import run_extraction
 from credit_intel.extraction.prompt import DEFAULT_PROMPT, Prompt, load_prompt
 from credit_intel.ingestion.errors import IngestionError
+from credit_intel.ingestion.locator import parse_page_range
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR
 from credit_intel.llm.provider import LLMRequest, LLMResponse
 from credit_intel.models import ExtractedField, FieldName, PeriodRole, Scale, StatementBasis, Status
@@ -47,7 +51,8 @@ from credit_intel.models import ExtractedField, FieldName, PeriodRole, Scale, St
 GATE_FIELDS = (FieldName.PROFIT_BEFORE_TAX, FieldName.INTEREST_EXPENSE, FieldName.TOTAL_BORROWINGS)
 ROLES = (PeriodRole.CURRENT, PeriodRole.COMPARATIVE)
 MAX_BYTES = 64 * 1024
-TOP_KEYS = ("document_id", "sha256", "basis", "entries")
+REQUIRED_KEYS = ("document_id", "sha256", "basis", "entries")
+TOP_KEYS = ("document_id", "sha256", "basis", "pages", "assert_basis", "entries")  # the canonical order; pages and assert_basis are optional
 ENTRY_KEYS = {"field", "period", "period_end", "page", "printed", "scale", "parts"}
 PART_KEYS = {"printed", "scale", "page"}
 SHA = re.compile(r"[0-9a-f]{64}")
@@ -72,6 +77,8 @@ class Reference:
     sha256: str
     basis: StatementBasis
     entries: tuple[Entry, ...]
+    pages: str | None = None  # the ``--pages`` of the live run the reply came from (the cache key covers the page set)
+    assert_basis: StatementBasis | None = None  # the ``--assert-basis`` of that run (H.4.6, v0.4.24); needs ``pages``
 
 
 def _amount(source: object, where: str) -> Decimal:
@@ -138,9 +145,26 @@ def load_reference(path: Path) -> Reference:
         raise GateReferenceError("the reference file cannot be read") from None
     except ValueError:
         raise GateReferenceError("the reference file is not valid JSON") from None
-    if not isinstance(data, dict) or tuple(data) != TOP_KEYS:
-        raise GateReferenceError(f"the reference file must be an object with the keys {', '.join(TOP_KEYS)}, in that order")
-    document_id, sha256, basis, raw_entries = (data[k] for k in TOP_KEYS)
+    expected = tuple(k for k in TOP_KEYS if isinstance(data, dict) and k in data)
+    if not isinstance(data, dict) or tuple(data) != expected or any(k not in data for k in REQUIRED_KEYS):
+        raise GateReferenceError(
+            f"the reference file must be an object with the keys {', '.join(REQUIRED_KEYS)}, in the order {', '.join(TOP_KEYS)}"
+            " (pages and assert_basis are optional)"
+        )
+    document_id, sha256, basis, raw_entries = (data[k] for k in REQUIRED_KEYS)
+    pages, asserted = data.get("pages"), data.get("assert_basis")
+    if "pages" in data:
+        try:
+            if not isinstance(pages, str):
+                raise ValueError
+            parse_page_range(pages, 10**6, 10**6)  # the syntax only; the pages are checked against the document when it is replayed
+        except (ValueError, IngestionError):
+            raise GateReferenceError("pages must be a page range such as 36-38 or 10-12,20") from None
+    if "assert_basis" in data:
+        if asserted not in ("consolidated", "standalone"):
+            raise GateReferenceError("assert_basis must be consolidated or standalone")
+        if "pages" not in data:
+            raise GateReferenceError("assert_basis needs pages")
     if not isinstance(document_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", document_id):
         raise GateReferenceError("document_id must be a short plain identifier")
     if not isinstance(sha256, str) or not SHA.fullmatch(sha256):
@@ -157,7 +181,7 @@ def load_reference(path: Path) -> Reference:
     if set(seen) != set(wanted):
         missing = sorted(f"{f.value}.{r.value}" for f, r in set(wanted) - set(seen))
         raise GateReferenceError(f"the gate needs all six entries; missing: {', '.join(missing)}")
-    return Reference(document_id, sha256, StatementBasis(basis), entries)
+    return Reference(document_id, sha256, StatementBasis(basis), entries, pages, StatementBasis(asserted) if asserted else None)
 
 
 def _record(field_set: FieldSet, entry: Entry) -> ExtractedField | None:
@@ -177,12 +201,13 @@ def compare(reference: Reference, field_set: FieldSet) -> dict:
     results = []
     for entry in reference.entries:
         record = _record(field_set, entry)
-        out = {"field": entry.field.value, "period": entry.role.value, "origin": None, "reason": None, "page_agrees": None}
+        out = {"field": entry.field.value, "period": entry.role.value, "origin": None, "reason": None, "page_agrees": None, "basis_evidence": None}
         if record is None or record.status is not Status.EXTRACTED:
             out["outcome"] = "missing"
             out["reason"] = "no_record" if record is None else (record.status_reason.value if record.status_reason else record.status.value)
         else:
             out["origin"] = record.origin.value
+            out["basis_evidence"] = record.basis_evidence.value  # which values rest on the analyst's assertion
             wrong = []
             if record.value != entry.expected:
                 wrong.append("value_differs")
@@ -221,12 +246,18 @@ def replay(
     llm = llm or load_llm_settings(config, {**os.environ, ENV_TOKEN_CEILING: os.environ.get(ENV_TOKEN_CEILING, "1000000")})
     failed = {"document_id": document_id, "replayed": False, "passed": False, "counts": {"match": 0, "mismatch": 0, "missing": len(reference.entries)}}
     try:
-        run = run_extraction(path, _NoCallProvider(), llm, basis=reference.basis, cache_dir=cache_dir, prompt=prompt)
+        run = run_extraction(
+            path, _NoCallProvider(), llm, basis=reference.basis, cache_dir=cache_dir, prompt=prompt,
+            page_range=reference.pages, assert_basis=reference.assert_basis,
+        )  # fmt: skip
     except RuntimeError:
         return {**failed, "reason": "cache_miss"}
     except IngestionError as error:
         return {**failed, "reason": error.code.value}
-    return compare(reference, run.field_set)
+    report = compare(reference, run.field_set)
+    assertion = run.basis_assertion
+    report["basis_assertion"] = None if assertion is None else {"basis": assertion.basis.value, "pages": list(assertion.pages), "applied_pages": list(assertion.applied_pages)}
+    return report
 
 
 def evaluate_gate(reports: list[dict], assignments: Path = ASSIGNMENTS_PATH) -> dict:
@@ -249,7 +280,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for reference_path in args.check_reference:
             reference = load_reference(reference_path)
-            print("gate: " + json.dumps({"reference_ok": True, "document_id": reference.document_id, "entries": len(reference.entries)}, sort_keys=True))
+            print("gate: " + json.dumps({"reference_ok": True, "document_id": reference.document_id, "entries": len(reference.entries), "pages": reference.pages,
+                                   "assert_basis": reference.assert_basis.value if reference.assert_basis else None}, sort_keys=True))
         if not args.report:
             return 0
         prompt = load_prompt(os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT))

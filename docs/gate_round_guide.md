@@ -43,9 +43,22 @@ Write the figures **exactly as printed on the page**, with the scale the page de
 
 (The numbers above are invented. The example parses with the real checker, and a test keeps it that way.)
 
+For a report that never names its basis (tuning report R2), the file also names the pages and the assertion of the live run it was written for:
+
+```json
+{
+  "document_id": "R2",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "basis": "consolidated",
+  "pages": "36-38",
+  "assert_basis": "consolidated",
+  "entries": [ ... the six entries as above ... ]
+}
+```
+
 Rules:
 
-- The keys are exactly `document_id`, `sha256`, `basis`, `entries`, in that order. `document_id` is the neutral ID in `tests/eval/assignments.jsonl` (`R1` or `R2`) and `sha256` is that record's hash for the report. The gate refuses a reference whose hash is not the document's.
+- The keys are `document_id`, `sha256`, `basis`, then, only if the live run used them, `pages` and `assert_basis`, then `entries`, in that order. `pages` is the `--pages` range of the live run and `assert_basis` its `--assert-basis` (consolidated or standalone); `assert_basis` needs `pages`. They must match the live run exactly: the cached reply is found by the page set, so other pages are a cache miss, and a document that names no basis passes the basis gate only with the same assertion. `document_id` is the neutral ID in `tests/eval/assignments.jsonl` (`R1` or `R2`) and `sha256` is that record's hash for the report. The gate refuses a reference whose hash is not the document's.
 - All six entries are required, once each. `field` is `profit_before_tax`, `interest_expense` or `total_borrowings`; `period` is `current` or `comparative`; `period_end` is the ISO date of that column.
 - `printed` is the figure as it appears: thousands separators are fine, brackets mean negative, and a dash or `nil` means a reported zero. `scale` is one of `units`, `thousands`, `lakh`, `millions`, `crore`, `billions`.
 - `parts` (for `total_borrowings` only) replaces `printed`, `scale` and `page`, and lists at least two components, each with its own `printed`, `scale` and `page`.
@@ -71,13 +84,8 @@ uv run --locked python -m credit_intel.evaluation.gate \
 
 It prints one counts-only line per report and then `GATE: PASS` or `GATE: FAIL` (exit 0 or 1; exit 2 if a reference or a refusal stops it). The gate passes only if **every tuning document on the assignment record** was replayed and matched on all six values. A held-out document is refused. A cache miss counts as a failure to replay, not as a pass.
 
-## 6. Two points that are yours to settle
+## 6. The two points, and how they were settled
 
-**(a) R2.** R2's statement titles name no basis, so it stops at the basis gate (`E-EXTRACT-BASIS-UNAVAILABLE`) and extracts nothing. The routes, from `docs/OD-10_options_note.md`:
-
-1. **Build option 3 (the page-scoped analyst assertion)**, which you accepted in principle on 2026-10-13: the analyst states the basis for named pages, and the run records it as analyst-provided and not as evidence. It needs a PRD amendment (v0.4.24) that I would draft first, then code and tests. This is my recommendation.
-2. **Build option 2 (basis from a footnote)**, also accepted in principle: the page's own footnote establishes the basis. It also needs an amendment.
-3. **Replace R2** with another public report that you assign to the tuning set before anyone inspects it.
-4. **Gate on R1 only**: this changes your first condition, so it is yours to decide and record.
+**(a) R2 — settled 2026-10-25: option 3, the page-scoped analyst assertion (PRD v0.4.24).** R2's statement titles name no basis, so without help it stops at the basis gate (`E-EXTRACT-BASIS-UNAVAILABLE`) and extracts nothing. A live run of R2 uses `--pages <the statements> --assert-basis consolidated` (you confirmed R2 is consolidated), and the reference file names the same two. The assertion fills only pages whose title names no basis, never overrides a page that names one, and is disclosed in the results and the memo. In the gate report each value shows `basis_evidence`: `analyst_assertion` for a value that rests on it, `title` otherwise. A matching value still counts as a match; the flag is there so you can see how much of R2 rests on your assertion.
 
 **(b) What "borrowings" means.** The gate compares the total the metrics use (a reported total, or the sum of non-current and current borrowings, plus a separate current-maturities row where the specification adds it). If you prefer the gate to compare each component too, the reference file would grow by two entries per period and the tool by a few lines.

@@ -14,7 +14,7 @@ from credit_intel.evaluation import gate
 from credit_intel.evaluation.gate import GateReferenceError, compare, evaluate_gate, load_reference
 from credit_intel.evaluation.guard import MEMBERS
 from credit_intel.extraction.field_set import FieldSet
-from credit_intel.models import FieldName as F, PeriodRole, StatementBasis as Basis, Status, StatusReason as R
+from credit_intel.models import BasisEvidence, FieldName as F, PeriodRole, StatementBasis as Basis, Status, StatusReason as R
 
 COMP = PeriodRole.COMPARATIVE
 SHA = "a" * 64
@@ -289,3 +289,75 @@ def test_a_seventh_entry_that_repeats_one_is_refused_as_a_repeat(tmp_path):
 
     with pytest.raises(GateReferenceError, match="repeated"):
         load_reference(write(tmp_path, data))
+
+
+# --- pages and assert_basis in the reference (v0.4.24; step A4) ---------------------------------------------------------------------------------
+
+
+def with_run_options(**options):
+    data = base()
+    ordered = {"document_id": data["document_id"], "sha256": data["sha256"], "basis": data["basis"]}
+    for key in ("pages", "assert_basis"):
+        if key in options:
+            ordered[key] = options[key]
+    ordered["entries"] = data["entries"]
+    return ordered
+
+
+def test_a_reference_may_name_the_pages_and_the_assertion_of_the_live_run(tmp_path):
+    reference = load_reference(write(tmp_path, with_run_options(pages="36-38", assert_basis="consolidated")))
+
+    assert reference.pages == "36-38" and reference.assert_basis is Basis.CONSOLIDATED and len(reference.entries) == 6
+
+
+def test_the_pages_may_be_given_without_an_assertion_and_both_are_optional(tmp_path):
+    only_pages = load_reference(write(tmp_path, with_run_options(pages="10-12,20"), "a.json"))
+    neither = load_reference(write(tmp_path, with_run_options(), "b.json"))
+
+    assert (only_pages.pages, only_pages.assert_basis) == ("10-12,20", None) and (neither.pages, neither.assert_basis) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("options", "fragment"),
+    [
+        ({"assert_basis": "consolidated"}, "assert_basis needs pages"),
+        ({"pages": "36-38", "assert_basis": "unknown"}, "assert_basis must be"),
+        ({"pages": "36-38", "assert_basis": "both"}, "assert_basis must be"),
+        ({"pages": "36-38", "assert_basis": None}, "assert_basis must be"),
+        ({"pages": ""}, "pages must be a page range"),
+        ({"pages": "abc"}, "pages must be a page range"),
+        ({"pages": "5-3"}, "pages must be a page range"),
+        ({"pages": 36}, "pages must be a page range"),
+        ({"pages": None}, "pages must be a page range"),
+        ({"pages": "0"}, "pages must be a page range"),
+    ],
+)
+def test_a_bad_pages_or_assertion_is_refused_with_its_name(tmp_path, options, fragment):
+    with pytest.raises(GateReferenceError, match=fragment):
+        load_reference(write(tmp_path, with_run_options(**options)))
+
+
+def test_the_optional_keys_must_come_in_their_place_and_unknown_keys_are_still_refused(tmp_path):
+    data = base()
+    wrong_order = {"document_id": data["document_id"], "sha256": data["sha256"], "basis": data["basis"], "assert_basis": "consolidated", "pages": "1", "entries": data["entries"]}
+    unknown = {**with_run_options(pages="1"), "note": "x"}
+    after_entries = {**base(), "pages": "1"}
+
+    for bad in (wrong_order, unknown, after_entries):
+        with pytest.raises(GateReferenceError):
+            load_reference(write(tmp_path, bad))
+
+
+def test_each_entry_reports_whether_its_basis_rests_on_the_assertion(tmp_path):
+    asserted = rec(F.PROFIT_BEFORE_TAX, "352.70", role=CUR, end=D25).model_copy(update={"basis_evidence": BasisEvidence.ANALYST_ASSERTION})
+    fs = field_set({(F.PROFIT_BEFORE_TAX, CUR): None}, extra=[asserted])
+
+    evidence = {(e["field"], e["period"]): e["basis_evidence"] for e in compare(reference(tmp_path), fs)["entries"]}
+
+    assert evidence[("profit_before_tax", "current")] == "analyst_assertion" and evidence[("interest_expense", "current")] == "title"
+
+
+def test_a_missing_value_has_no_basis_evidence(tmp_path):
+    report = compare(reference(tmp_path), field_set({(F.INTEREST_EXPENSE, CUR): None}))
+
+    assert {(e["field"], e["period"]): e["basis_evidence"] for e in report["entries"]}[("interest_expense", "current")] is None
