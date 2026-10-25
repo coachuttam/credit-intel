@@ -582,3 +582,31 @@ def test_b6_row_66_a_row_with_a_currency_sign_after_its_label_is_extracted_and_k
     equity = result.field_set.get(FieldName.TOTAL_EQUITY, PeriodRole.CURRENT)
     assert result.field_set.counts["extracted"] == 6 and equity.status is Status.EXTRACTED
     assert "Total equity $" in equity.evidence_quote and equity.line_item_label == "Total equity"  # the model's own label is kept
+
+
+# --- the document currency supported by the cited page (PRD v0.4.30, FR-005.8; Appendix B.6 row 68) ------------------------------
+
+
+def currency_reply(pdf, quote, raw):
+    reply = json.loads(fx.good_response(pdf, drop_attributes=("reporting_currency",)))
+    reply["attributes"].append(fx.attribute(pdf, "reporting_currency", raw, "INR", quote))
+    return json.dumps(reply)
+
+
+def test_b6_row_68_a_currency_quote_without_the_sign_is_supported_by_the_page_and_the_fields_extract(tmp_path):
+    pdf = fx.balance_sheet_pdf(tmp_path / "unit.pdf")  # the page prints "(Rs. in crore)"; the model quotes a title line instead
+
+    result, _ = run(pdf, tmp_path, [currency_reply(pdf, "Consolidated Balance Sheet", "Balance Sheet")])
+
+    assert result.attributes.reporting_currency.status is Status.EXTRACTED
+    assert result.attributes.reporting_currency.evidence_quote == "Consolidated Balance Sheet"
+    assert result.field_set.counts["extracted"] == 6
+
+
+def test_b6_row_69_a_page_without_any_currency_declaration_still_blocks_the_fields(tmp_path):
+    pdf = fx.balance_sheet_pdf(tmp_path / "nounit.pdf", scale="(in crore)")
+
+    result, _ = run(pdf, tmp_path, [currency_reply(pdf, "Consolidated Balance Sheet", "Balance Sheet")])
+
+    assert result.attributes.reporting_currency.status_reason is R.CURRENCY_NOT_VERIFIED
+    assert result.field_set.counts["extracted"] == 0

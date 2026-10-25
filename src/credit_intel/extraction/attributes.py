@@ -13,7 +13,7 @@ attribute it depends on is not (``blocking_reason``).
   must be the previous year on the same month and day (H.1.1);
 - ``statement_basis``: the raw text is in a title block that names exactly that basis
   (H.4.6);
-- ``reporting_currency`` and ``scale``: the quote itself supports them (FR-005.8).
+- ``reporting_currency``: a sign, code or name for the code in the quote or on the cited page (FR-005.8, v0.4.30); ``scale``: the quote itself supports it (FR-005.8).
 """
 
 import re
@@ -167,11 +167,13 @@ def _currency_reason(
     if reason is not None:
         return reason
     code = proposal.normalised_value.strip()
-    if not _ISO_CURRENCY.fullmatch(code) or not check_currency(
-        code, proposal.evidence_quote, settings=declarations
-    ).ok:
+    if not _ISO_CURRENCY.fullmatch(code):
         return StatusReason.CURRENCY_NOT_VERIFIED
-    return None
+    # A sign, code or name for this code in the quote or on the cited page (FR-005.8, v0.4.30): the page is what a field's own
+    # currency check already reads, and the model's choice of which line to quote is not evidence of where the page declares it.
+    in_quote = check_currency(code, proposal.evidence_quote, settings=declarations).ok
+    on_page = check_currency(code, pages.get(proposal.page_number, ""), settings=declarations).ok
+    return None if in_quote or on_page else StatusReason.CURRENCY_NOT_VERIFIED
 
 
 def _scale_reason(

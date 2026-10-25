@@ -375,11 +375,64 @@ def test_a_currency_symbol_for_another_code_is_not_verified():
     assert verify([proposed]).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
 
 
-def test_the_currency_must_be_supported_by_the_quote_itself():
-    page = PAGE + "\nAll amounts in USD"
-    proposed = replaced(CURRENCY, normalised_value="USD")  # USD is on the page, not in the quote
+# The document-level currency is supported in the quote or on the cited page (PRD v0.4.30, FR-005.8; Appendix B.6 rows 68 to 71).
 
-    assert verify([proposed], {112: page}).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+USD_PAGE = "Acme Inc\nConsolidated Balance Sheet\nAs at 31 March 2025 31 March 2024\n(In millions)\nCash and cash equivalents $ 1,482.30 $ 1,356.75"
+UNIT_LINE = attr(Name.REPORTING_CURRENCY, "In millions", "USD", "(In millions)")  # a quote that states only the unit
+
+
+def test_b6_row_68_a_currency_on_the_cited_page_supports_the_attribute_when_the_quote_has_no_sign():
+    result = verify([UNIT_LINE], {112: USD_PAGE}).reporting_currency
+
+    assert result.status is Status.EXTRACTED and result.normalised_value == "USD" and result.evidence_quote == "(In millions)"
+
+
+def test_the_currency_may_also_be_stated_as_a_code_or_a_name_on_the_cited_page():
+    for declaration in ("All amounts in USD", "All amounts in US dollars", "Amounts in dollars"):
+        page = USD_PAGE.replace("Cash and cash equivalents $ 1,482.30 $ 1,356.75", f"{declaration}\nCash 1,482.30 1,356.75")
+
+        assert verify([UNIT_LINE], {112: page}).reporting_currency.status is Status.EXTRACTED, declaration
+
+
+def test_b6_row_69_a_page_with_no_sign_code_or_name_leaves_the_attribute_unverified():
+    page = USD_PAGE.replace("$ ", "")
+
+    assert verify([UNIT_LINE], {112: page}).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+
+
+def test_b6_row_70_a_sign_for_another_code_on_the_page_does_not_support_the_code():
+    proposed = replaced(UNIT_LINE, normalised_value="INR")
+
+    assert verify([proposed], {112: USD_PAGE}).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+
+
+def test_b6_row_71_a_quote_that_carries_the_sign_is_supported_as_before():
+    assert verify([CURRENCY]).reporting_currency.status is Status.EXTRACTED
+
+
+def test_only_the_cited_page_counts_not_another_candidate_page():
+    pages = {112: USD_PAGE.replace("$ ", ""), 113: USD_PAGE}
+
+    assert verify([UNIT_LINE], pages).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+    assert verify([replaced(UNIT_LINE, page_number=113)], pages).reporting_currency.status is Status.EXTRACTED
+
+
+def test_the_other_conditions_still_apply_when_the_page_supports_the_currency():
+    lower = replaced(UNIT_LINE, normalised_value="usd")
+    not_in_quote = replaced(UNIT_LINE, raw_text="$")  # the raw text is not in the quote
+    off_page = replaced(UNIT_LINE, evidence_quote="(In billions)", raw_text="In billions")  # the quote is not on the page
+
+    assert verify([lower], {112: USD_PAGE}).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
+    assert verify([not_in_quote], {112: USD_PAGE}).reporting_currency.status_reason is Reason.VALUE_NOT_IN_EVIDENCE
+    assert verify([off_page], {112: USD_PAGE}).reporting_currency.status_reason is Reason.EVIDENCE_NOT_VERIFIED
+
+
+def test_a_page_that_names_two_currencies_still_does_not_let_two_proposals_disagree():
+    page = USD_PAGE + "\nAlso shown in ₹"
+    usd = replaced(UNIT_LINE, normalised_value="USD")
+    inr = replaced(UNIT_LINE, normalised_value="INR")
+
+    assert verify([usd, inr], {112: page}).reporting_currency.status_reason is Reason.CURRENCY_NOT_VERIFIED
 
 
 def test_a_scale_other_than_the_declared_one_is_not_verified():
