@@ -44,7 +44,7 @@ Each round is one live call per report (about $0.001 to $0.002; the five calls s
 
 **The levers allowed in a tuning round** (one per round, with the evidence from the tuning report, recorded in `PROGRESS.md` as counts):
 
-1. the wording of a field's description in the prompt (a new prompt version, never edited in place; `extraction-v2` stays the default until you adopt another);
+1. the wording of a field's description in the prompt (a new prompt version, never edited in place; the default is `extraction-v5` since 2026-10-25, adopted after the gate round on R1 and R2);
 2. the row-label phrase list for a field (`LabelSettings`), for example the wording a US filing uses for income before tax;
 3. the inclusion and exclusion phrases for current maturities (D-12);
 4. which pages are sent (`--pages`), including a note page.
@@ -73,7 +73,7 @@ The gate replays the reply from the cache, so it must ask for exactly what the l
 
 | Must be the same in the live run and in the gate replay | How |
 |---|---|
-| prompt | `CREDIT_INTEL_PROMPT` (a file name under `prompts/`; default `extraction_v2`; the version label printed in reports is `extraction-v2`) |
+| prompt | `CREDIT_INTEL_PROMPT` (a file name under `prompts/`; default `extraction_v5`; the version label printed in reports is `extraction-v5`; a cache made under the older default needs `CREDIT_INTEL_PROMPT=extraction_v2` to replay) |
 | output limit | `CREDIT_INTEL_MAX_OUTPUT_TOKENS` (8192 in the earlier runs; the shipped file says 4096) |
 | model and provider | `config/settings.toml` or its overrides |
 | pages and assertion | `CREDIT_INTEL_PAGES` and `CREDIT_INTEL_ASSERT_BASIS` in the live run; `pages` and `assert_basis` in the reference file |
@@ -88,7 +88,7 @@ R1, one live round (the harness of runs 2 and 3; the key is already exported in 
 CREDIT_INTEL_PRIVATE_APPROVED=1 CREDIT_INTEL_DOCUMENT=private/R1_infosys_2024_25.pdf CREDIT_INTEL_LIVE=1 \
 CREDIT_INTEL_TOKEN_CEILING=30000 CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 \
 CREDIT_INTEL_PRICE_INPUT_PER_MILLION=0.15 CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION=0.60 \
-CREDIT_INTEL_PAGES=274-277 CREDIT_INTEL_PROMPT=extraction_v2 \
+CREDIT_INTEL_PAGES=274-277 \
 uv run --locked pytest tests/live/test_live_tuning.py -q -s
 ```
 
@@ -98,14 +98,14 @@ R2, one live round (the pages are an example and must match the reference file):
 CREDIT_INTEL_PRIVATE_APPROVED=1 CREDIT_INTEL_DOCUMENT=private/R2_microsoft_2025.pdf CREDIT_INTEL_LIVE=1 \
 CREDIT_INTEL_TOKEN_CEILING=30000 CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 \
 CREDIT_INTEL_PRICE_INPUT_PER_MILLION=0.15 CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION=0.60 \
-CREDIT_INTEL_PAGES=36-38 CREDIT_INTEL_ASSERT_BASIS=consolidated CREDIT_INTEL_PROMPT=extraction_v2 \
+CREDIT_INTEL_PAGES=36-38 CREDIT_INTEL_ASSERT_BASIS=consolidated \
 uv run --locked pytest tests/live/test_live_tuning.py -q -s
 ```
 
 The gate check, with the same prompt and output limit exported:
 
 ```
-CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 CREDIT_INTEL_PROMPT=extraction_v2 \
+CREDIT_INTEL_MAX_OUTPUT_TOKENS=8192 \
 uv run --locked python -m credit_intel.evaluation.gate \
   --report private/R1_infosys_2024_25.pdf private/eval/R1_reference.json \
   --report private/R2_microsoft_2025.pdf private/eval/R2_reference.json

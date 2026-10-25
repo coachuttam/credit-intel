@@ -61,7 +61,7 @@ def test_a_completed_run_is_summarised_by_counts(pdf, tmp_path):
     assert summary["pages"] == 1 and summary["candidate_pages"] == [1] and summary["locator"] == "keywords"
     assert summary["fields"]["counts"] == {"extracted": 6, "not_found": 18, "conflicting": 0, "requires_review": 0}
     assert summary["fields"]["by_basis"] == {"consolidated": 6} and summary["fields"]["proposed"] == 6
-    assert summary["prompt_version"] == "extraction-v2" and summary["attempts"] == 1
+    assert summary["prompt_version"] == "extraction-v5" and summary["attempts"] == 1
     assert summary["llm_calls"] == 1 and summary["tokens_in"] > 0 and summary["tokens_out"] > 0
     assert Decimal(summary["cost_usd"]) > 0 and summary["sha256_prefix"] == file_sha256(pdf)[:12]
 
@@ -186,7 +186,7 @@ def test_the_dry_run_sizes_the_candidate_pages_and_the_gate(pdf, tmp_path):
     assert result["document_id"] == "R9" and result["set"] == "tuning" and result["pages"] == 1
     assert result["candidate_pages"] == [1] and result["candidate_chars_total"] == len(page_text(pdf))
     assert result["basis_gate"] == {"passes": True, "error_code": None, "detail": None}
-    assert result["prompt_version"] == "extraction-v2" and result["max_output_tokens"] == fx.LLM.max_output_tokens
+    assert result["prompt_version"] == "extraction-v5" and result["max_output_tokens"] == fx.LLM.max_output_tokens
 
 
 def test_the_dry_run_estimate_is_the_same_one_the_budget_uses(pdf, tmp_path):

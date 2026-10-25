@@ -101,7 +101,7 @@ def flow(tmp_path, replies, doc=None, loc=None, basis="consolidated", ceiling=1_
 def test_shipped_prompt_loads_with_its_version():
     prompt = load_prompt()
 
-    assert prompt.version == "extraction-v2"  # the default since 2026-10-20
+    assert prompt.version == "extraction-v5"  # the default since 2026-10-25 (v2 was the default from 2026-10-20)
     assert "{{" not in prompt.system
 
 
