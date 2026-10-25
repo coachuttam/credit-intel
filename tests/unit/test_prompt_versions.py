@@ -20,9 +20,10 @@ V5 = (PROMPT_DIR / "extraction_v5.md").read_text(encoding="utf-8").splitlines()
 V6 = (PROMPT_DIR / "extraction_v6.md").read_text(encoding="utf-8").splitlines()
 V7 = (PROMPT_DIR / "extraction_v7.md").read_text(encoding="utf-8").splitlines()
 V8 = (PROMPT_DIR / "extraction_v8.md").read_text(encoding="utf-8").splitlines()
+V9 = (PROMPT_DIR / "extraction_v9.md").read_text(encoding="utf-8").splitlines()
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7", "extraction_v8"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7", "extraction_v8", "extraction_v9"])
 def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     prompt = load_prompt(name)
 
@@ -30,7 +31,7 @@ def test_each_prompt_file_loads_with_the_version_its_name_says(name):
     assert "{{schema}}" not in prompt.system and "{{fields}}" not in prompt.system  # filled in from the code
 
 
-@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7", "extraction_v8"])
+@pytest.mark.parametrize("name", ["extraction_v1", "extraction_v2", "extraction_v3", "extraction_v4", "extraction_v5", "extraction_v6", "extraction_v7", "extraction_v8", "extraction_v9"])
 def test_each_prompt_lists_every_extractable_field_and_the_schema(name):
     system = load_prompt(name).system
 
@@ -267,3 +268,36 @@ def test_the_shared_field_descriptions_are_still_not_changed_by_v8():
     from credit_intel.extraction.prompt import FIELD_DESCRIPTIONS
 
     assert FIELD_DESCRIPTIONS["borrowings_non_current"] == "borrowings under the non-current liabilities heading"  # the note overrides it for v8 only
+
+
+
+# --- extraction_v9: a draft that maps debt captions to component fields and keeps the total field for a row labelled total ----------------
+
+
+def test_v9_is_a_draft_and_the_default_stays_version_five():
+    assert DEFAULT_PROMPT == "extraction_v5" and load_prompt("extraction_v9").version == "extraction-v9"
+
+
+def test_v9_differs_from_v8_only_in_its_version_line_and_the_borrowings_note():
+    changed = [(a, b) for a, b in zip(V8, V9, strict=True) if a != b]
+
+    assert len(V8) == len(V9) and len(changed) == 2
+    assert changed[0] == ("prompt-version: extraction-v8", "prompt-version: extraction-v9")
+    assert changed[1][0].startswith("Note on borrowings:") and changed[1][1].startswith("Note on borrowings:")
+
+
+def test_the_v9_note_maps_each_caption_to_its_field_and_limits_the_total_to_a_row_labelled_total():
+    note = next(line for line in V9 if line.startswith("Note on borrowings:"))
+
+    assert "long-term debt (or non-current borrowings) is borrowings_non_current" in note
+    assert "short-term debt, commercial paper or current borrowings is borrowings_current" in note
+    assert "is current_maturities_long_term_borrowings" in note
+    assert "never total_borrowings merely because it is the only debt row" in note
+    assert "whose own printed label says total" in note
+    assert "do not require one" in note and "Lease liabilities" in note and "Never add rows together yourself." in note
+
+
+def test_the_v9_note_holds_no_digits():
+    note = next(line for line in V9 if line.startswith("Note on borrowings:"))
+
+    assert not any(ch.isdigit() for ch in note)
