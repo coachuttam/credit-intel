@@ -237,11 +237,11 @@ def test_a_page_with_no_text_is_not_sent(tmp_path):
     assert caught.value.reason == "invalid_reply" and client.calls == []
 
 
-def test_without_a_key_nothing_is_sent_and_the_reason_is_auth(tmp_path):
+def test_without_a_key_nothing_is_sent_and_the_reason_is_no_key_not_auth(tmp_path):
     with pytest.raises(ClassifierError) as caught:
         JevClassifier(SETTINGS, {}, cache_dir=tmp_path / "jev").classify(1, TEXT)
 
-    assert caught.value.reason == "auth"
+    assert caught.value.reason == "no_key"  # a refused key is "auth"; no key at all is "no_key", so a log can tell them apart
 
 
 def test_a_failed_call_is_not_cached(tmp_path):

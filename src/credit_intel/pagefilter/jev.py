@@ -147,7 +147,7 @@ class JevClassifier:
             except (KeyError, ValueError, TypeError):
                 pass  # a damaged cache file is only a miss
         if not self.has_key:
-            raise ClassifierError("auth")
+            raise ClassifierError("no_key")
         started = self._clock()
         try:
             if self._client is None:

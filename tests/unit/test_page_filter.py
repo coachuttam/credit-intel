@@ -119,7 +119,7 @@ def test_a_page_dropped_for_its_type_is_not_a_fallback_even_if_the_basis_was_uns
 # --- errors never fail the run --------------------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("reason", ["timeout", "connection", "rate_limit", "auth", "bad_request", "server", "invalid_reply", "sdk_error", "error"])
+@pytest.mark.parametrize("reason", ["no_key", "timeout", "connection", "rate_limit", "auth", "bad_request", "server", "invalid_reply", "sdk_error", "error"])
 def test_a_classifier_error_keeps_the_page_with_the_reason_word(reason):
     result, outcome, _ = run({1: ClassifierError(reason), 2: label(), 3: label()})
 

@@ -53,10 +53,11 @@ class ClassifierError(Exception):
 
 
 FAILURE_REASONS = (
+    "no_key",  # no key in the environment: nothing was sent
     "timeout",
     "connection",
     "rate_limit",
-    "auth",
+    "auth",  # the service refused the key
     "bad_request",
     "server",
     "invalid_reply",
