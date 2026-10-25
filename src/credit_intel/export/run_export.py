@@ -19,6 +19,7 @@ from credit_intel.export.manifest import CodeVersion, build_manifest, render_man
 from credit_intel.export.results import build_results, render_data
 from credit_intel.export.writer import write_run
 from credit_intel.memo.render import render_memo
+from credit_intel.memo.trace import MemoCheckFailed, problems
 from credit_intel.models import StatementBasis
 from credit_intel.run import RunResult
 from credit_intel.states import EXPORTED, MEMO_GENERATED, Recorder
@@ -43,6 +44,10 @@ def export_run(
     try:
         data = build_results(result.extraction, result.metrics, result.rules, result.profile)
         memo = render_memo(data, identifier, timestamp(recorder.now()))
+        found = problems(memo, data)  # FR-010 criterion 5: the K.10 rules, on every memo, before anything is written
+        logger.info("stage=memo_checked run=%s problems=%d", identifier, len(found))  # a count, never the text
+        if found:
+            raise MemoCheckFailed(len(found))  # an internal error: a defect in the template or the data, recorded as failed in memo_generated
         recorder.enter(MEMO_GENERATED, {"memo_lines": memo.count("\n")})
         recorder.enter(EXPORTED, {"files": 3})
         manifest = build_manifest(recorder=recorder, llm=llm, requested_basis=requested_basis, version=version, packages=packages,

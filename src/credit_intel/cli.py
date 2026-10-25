@@ -33,6 +33,7 @@ from credit_intel.export.run_export import export_failure, export_run
 from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, ErrorCode, IngestionError, exit_code
 from credit_intel.llm.factory import build_provider
 from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
+from credit_intel.memo.trace import MemoCheckFailed
 from credit_intel.models import StatementBasis
 from credit_intel.run import run_pipeline
 from credit_intel.send_rule import NOTICE, SendRefusal, check_send
@@ -189,7 +190,9 @@ def main(
         logger.debug("internal error", exc_info=True)  # the trace is for DEBUG only (FR-011.4)
         _record_failure(call, err, error)
         identifier = run_id(call.recorder.events[0].at, call.sha256) if call.recorder.events and call.sha256 else "unknown"
-        print(f"Internal error. Run ID: {identifier}. Re-run, and report it if it persists.", file=err)
+        # A memo that failed its check before export (FR-010 criterion 5) is reported with the number of problems and never their text.
+        detail = f" The memo failed its traceability check ({error.count} {'problem' if error.count == 1 else 'problems'})." if isinstance(error, MemoCheckFailed) else ""
+        print(f"Internal error. Run ID: {identifier}.{detail} Re-run, and report it if it persists.", file=err)
         return EXIT_INTERNAL
     finally:
         package_logger.removeHandler(handler)
