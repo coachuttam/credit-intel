@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from credit_intel.config import DeclarationSettings, LocatorSettings
-from credit_intel.extraction.declarations import check_currency, check_scale
+from credit_intel.extraction.declarations import check_currency, check_scale, find_currencies, find_scales
 from credit_intel.extraction.periods import (
     Method,
     PeriodEvidence,
@@ -53,6 +53,15 @@ Name = DocumentAttributeName
 
 
 @dataclass(frozen=True)
+class PageRepair:
+    """A currency or scale declaration verified on another page than the one the model cited (PRD v0.4.36)."""
+
+    attribute: str
+    cited_page: int
+    page_used: int
+
+
+@dataclass(frozen=True)
 class VerifiedAttributes:
     entity_name: DocumentAttribute
     current_period_end: DocumentAttribute
@@ -62,6 +71,8 @@ class VerifiedAttributes:
     scale: DocumentAttribute
     # How each validated period-end was validated (raw text, method, derivation).
     period_evidence: Mapping[PeriodRole, PeriodEvidence] = field(default_factory=dict)
+    # Each declaration verified on a page other than the cited one: the cited page and the page used (recorded in the manifest only).
+    page_repairs: tuple[PageRepair, ...] = ()
 
     @property
     def all(self) -> tuple[DocumentAttribute, ...]:
@@ -253,6 +264,37 @@ def _derived_comparative(
     return None
 
 
+_REPAIRABLE = (Name.REPORTING_CURRENCY, Name.SCALE)
+
+
+def _declared_conflict(name: Name, pages: Mapping[int, str], settings: DeclarationSettings | None) -> bool:
+    """Whether the candidate pages declare more than one currency (or more than one scale) between them (PRD v0.4.36)."""
+    if name is Name.REPORTING_CURRENCY:
+        return len(frozenset().union(*(find_currencies(text, settings) for text in pages.values()))) > 1
+    return len(frozenset().union(*(find_scales(text, settings) for text in pages.values()))) > 1
+
+
+def _repaired(
+    proposal: ProposedAttribute, pages: Mapping[int, str], settings: DeclarationSettings | None
+) -> tuple[ProposedAttribute, PageRepair | None, bool]:
+    """The proposal with the page its quote is on, if the model cited another page (PRD v0.4.36).
+
+    Only for the currency and scale declarations. If the quote is on the cited page, or on no candidate page, nothing changes. If
+    the quote is on other candidate pages the lowest-numbered one is used, unless the candidate pages declare conflicting currencies
+    (or scales): then nothing is repaired and the third value is ``True``.
+    """
+    if proposal.attribute not in _REPAIRABLE:
+        return proposal, None, False
+    quote = normalise_for_match(proposal.evidence_quote)
+    holding = sorted(number for number, text in pages.items() if quote and quote in normalise_for_match(text))
+    if not holding or proposal.page_number in holding:
+        return proposal, None, False
+    if _declared_conflict(proposal.attribute, pages, settings):
+        return proposal, None, True
+    used = holding[0]
+    return proposal.model_copy(update={"page_number": used}), PageRepair(proposal.attribute.value, proposal.page_number, used), False
+
+
 def verify_attributes(
     proposed: Sequence[ProposedAttribute],
     pages: Mapping[int, str],
@@ -269,6 +311,18 @@ def verify_attributes(
     (no raw text, page or quote; what the model proposed is neither needed nor used). A ``statement_basis``
     verified from a title block is unchanged and has ``basis_evidence = title``.
     """
+
+    repairs: list[PageRepair] = []
+    blocked: set[int] = set()  # proposals whose declaration conflicts across the candidate pages: not repaired, and reviewed
+    repaired_proposals = []
+    for proposal in proposed:
+        fixed, repair, conflict = _repaired(proposal, pages, declaration_settings)
+        repaired_proposals.append(fixed)
+        if repair is not None and repair not in repairs:
+            repairs.append(repair)
+        if conflict:
+            blocked.add(id(fixed))
+    proposed = repaired_proposals
 
     def group(name: Name, role: PeriodRole | None = None) -> list[ProposedAttribute]:
         # Only a period-end has a role. Strict mode makes the role nullable for every
@@ -293,8 +347,13 @@ def verify_attributes(
             status=Status.EXTRACTED,
             basis_evidence=BasisEvidence.ANALYST_ASSERTION,
         )
-    currency = simple(Name.REPORTING_CURRENCY, lambda p: _currency_reason(p, pages, declaration_settings))
-    scale = simple(Name.SCALE, lambda p: _scale_reason(p, pages, declaration_settings))
+    currency = simple(
+        Name.REPORTING_CURRENCY,
+        lambda p: StatusReason.CURRENCY_NOT_VERIFIED if id(p) in blocked else _currency_reason(p, pages, declaration_settings),
+    )
+    scale = simple(
+        Name.SCALE, lambda p: StatusReason.SCALE_AMBIGUOUS if id(p) in blocked else _scale_reason(p, pages, declaration_settings)
+    )
 
     # Periods: the current one first, so a comparative year can be derived from it.
     current_props = group(Name.PERIOD_END, PeriodRole.CURRENT)
@@ -350,7 +409,7 @@ def verify_attributes(
         evidence[PeriodRole.CURRENT] = current_evidence
     if comparative.status is Status.EXTRACTED and comparative_evidence is not None:
         evidence[PeriodRole.COMPARATIVE] = comparative_evidence
-    return VerifiedAttributes(entity, current, comparative, basis, currency, scale, evidence)
+    return VerifiedAttributes(entity, current, comparative, basis, currency, scale, evidence, tuple(repairs))
 
 
 def blocking_reasons(attributes: VerifiedAttributes, period_role: PeriodRole) -> tuple[StatusReason, ...]:

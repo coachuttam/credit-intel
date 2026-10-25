@@ -141,6 +141,9 @@ def build_manifest(
                    "llm_calls": stats.llm_calls, "retries": stats.llm_retries} if stats else None,  # fmt: skip
         "estimated_cost_usd": to_jsonable(stats.estimated_cost) if stats else None,
     }
+    repairs = extraction.attributes.page_repairs if extraction is not None else ()
+    if repairs:  # PRD v0.4.36: each currency or scale declaration verified on another page than the one the model cited
+        manifest["attribute_page_repairs"] = [{"attribute": r.attribute, "cited_page": r.cited_page, "page_used": r.page_used} for r in repairs]
     page_filter = getattr(extraction, "page_filter", None)
     if page_filter is not None:  # only when the optional page classifier was switched on (PRD v0.4.31): per-page labels, latency, cost
         manifest["page_filter"] = page_filter.to_manifest()

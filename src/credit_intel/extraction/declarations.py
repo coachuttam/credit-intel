@@ -147,6 +147,12 @@ def _has_currency(code: str, text: str, settings: DeclarationSettings) -> bool:
     return False
 
 
+def find_currencies(text: str, settings: DeclarationSettings | None = None) -> frozenset[str]:
+    """The distinct currency codes ``text`` declares by an ISO code, or by a symbol or name configured for one (PRD v0.4.36)."""
+    settings = settings or DeclarationSettings()
+    return frozenset(code for code in settings.currency_tokens if _has_currency(code, text, settings))
+
+
 def check_currency(
     code: str,
     cited_page_text: str,
