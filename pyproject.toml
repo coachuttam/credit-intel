@@ -5,7 +5,9 @@ requires-python = ">=3.12"
 dependencies = [
     "openai>=3.35.1",
     "pdfplumber>=0.11.10",
+    "pillow>=12.3.0",
     "pydantic>=2.14.1",
+    "pypdfium2>=5.14.0",
     "typesafe-sdk==0.7.5",
 ]
 
@@ -29,4 +31,5 @@ module-name = "credit_intel"
 [tool.pytest.ini_options]
 markers = [
     "live: calls the real OpenAI API; skipped unless CREDIT_INTEL_LIVE=1 and OPENAI_API_KEY are set",
+    "real_ocr: runs the real Tesseract engine; skipped unless it is installed and CREDIT_INTEL_REAL_OCR=1 is set",
 ]

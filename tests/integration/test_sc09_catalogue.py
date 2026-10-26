@@ -179,7 +179,10 @@ def scanned_pdf(tmp_path):
 
 
 def ocr_unavailable(tmp_path):
-    return invoke(tmp_path, scanned_pdf(tmp_path), "--ocr", "--pages", "1", ocr=True)  # no engine is installed: the default engine says so
+    from credit_intel.ingestion.tesseract_ocr import TesseractExtractor
+
+    absent = lambda: TesseractExtractor(command="no-such-ocr-engine-installed")  # noqa: E731  (whatever is installed on this machine)
+    return invoke(tmp_path, scanned_pdf(tmp_path), "--ocr", "--pages", "1", ocr=True, ocr_factory=absent)
 
 
 def ocr_failed(tmp_path):

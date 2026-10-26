@@ -310,8 +310,11 @@ def test_a_read_longer_than_the_time_limit_is_ocr_failed(tmp_path):
     failed(run(tmp_path, scan_pdf(tmp_path / "scan.pdf"), "--ocr", "--pages", "1", engine=engine, settings=ocr_table(timeout_seconds=30)), ErrorCode.OCR_FAILED)
 
 
-def test_with_no_engine_installed_the_default_engine_gives_ocr_unavailable(tmp_path):
-    failed(run(tmp_path, scan_pdf(tmp_path / "scan.pdf"), "--ocr", "--pages", "1"), ErrorCode.OCR_UNAVAILABLE)
+def test_with_no_engine_installed_the_engine_gives_ocr_unavailable(tmp_path):
+    from credit_intel.ingestion.tesseract_ocr import TesseractExtractor
+
+    absent = TesseractExtractor(command="no-such-ocr-engine-installed")  # whatever is installed on this machine
+    failed(run(tmp_path, scan_pdf(tmp_path / "scan.pdf"), "--ocr", "--pages", "1", engine=absent), ErrorCode.OCR_UNAVAILABLE)
 
 
 def test_an_engine_that_reads_nothing_is_no_text_layer(tmp_path):

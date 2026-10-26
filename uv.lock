@@ -9,7 +9,9 @@ source = { editable = "." }
 dependencies = [
     { name = "openai" },
     { name = "pdfplumber" },
+    { name = "pillow" },
     { name = "pydantic" },
+    { name = "pypdfium2" },
     { name = "typesafe-sdk" },
 ]
 
@@ -24,7 +26,9 @@ dev = [
 requires-dist = [
     { name = "openai", specifier = ">=3.35.1" },
     { name = "pdfplumber", specifier = ">=0.11.10" },
+    { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2.14.1" },
+    { name = "pypdfium2", specifier = ">=5.14.0" },
     { name = "typesafe-sdk", specifier = "==0.7.5" },
 ]
 
