@@ -12,7 +12,7 @@ import re
 from datetime import date
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -23,6 +23,8 @@ from pydantic import (
     StrictInt,
     StrictStr,
     field_validator,
+    SerializerFunctionWrapHandler,
+    model_serializer,
     model_validator,
 )
 
@@ -97,6 +99,14 @@ class StatusReason(StrEnum):
     MISSING_INPUT = "missing_input"
     CURRENCY_MISMATCH = "currency_mismatch"
     BORROWINGS_CLASSIFICATION_UNRESOLVED = "borrowings_classification_unresolved"
+    OCR_UNCONFIRMED = "ocr_unconfirmed"  # v0.4.44: the evidence is an OCR reading; always the last reason (FR-005 criterion 11)
+
+
+class EvidenceSource(StrEnum):
+    """Where the page text a field rests on came from (FR-005 criterion 11, v0.4.44)."""
+
+    TEXT_LAYER = "text_layer"
+    OCR = "ocr"
 
 
 class ValueInterpretation(StrEnum):
@@ -217,6 +227,28 @@ class Validation(_Model):
         )
 
 
+class OcrEvidence(_Model):
+    """What an OCR reading of a field's page was, and how sure the engine said it was (FR-005 criterion 11).
+
+    The confidences are the engine's own figures, 0 to 100, to one decimal place; they are not a probability that the
+    reading is right. ``min_word_confidence`` and ``mean_word_confidence`` are over the words of the field's quote and are
+    ``None`` when no word of the quote could be found in the page's OCR words; ``page_mean_confidence`` is over the page
+    and is ``None`` for a page with no words.
+    """
+
+    engine: StrictStr = Field(min_length=1)
+    engine_version: StrictStr = Field(min_length=1)
+    dpi: StrictInt = Field(ge=1)
+    min_word_confidence: Decimal | None = None
+    mean_word_confidence: Decimal | None = None
+    page_mean_confidence: Decimal | None = None
+
+    @field_validator("min_word_confidence", "mean_word_confidence", "page_mean_confidence", mode="before")
+    @classmethod
+    def _no_float(cls, value: object) -> object:
+        return _reject_float(value)
+
+
 class Derivation(_Model):
     method_id: StrictStr = Field(min_length=1)
     formula: StrictStr = Field(min_length=1)
@@ -260,6 +292,8 @@ class ExtractedField(_Model):
     basis_evidence: BasisEvidence = BasisEvidence.TITLE
     status: Status
     status_reason: StatusReason | None = None
+    evidence_source: EvidenceSource = EvidenceSource.TEXT_LAYER
+    ocr_evidence: OcrEvidence | None = None
     value: Decimal | None = None
     currency: StrictStr | None = None
     raw_value: StrictStr | None = Field(default=None, min_length=1)
@@ -274,6 +308,14 @@ class ExtractedField(_Model):
     derivation: Derivation | None = None
     candidates: tuple[Candidate, ...] = ()
     corroborating_evidence: tuple[Evidence, ...] = ()
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_ocr_evidence(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        """``ocr_evidence`` is written only for a field read by OCR, so a run without OCR keeps its earlier files."""
+        data = handler(self)
+        if data.get("ocr_evidence") is None:
+            data.pop("ocr_evidence", None)
+        return data
 
     @field_validator("value", mode="before")
     @classmethod
@@ -322,6 +364,16 @@ class ExtractedField(_Model):
                 raise ValueError(f"a derived field has no {', '.join(present)}")
             if self.derivation is None:
                 raise ValueError("a derived field requires a derivation")
+
+        if self.evidence_source is EvidenceSource.OCR:
+            if self.origin is not Origin.SOURCE or self.status is Status.NOT_FOUND:
+                raise ValueError("only a found source field has an OCR evidence source")
+            if self.status is Status.EXTRACTED:
+                raise ValueError("a field read by OCR is never extracted (FR-005 criterion 11)")
+            if self.ocr_evidence is None:
+                raise ValueError("a field read by OCR records its ocr_evidence")
+        elif self.ocr_evidence is not None:
+            raise ValueError("only a field read by OCR has an ocr_evidence")
 
         if self.status is Status.EXTRACTED:
             if self.status_reason is not None:

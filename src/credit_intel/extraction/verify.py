@@ -36,6 +36,7 @@ from credit_intel.extraction.attributes import VerifiedAttributes, blocking_reas
 from credit_intel.extraction.bases import field_basis
 from credit_intel.extraction.columns import PageStructure, analyse_structure
 from credit_intel.extraction.declarations import check_currency, check_scale, check_sign
+from credit_intel.extraction.ocr_evidence import OcrReading, ocr_evidence_for
 from credit_intel.extraction.labels import LabelCheck, check_label, expense_table_heading, row_label
 from credit_intel.extraction.normalise import apply_scale, parse_value
 from credit_intel.extraction.periods import page_period_resolver
@@ -45,6 +46,7 @@ from credit_intel.ingestion.locator import title_lines
 from credit_intel.ingestion.models import LocatorResult, PageText, PageWords
 from credit_intel.models import (
     BasisEvidence,
+    EvidenceSource,
     ExtractedField,
     ExtractionResponse,
     FieldName,
@@ -74,6 +76,7 @@ _ORDER = (
     R.SCALE_NOT_VERIFIED,
     R.SCALE_AMBIGUOUS,
     R.CURRENCY_NOT_VERIFIED,
+    R.OCR_UNCONFIRMED,  # last: a field that fails an earlier check keeps that reason (FR-005 criterion 11)
 )
 
 
@@ -92,6 +95,7 @@ class VerificationContext:
     column_settings: ColumnSettings | None = None
     locator_settings: LocatorSettings | None = None
     assertion: BasisAssertion | None = None  # the analyst's assertion of the basis (H.4.6, v0.4.24)
+    ocr: OcrReading | None = None  # the pages whose text is an OCR reading; a field cited on one is OCR evidence (v0.4.44)
 
 
 @dataclass(frozen=True)
@@ -310,6 +314,11 @@ class FieldVerifier:
         if basis_info[0] is StatementBasis.UNKNOWN:
             failing.add(R.BASIS_UNKNOWN)
 
+        # FR-005 criterion 11: a page read by OCR gives evidence that is never extracted
+        is_ocr = ctx.ocr is not None and proposed.page_number in ctx.ocr.pages
+        if is_ocr:
+            failing.add(R.OCR_UNCONFIRMED)
+
         # Link the quote to a figure line, then FR-005.10 on that line
         structure = self._structure(proposed.page_number)
         line = None
@@ -416,6 +425,10 @@ class FieldVerifier:
             evidence_quote=proposed.evidence_quote,
             line_item_label=proposed.line_item_label,
             validation=validation,
+            evidence_source=EvidenceSource.OCR if is_ocr else EvidenceSource.TEXT_LAYER,
+            ocr_evidence=ocr_evidence_for(ctx.ocr, proposed.page_number, proposed.evidence_quote, line.words if line is not None else None)
+            if is_ocr and ctx.ocr is not None
+            else None,
         )
         return FieldVerification(proposed, record, reasons)
 

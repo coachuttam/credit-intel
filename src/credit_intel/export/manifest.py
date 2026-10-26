@@ -150,6 +150,9 @@ def build_manifest(
     scans = getattr(extraction, "field_scans", ())
     if scans:  # PRD v0.4.39: a borrowings component row the code read from the page because the model proposed none
         manifest["field_scans"] = [{"field": s.field, "page": s.page, "period": s.period, "label": s.label} for s in scans]
+    ocr = getattr(extraction, "ocr", None)
+    if ocr is not None:  # PRD v0.4.44: only when OCR was used (engine, DPI, language, and per page the source of its text)
+        manifest["ocr"] = ocr.to_manifest()
     repairs = extraction.attributes.page_repairs if extraction is not None else ()
     if repairs:  # PRD v0.4.36: each currency or scale declaration verified on another page than the one the model cited
         manifest["attribute_page_repairs"] = [{"attribute": r.attribute, "cited_page": r.cited_page, "page_used": r.page_used} for r in repairs]

@@ -122,7 +122,7 @@ def test_status_reasons_are_the_h1_list():
         "evidence_not_verified", "value_not_in_evidence", "sign_mismatch", "period_not_verified",
         "scale_not_verified", "scale_ambiguous", "currency_not_verified", "label_not_recognised",
         "period_mismatch", "basis_unknown", "implausible_value", "missing_input",
-        "currency_mismatch", "borrowings_classification_unresolved",
+        "currency_mismatch", "borrowings_classification_unresolved", "ocr_unconfirmed",
     }  # fmt: skip
 
 

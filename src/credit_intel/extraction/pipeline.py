@@ -34,6 +34,7 @@ from credit_intel.extraction.assertion import BasisAssertion, apply_assertion
 from credit_intel.extraction.attributes import VerifiedAttributes, verify_attributes
 from credit_intel.extraction.extract import ExtractionResult, extract_fields
 from credit_intel.extraction.field_set import FieldSet, build_field_set
+from credit_intel.extraction.ocr_evidence import OcrRunRecord
 from credit_intel.extraction.prompt import Prompt, load_prompt
 from credit_intel.extraction.verify import FieldRefiling, FieldScan, FieldVerification, FieldVerifier, VerificationContext
 from credit_intel.extraction.bases import drop_unknown_basis_pages
@@ -100,6 +101,8 @@ class ExtractionRun:
     field_refilings: tuple[FieldRefiling, ...] = ()
     # A borrowings component row the model did not propose, proposed by the code from a balance-sheet page (PRD v0.4.39); empty if none.
     field_scans: tuple[FieldScan, ...] = ()
+    # What OCR read and from which engine (PRD v0.4.44); ``None`` when OCR was not used, so the manifest has no ``ocr`` block.
+    ocr: OcrRunRecord | None = None
 
 
 def run_extraction(
