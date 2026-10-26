@@ -35,7 +35,8 @@ OCR_SCOPE = (
     "A figure read by OCR is never accepted as extracted, is not used in any ratio or risk indicator, and must be checked against the page image. "
     "OCR reads English only, and its confidence is the engine's own figure, not a measure of correctness. "
     "Skewed or rotated pages are not corrected, so they may be read wrongly or fail the period column check, and a rotated page may not be readable at all. "
-    "OCR has not been tuned or measured on real scanned reports."
+    "The period of an OCR page is often not verified, because the engine often does not read a full period-end date; the fields then stay under review for that reason too. "
+    "OCR has been tried on a few real scanned pages and has not been measured on real scanned reports."
 )
 REVIEW = (
     "**This memo is a draft. A qualified human must review it, verify every figure against the cited source pages, and make any credit "

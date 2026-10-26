@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Status | **Draft. Not applied.** `docs/PRD.md` is unchanged (0.4.46). Needs the owner's choice of option and a version bump. |
+| Status | **Declined on 2026-10-27: option (a), no change** (the owner: an OCR field is never extracted whatever the period check says, so this would only relabel the review reason; (b) is not worth a new flag and setting; (c) touches text-layer behaviour). Not applied; `docs/PRD.md` stays at 0.4.46. Kept as the record, with the cause analysis in section 1. |
 | Drafted | 2026-10-27 |
 | Source | The OCR step 4 tuning run on S1 and S2 and its re-run on the v0.4.46 rule (`PROGRESS.md`, `671dded`, `457888d`), and the owner's choice of follow-up (b). |
 | Kind | A change to FR-005.9 and FR-005.7 for pages read by OCR, plus one new command-line option under one of the options below. |
