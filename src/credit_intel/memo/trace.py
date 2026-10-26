@@ -4,6 +4,8 @@
 The checks, applied to every label, ID and value in the memo against the ``results.json`` data it was made from:
 
 * every origin label is one of the five forms, and every unescaped bracket is a label;
+* ``[OCR p.N, confidence c]`` (PRD v0.4.44) sits only with a field read by OCR on page N, with that field's mean confidence (``n/a`` when it has
+  none); a field read by OCR is never given ``[SOURCE: p.N]``; a memo discloses OCR (the section 2 line) exactly when the results record it;
 * ``[CALCULATED: x]`` names a metric, a derived field, a comparison or one of ``document``, ``extraction``,
   ``provisional_notice``; ``[RULE: x]`` names an indicator; ``[SOURCE: p.N]`` names a page that the fields it sits
   with were read on (in section 1 and the header, the page of the attribute whose ID is on the line, or of the entity name for the
@@ -34,7 +36,7 @@ CODE = re.compile(r"`([^`]*)`")
 TOP_LEVEL = {"document", "extraction", "provisional_notice"}
 ASSERTION_MARKERS = ("asserted by the analyst", "analyst assertion of the basis")
 ASSERTED_INPUTS = "These figures rest on a statement basis that was asserted by the analyst, not established by the document."
-FORMS = [re.compile(p) for p in (r"SOURCE: p\.\d+", r"CALCULATED: [A-Za-z0-9_.\-]+", r"RULE: [A-Za-z0-9_.\-]+", r"ANALYST-PROVIDED", r"UNVERIFIED")]
+FORMS = [re.compile(p) for p in (r"SOURCE: p\.\d+", r"CALCULATED: [A-Za-z0-9_.\-]+", r"RULE: [A-Za-z0-9_.\-]+", r"ANALYST-PROVIDED", r"UNVERIFIED", r"OCR p\.\d+, confidence (?:\d+\.\d|n/a)")]
 
 
 def split_cells(line: str) -> list[str]:
@@ -79,6 +81,13 @@ def problems(memo: str, results: dict) -> list[str]:
     standalone = sum(1 for line in lines if line == f"{ASSERTED_INPUTS} [ANALYST-PROVIDED]")  # whole lines: a profile note that quotes it is not one
     if standalone != (2 if rests else 0):
         found.append(f"the sentence about figures resting on an asserted basis appears {standalone} times, expected {2 if rests else 0}")
+
+    ocr_used = results["extraction"].get("ocr") is not None
+    ocr_fields = {i for i, r in fields.items() if r.get("evidence_source") == "ocr"}
+    if ocr_fields and not ocr_used:
+        found.append("a field is marked as read by OCR but the results record no use of OCR")
+    if ("- **Text read by OCR:**" in memo) != ocr_used:
+        found.append("the memo's statement that OCR was used does not agree with the results")
 
     section, current_field, in_table, table_width = 0, None, False, None
     for number, line in enumerate(lines, 1):
@@ -146,9 +155,23 @@ def problems(memo: str, results: dict) -> list[str]:
                     ok = any(a["page_number"] == page for a in named)
                 else:
                     ids = line_fields or [current_field]
+                    if any(i in ocr_fields for i in ids):
+                        found.append(f"{where}: [{label}] is given to a field read by OCR, which is labelled with its OCR reading")
                     ok = any(page in (_pages_of(fields[i]) | _pages_of(all_source.get(i, fields[i]))) for i in ids if i in fields)
                 if not ok:
                     found.append(f"{where}: [{label}] is not a page the field or attribute beside it was read on")
+            elif label.startswith("OCR p."):
+                page, confidence = re.fullmatch(r"OCR p\.(\d+), confidence (.+)", label).groups()
+                ids = line_fields or [current_field]
+                ok = any(
+                    i in ocr_fields
+                    and fields[i]["page_number"] == int(page)
+                    and (fields[i]["ocr_evidence"]["mean_word_confidence"] or "n/a") == confidence
+                    for i in ids
+                    if i in fields
+                )
+                if not ok:
+                    found.append(f"{where}: [{label}] is not the page and confidence of the field read by OCR beside it")
             elif label == "ANALYST-PROVIDED" and not any(esc(v) in text for v in profile.values()):
                 if not (assertion is not None and any(marker in text for marker in ASSERTION_MARKERS)):
                     found.append(f"{where}: [ANALYST-PROVIDED] beside text the profile does not hold and no assertion records")

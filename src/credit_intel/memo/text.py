@@ -55,6 +55,11 @@ def rule(identifier: str) -> str:
     return f"[RULE: {identifier}]"
 
 
+def ocr_label(page: int, confidence: str | None) -> str:
+    """``[OCR p.N, confidence 82.2]``: a value or quote read by OCR, never ``[SOURCE: p.N]`` (PRD v0.4.44). ``n/a`` when no word of the quote was found."""
+    return f"[OCR p.{page}, confidence {confidence if confidence is not None else 'n/a'}]"
+
+
 ANALYST_LABEL = f"[{ANALYST}]"
 UNVERIFIED_LABEL = f"[{UNVERIFIED}]"
 

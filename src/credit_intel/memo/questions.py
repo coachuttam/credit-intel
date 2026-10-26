@@ -54,7 +54,13 @@ def _conflicting(record: dict[str, Any]) -> str:
     return f"{_subject(record)} has conflicting values on the pages reviewed ({seen}). Which figure is correct? {UNVERIFIED_LABEL}"
 
 
+OCR_QUESTION = "Check this value against the page image."
+
+
 def _review(record: dict[str, Any]) -> str:
+    if record.get("evidence_source") == "ocr":
+        reason = f" ({esc(words(record['status_reason']))})" if record["status_reason"] else ""
+        return f"{_subject(record)} was read by OCR as {esc(record['raw_value'])} on page {record['page_number']} and could not be verified{reason}. {OCR_QUESTION} {UNVERIFIED_LABEL}"
     reason = f" ({esc(words(record['status_reason']))})" if record["status_reason"] else ""
     found = f" as {esc(record['raw_value'])} on page {record['page_number']}" if record["evidence_quote"] is not None else ""
     return f"{_subject(record)} was read{found} but could not be verified{reason}. Confirm the figure from the audited statements. {UNVERIFIED_LABEL}"

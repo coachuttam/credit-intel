@@ -121,6 +121,9 @@ def build_results(extraction: Any, metrics: MetricSet, rules: RuleSet, profile: 
         "provisional_notice": rules.provisional_notice,
         "analyst_provided": {} if profile is None else {key: value for key, value in profile.items()},
     }
+    ocr = getattr(extraction, "ocr", None)
+    if ocr is not None:  # only when OCR was used (PRD v0.4.44): the memo states which pages were read by OCR, and with what
+        results["extraction"]["ocr"] = ocr.to_manifest()
     if page_filter is not None:  # only when the optional page classifier was switched on (PRD v0.4.31); a run without it is unchanged
         results["extraction"]["page_filter"] = page_filter.to_results()
     return results

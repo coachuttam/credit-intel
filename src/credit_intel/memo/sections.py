@@ -11,7 +11,7 @@ from typing import Any
 
 from credit_intel.memo.rule_text import condition_text
 from credit_intel.memo.text import (
-    ANALYST_LABEL, DASH, UNVERIFIED_LABEL, calculated, code, esc, esc_start, grouped, page_phrase, rounded, rule, source, table,
+    ANALYST_LABEL, DASH, UNVERIFIED_LABEL, calculated, code, esc, esc_start, grouped, ocr_label, page_phrase, rounded, rule, source, table,
 )  # fmt: skip
 
 DRAFT_STATEMENT = "DRAFT — generated for human review. Not a credit decision. Verify all figures against the cited sources."
@@ -27,6 +27,23 @@ LEGEND = [
     ("`[ANALYST-PROVIDED]`", "Supplied in the borrower profile input; not verified against the document."),
     ("`[UNVERIFIED]`", "Could not be traced to evidence."),
 ]  # fmt: skip (fixed text, already Markdown)
+
+
+OCR_LEGEND = (
+    "`[OCR p.N, confidence …]`",
+    "A value or quote read by OCR from the image of page N. It is a machine reading, not a text layer, and is not verified. "
+    "The confidence is the OCR engine's own mean for the words of the quote, from 0 to 100.",
+)
+
+
+def ocr_block(results: dict[str, Any]) -> dict[str, Any] | None:
+    """What the run records of its use of OCR (PRD v0.4.44), or ``None`` when OCR was not used."""
+    return results["extraction"].get("ocr")
+
+
+def ocr_confidence_label(record: dict[str, Any]) -> str:
+    """The OCR label of a field read by OCR: its page and the mean confidence of its quote's words."""
+    return ocr_label(record["page_number"], record["ocr_evidence"]["mean_word_confidence"])
 
 
 def words(reason: object) -> str:
@@ -96,7 +113,7 @@ def header(results: dict[str, Any], run_id: str, generated_at: str) -> list[str]
         f"**Generated:** {code(generated_at)} (UTC)", "",
         f"> **{DRAFT_STATEMENT}**", "",
         *([assertion_sentence(results), ""] if basis_assertion(results) is not None else []),
-        "**Origin labels**", "", *table(["Label", "Meaning"], [list(row) for row in LEGEND]), "",
+        "**Origin labels**", "", *table(["Label", "Meaning"], [list(row) for row in [*LEGEND, *([OCR_LEGEND] if ocr_block(results) else [])]]), "",
     ]  # fmt: skip
     return lines
 
@@ -149,6 +166,14 @@ def section_2(results: dict[str, Any], generated_at: str) -> list[str]:
     if assertion is not None:
         applied = page_phrase(assertion["applied_pages"]) if assertion["applied_pages"] else "no page"
         lines.append(f"- **Basis asserted by the analyst:** {esc(assertion['basis'])} for {page_phrase(assertion['pages'])}; applied to {applied} {ANALYST_LABEL}")
+    ocr = ocr_block(results)
+    if ocr is not None:
+        read = [item["page"] for item in ocr["pages_ocr"]]
+        lines.append(
+            f"- **Text read by OCR:** {page_phrase(read)} (engine {esc(ocr['engine'])} {esc(ocr['engine_version'])}, {ocr['dpi']} dpi, language {esc(ocr['language'])}) {calculated('extraction')}"
+        )
+        if ocr["pages_text_layer"]:
+            lines.append(f"- **Text read from the text layer:** {page_phrase(ocr['pages_text_layer'])} {calculated('extraction')}")
     lines.append(f"- **Extraction date:** {code(generated_at)} (UTC) {calculated('document')}")
     return [*lines, ""]
 
@@ -410,7 +435,13 @@ def section_7(results: dict[str, Any]) -> list[str]:
             for candidate in record["candidates"]:
                 lines += ["", f"  Candidate {esc(candidate['raw_value'])}: " + _evidence_lines(candidate, UNVERIFIED_LABEL)[0], "", f"  > {esc_start(candidate['evidence_quote'])}"]
             if status == "requires_review" and record["evidence_quote"] is not None:
-                lines += ["", "  Evidence: " + _evidence_lines({k: record[k] for k in ("page_number", "page_label", "line_item_label", "raw_value", "evidence_quote")}, UNVERIFIED_LABEL)[0], "", f"  > {esc_start(record['evidence_quote'])}"]
+                is_ocr = record.get("evidence_source") == "ocr"
+                label = ocr_confidence_label(record) if is_ocr else UNVERIFIED_LABEL
+                lines += ["", "  Evidence: " + _evidence_lines({k: record[k] for k in ("page_number", "page_label", "line_item_label", "raw_value", "evidence_quote")}, label)[0], "", f"  > {esc_start(record['evidence_quote'])}"]
+                if is_ocr:
+                    shown = record["ocr_evidence"]
+                    figures = {k: shown[k] if shown[k] is not None else "not available" for k in ("min_word_confidence", "mean_word_confidence", "page_mean_confidence")}
+                    lines += ["", f"  OCR confidence, the engine's own figures and not a measure of correctness: lowest word {figures['min_word_confidence']}, mean of the quote's words {figures['mean_word_confidence']}, page mean {figures['page_mean_confidence']}. {calculated('extraction')}"]
             if record["candidates"] or (status == "requires_review" and record["evidence_quote"] is not None):
                 lines.append("")
         lines.append("")

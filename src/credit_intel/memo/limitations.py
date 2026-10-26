@@ -29,6 +29,11 @@ EXTRACTION = [
     "All arithmetic, the risk rules and the text of this memo are produced by fixed programs, not by the model. This memo contains no AI-generated commentary.",
     "Values supplied by the analyst in a profile are shown as given. They are not checked against the document and are not used in any calculation or rule.",
 ]
+OCR_SCOPE = (
+    "Pages without a text layer were read by OCR, an engine's reading of a page image, and the other pages from the text layer. "
+    "A figure read by OCR is never accepted as extracted, is not used in any ratio or risk indicator, and must be checked against the page image. "
+    "OCR reads English only, and its confidence is the engine's own figure, not a measure of correctness."
+)
 REVIEW = (
     "**This memo is a draft. A qualified human must review it, verify every figure against the cited source pages, and make any credit "
     "decision. It is not a credit decision, a rating or a score.**"
@@ -37,7 +42,8 @@ REVIEW = (
 
 def section_9(results: dict[str, Any]) -> list[str]:
     lines = ["## 9. Limitations and human-review requirements", "", REVIEW, "", "**Scope**", ""]
-    lines += [f"- {text}" for text in SCOPE]
+    scope = [OCR_SCOPE if results["extraction"].get("ocr") and text is SCOPE[0] else text for text in SCOPE]
+    lines += [f"- {text}" for text in scope]
     lines += ["", "**Ratios**", "", *(f"- {text}" for text in METRICS)]
     lines += ["", "**Risk indicators**", "",
               "- Indicators are prompts for human investigation. Severity says how urgently to look, not how creditworthy the borrower is.",
