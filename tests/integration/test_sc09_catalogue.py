@@ -16,6 +16,7 @@ from reportlab.pdfgen import canvas
 
 import pipeline_fixture as fx
 from credit_intel.cli import main
+from credit_intel.config import IngestionSettings
 from credit_intel.ingestion.errors import CATALOGUE, ErrorCode, IngestionError
 from credit_intel.llm.factory import build_provider
 from credit_intel.llm.provider import FakeProvider
@@ -63,7 +64,7 @@ def too_large(tmp_path):
     big = tmp_path / "big.pdf"
     with big.open("wb") as handle:
         handle.write(b"%PDF-1.4\n")
-        handle.truncate(26 * 1024 * 1024)
+        handle.truncate(IngestionSettings().max_file_bytes + 1)
     return invoke(tmp_path, big)
 
 
@@ -90,7 +91,7 @@ def encrypted(tmp_path):
 def too_many_pages(tmp_path):
     path = tmp_path / "long.pdf"
     pdf = canvas.Canvas(str(path), invariant=1)
-    for page in range(401):
+    for page in range(IngestionSettings().max_pages + 1):
         pdf.drawString(72, 700, f"Page {page}")
         pdf.showPage()
     pdf.save()

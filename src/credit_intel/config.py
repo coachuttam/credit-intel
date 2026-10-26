@@ -21,8 +21,8 @@ MEGABYTE = 1024 * 1024
 class IngestionSettings:
     """Limits applied when validating an input PDF (PRD FR-001)."""
 
-    max_file_bytes: int = 25 * MEGABYTE  # FR-001.2
-    max_pages: int = 400  # FR-001.3
+    max_file_bytes: int = 100 * MEGABYTE  # FR-001.2 (raised from 25 MB, owner decision 2026-10-26)
+    max_pages: int = 600  # FR-001.3 (raised from 400, owner decision 2026-10-26)
 
 
 INCOME_STATEMENT = "income_statement"

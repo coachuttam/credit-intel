@@ -139,7 +139,7 @@ These are the limits of Release 1. The memo's last section states them too, and 
 - All arithmetic, the risk rules and the text of this memo are produced by fixed programs, not by the model. This memo contains no AI-generated commentary.
 - Values supplied by the analyst in a profile are shown as given. They are not checked against the document and are not used in any calculation or rule.
 
-Other limits: the PDF may be at most 25 MB and 400 pages; at most 15 candidate pages are sent in one run; the line-item phrases are English; a page range (`--pages`) may be needed when the locator cannot place the statements. A field that is not found, conflicting or in need of review is listed in the memo and is never silently used in a calculation.
+Other limits: the PDF may be at most 100 MB and 600 pages; at most 15 candidate pages are sent in one run; the line-item phrases are English; a page range (`--pages`) may be needed when the locator cannot place the statements. A field that is not found, conflicting or in need of review is listed in the memo and is never silently used in a calculation.
 
 ## Provisional thresholds
 

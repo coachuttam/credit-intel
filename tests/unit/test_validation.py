@@ -128,8 +128,8 @@ def test_file_exactly_at_size_limit_is_accepted(make_pdf):
     assert info.size_bytes == size
 
 
-def test_default_size_limit_is_25_mb():
-    assert IngestionSettings().max_file_bytes == 25 * 1024 * 1024
+def test_default_size_limit_is_100_mb():
+    assert IngestionSettings().max_file_bytes == 100 * 1024 * 1024
 
 
 # --- E-INPUT-NOT-PDF -----------------------------------------------------
@@ -234,8 +234,8 @@ def test_pdf_exactly_at_page_limit_is_accepted(make_pdf):
     assert validate_pdf(path, settings=IngestionSettings(max_pages=3)).page_count == 3
 
 
-def test_default_page_limit_is_400():
-    assert IngestionSettings().max_pages == 400
+def test_default_page_limit_is_600():
+    assert IngestionSettings().max_pages == 600
 
 
 # --- Check order and extractor boundary ----------------------------------
