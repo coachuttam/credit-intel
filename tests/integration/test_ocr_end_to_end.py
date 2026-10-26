@@ -50,14 +50,14 @@ def clock():
     return lambda: next(ticks)
 
 
-PICTURE = ImageReader(Image.new("RGB", (20, 20), "white"))
+PICTURE = ImageReader(Image.new("RGB", (1700, 2200), "white"))  # 200 pixels per inch across a 612 pt page
 
 
-def scan_pdf(path, pages=1):
-    """A scanned document: every page is one full-page image and has no text."""
+def scan_pdf(path, pages=1, pixels=(1700, 2200)):
+    """A scanned document: every page is one full-page image and has no text. The default image is 200 pixels per inch."""
     pdf = canvas.Canvas(str(path), pagesize=(612, 792), invariant=1)
     for _ in range(pages):
-        pdf.drawImage(PICTURE, 0, 0, 612, 792)
+        pdf.drawImage(PICTURE if pixels == (1700, 2200) else ImageReader(Image.new("RGB", pixels, "white")), 0, 0, 612, 792)
         pdf.showPage()
     pdf.save()
     return path
@@ -111,9 +111,9 @@ def load(folder_text, name):
     return json.loads((Path(folder_text.strip()) / name).read_text(encoding="utf-8"))
 
 
-def scan_run(tmp_path, **kw):
+def scan_run(tmp_path, pixels=(1700, 2200), **kw):
     page, source = ocr_reading_of_balance_sheet(tmp_path)
-    scan = scan_pdf(tmp_path / "scan.pdf")
+    scan = scan_pdf(tmp_path / "scan.pdf", pixels=pixels)
     engine = FakeOcrExtractor({1: page}, page_count=1)
     code, out, err = run(tmp_path, scan, "--ocr", "--pages", "1", reply=fx.good_response(source), engine=engine, **kw)
     return code, out, err, engine
@@ -138,7 +138,22 @@ def test_a_scan_with_ocr_and_pages_gives_a_run_whose_fields_all_await_review(tmp
 def test_the_engine_is_asked_for_the_image_only_pages_with_the_dpi_and_time_limit_of_the_settings(tmp_path):
     _, _, _, engine = scan_run(tmp_path)
 
-    assert engine.calls == [((1,), 200, 60.0)]
+    assert engine.calls == [((1,), {1: 200}, 60.0)]
+
+
+def test_a_page_is_rendered_at_its_image_resolution_and_the_cap_only_limits_it(tmp_path):
+    low, high = tmp_path / "low", tmp_path / "high"
+    low.mkdir()
+    high.mkdir()
+    _, out, _, engine = scan_run(low, pixels=(850, 1100))  # 100 pixels per inch, under the cap of 200
+    assert engine.calls == [((1,), {1: 100}, 60.0)]
+    results, manifest = load(out, "results.json"), load(out, "manifest.json")
+    assert {f["ocr_evidence"]["dpi"] for f in results["fields"] if f["evidence_source"] == "ocr"} == {100}
+    assert manifest["ocr"]["dpi_cap"] == 200 and manifest["ocr"]["pages_ocr"][0]["dpi"] == 100
+
+    _, out, _, engine = scan_run(high, pixels=(3400, 4400))  # 400 pixels per inch, over the cap
+    assert engine.calls == [((1,), {1: 200}, 60.0)]
+    assert load(out, "manifest.json")["ocr"]["pages_ocr"][0]["dpi"] == 200
 
 
 def test_no_metric_or_indicator_uses_an_ocr_value(tmp_path):
@@ -157,8 +172,8 @@ def test_the_manifest_records_the_ocr_block_and_a_text_stage_count(tmp_path):
     manifest = load(out, "manifest.json")
 
     assert manifest["ocr"] == {
-        "engine": "fake-ocr", "engine_version": "0", "dpi": 200, "language": "eng",
-        "pages_ocr": [{"page": 1, "mean_word_confidence": "88.0"}], "pages_text_layer": [],
+        "engine": "fake-ocr", "engine_version": "0", "dpi_cap": 200, "language": "eng",
+        "pages_ocr": [{"page": 1, "dpi": 200, "mean_word_confidence": "88.0"}], "pages_text_layer": [],
     }  # fmt: skip
     assert next(e for e in manifest["stage_events"] if e["state"] == "text_extracted")["counts"]["ocr_pages"] == 1
     assert "Total" not in json.dumps(manifest["ocr"])
@@ -236,8 +251,8 @@ def test_in_a_mixed_document_only_the_scanned_page_is_read_by_ocr_and_the_text_l
     equity = next(f for f in results["fields"] if f["field_id"] == "total_equity.2025-03-31.consolidated")
 
     assert code == 0, err
-    assert engine.calls == [((2,), 200, 60.0)]
-    assert manifest["ocr"]["pages_ocr"] == [{"page": 2, "mean_word_confidence": "88.0"}] and manifest["ocr"]["pages_text_layer"] == [1]
+    assert engine.calls == [((2,), {2: 200}, 60.0)]
+    assert manifest["ocr"]["pages_ocr"] == [{"page": 2, "dpi": 200, "mean_word_confidence": "88.0"}] and manifest["ocr"]["pages_text_layer"] == [1]
     assert equity["status"] == "extracted" and equity["evidence_source"] == "text_layer" and equity["page_number"] == 1
     assert "ocr_evidence" not in equity and equity["corroborating_evidence"] == []  # an OCR reading never corroborates
     other = equity["validation"]["details"]["unverified_occurrences"]
@@ -390,7 +405,7 @@ def test_only_the_pages_of_the_range_are_read_by_ocr_though_other_pages_are_scan
 
     run(tmp_path, scan_pdf(tmp_path / "scan.pdf", pages=3), "--ocr", "--pages", "2", engine=engine)
 
-    assert engine.calls == [((2,), 200, 60.0)]
+    assert engine.calls == [((2,), {2: 200}, 60.0)]
 
 
 def test_without_ocr_the_engine_is_never_built(tmp_path):

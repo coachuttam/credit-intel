@@ -5,6 +5,7 @@ Like the fake LLM provider, it lets the whole OCR path be tested without an engi
 """
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -36,11 +37,11 @@ class FakeOcrExtractor:
         self._unavailable = unavailable
         self._fail = fail
         self._seconds_per_page = seconds_per_page
-        self.calls: list[tuple[tuple[int, ...], int, float]] = []
+        self.calls: list[tuple[tuple[int, ...], dict[int, int], float]] = []
 
-    def ocr_pages(self, path: Path, page_numbers: Sequence[int], *, dpi: int, timeout_seconds: float) -> list[OcrPage]:
+    def ocr_pages(self, path: Path, page_numbers: Sequence[int], *, dpi: Mapping[int, int], timeout_seconds: float) -> list[OcrPage]:
         requested = list(page_numbers)
-        self.calls.append((tuple(requested), dpi, timeout_seconds))
+        self.calls.append((tuple(requested), dict(dpi), timeout_seconds))
         if self._unavailable:
             raise IngestionError(ErrorCode.OCR_UNAVAILABLE)
         if not requested or len(set(requested)) != len(requested):
@@ -49,4 +50,6 @@ class FakeOcrExtractor:
             raise IngestionError(ErrorCode.PAGE_RANGE)
         if self._fail or self._seconds_per_page * len(requested) > timeout_seconds:
             raise IngestionError(ErrorCode.OCR_FAILED)
-        return [self._pages.get(number, OcrPage(number, 612.0, 792.0, "", ())) for number in sorted(requested)]
+        if any(number not in dpi for number in requested):
+            raise IngestionError(ErrorCode.PAGE_RANGE)
+        return [replace(self._pages.get(number, OcrPage(number, 612.0, 792.0, "", ())), dpi=dpi[number]) for number in sorted(requested)]

@@ -4,7 +4,7 @@ Pure decisions on page text and image coverage; no engine is called here. A page
 image covers enough of it; a page with a text layer is never read by OCR, and a blank page is not image-only.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from credit_intel.config import OcrSettings
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -48,3 +48,14 @@ def plan_ocr_pages(
     if not image_only and not any(text_of[n].has_text for n in chosen):
         raise IngestionError(ErrorCode.NO_TEXT_LAYER, detail="no used page has text or an image to read")
     return image_only
+
+
+def render_dpis(pages: Sequence[int], coverage: Sequence[PageImageCoverage], cap: int) -> Mapping[int, int]:
+    """The resolution to render each page at (FR-001A.6): its largest image's own pixels per inch, never above ``cap``.
+
+    A page whose image resolution is unknown is rendered at ``cap``. A page is never rendered above its image's resolution
+    and there is no lower bound.
+    """
+    native = {item.page_number: item.native_dpi for item in coverage}
+    return {n: cap if native.get(n) is None else min(native[n], cap) for n in pages}  # type: ignore[type-var]
+

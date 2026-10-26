@@ -104,7 +104,7 @@ def scan(tmp_path, pages=1):
 
 
 def read(engine, path, numbers=(1,), dpi=200, timeout=30.0):
-    return engine.ocr_pages(path, list(numbers), dpi=dpi, timeout_seconds=timeout)
+    return engine.ocr_pages(path, list(numbers), dpi={n: dpi for n in numbers}, timeout_seconds=timeout)
 
 
 # --- availability ---------------------------------------------------------------------------------------------
@@ -383,7 +383,7 @@ def test_the_real_engine_reads_a_rendered_line_of_text(tmp_path):
     path = tmp_path / "line.pdf"
     image.save(path, "PDF", resolution=200.0)
 
-    (page,) = TesseractExtractor().ocr_pages(path, [1], dpi=300, timeout_seconds=120.0)
+    (page,) = TesseractExtractor().ocr_pages(path, [1], dpi={1: 300}, timeout_seconds=120.0)
 
     assert "assets" in page.text.lower() and page.words and page.mean_confidence is not None
 
@@ -415,7 +415,7 @@ def test_the_real_engine_keeps_the_label_and_figures_of_each_table_row_on_one_li
     scan = tmp_path / "scan.pdf"
     pdfium.PdfDocument(str(source))[0].render(scale=300 / 72).to_pil().convert("RGB").save(scan, "PDF", resolution=300.0)
 
-    (page,) = TesseractExtractor().ocr_pages(scan, [1], dpi=300, timeout_seconds=120.0)
+    (page,) = TesseractExtractor().ocr_pages(scan, [1], dpi={1: 300}, timeout_seconds=120.0)
 
     whole = [line for line in page.text.split("\n") if sum(ch.isdigit() for ch in line) >= 8 and any(label in line for label in labels)]
     assert len(whole) == len(rows)  # with Tesseract's default mode the labels come out apart from their figures

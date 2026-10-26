@@ -51,6 +51,8 @@ class PageImageCoverage:
 
     page_number: int  # 1-based physical page number
     area_share: float
+    # Pixels per inch of the page's largest image across its displayed width, or None if it has no image or none can be read.
+    native_dpi: int | None = None
 
 
 @dataclass(frozen=True)
@@ -163,6 +165,7 @@ class OcrPage:
     height: float
     text: str
     words: tuple[OcrWord, ...]
+    dpi: int | None = None  # the resolution the engine rendered the page at (FR-001A.6); None for a page not made by an engine
 
     @property
     def mean_confidence(self) -> float | None:

@@ -67,7 +67,7 @@ def fake(**kwargs):
 
 
 def read(engine, numbers, dpi=300, timeout=60.0):
-    return engine.ocr_pages(PDF, numbers, dpi=dpi, timeout_seconds=timeout)
+    return engine.ocr_pages(PDF, numbers, dpi={n: dpi for n in numbers}, timeout_seconds=timeout)
 
 
 def test_it_returns_one_page_per_request_ascending_whatever_the_order_asked():
@@ -76,13 +76,13 @@ def test_it_returns_one_page_per_request_ascending_whatever_the_order_asked():
 
 def test_a_page_it_was_not_given_comes_back_empty_not_missing():
     got = read(fake(), [4])
-    assert got == [OcrPage(4, 612.0, 792.0, "", ())] and got[0].mean_confidence is None
+    assert got == [OcrPage(4, 612.0, 792.0, "", (), 300)] and got[0].mean_confidence is None
 
 
 def test_it_records_what_it_was_asked():
     engine = fake()
     read(engine, [2, 1], dpi=200, timeout=9.0)
-    assert engine.calls == [((2, 1), 200, 9.0)] and (engine.name, engine.version) == ("fake-ocr", "0")
+    assert engine.calls == [((2, 1), {2: 200, 1: 200}, 9.0)] and (engine.name, engine.version) == ("fake-ocr", "0")
 
 
 @pytest.mark.parametrize("numbers", [[], [1, 1], [0], [6], [-1]])

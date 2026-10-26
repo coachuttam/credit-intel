@@ -4,7 +4,7 @@ Code outside ``pdfplumber_extractor.py`` depends only on this interface, so
 the PDF library can be replaced without changing callers.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -66,11 +66,12 @@ class OcrExtractor(Protocol):
     name: str  # the engine's name, recorded in the manifest
     version: str  # the engine's version, recorded in the manifest
 
-    def ocr_pages(self, path: Path, page_numbers: Sequence[int], *, dpi: int, timeout_seconds: float) -> list[OcrPage]:
+    def ocr_pages(self, path: Path, page_numbers: Sequence[int], *, dpi: Mapping[int, int], timeout_seconds: float) -> list[OcrPage]:
         """Return one ``OcrPage`` per requested page, ascending by page number.
 
         ``page_numbers`` must be non-empty, without duplicates and within the document; otherwise ``IngestionError``
-        with ``ErrorCode.PAGE_RANGE``. The pages are rendered in memory at ``dpi`` and discarded. An engine that is not
+        with ``ErrorCode.PAGE_RANGE``. ``dpi`` gives each requested page's resolution; each page is rendered in memory at it and
+        discarded, and the returned ``OcrPage`` records it. An engine that is not
         installed or configured raises ``ErrorCode.OCR_UNAVAILABLE``; an engine error or a read that takes longer than
         ``timeout_seconds`` raises ``ErrorCode.OCR_FAILED``. No error carries document text.
         """

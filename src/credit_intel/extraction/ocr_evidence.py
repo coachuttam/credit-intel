@@ -16,11 +16,11 @@ _ONE_PLACE = Decimal("0.1")
 
 @dataclass(frozen=True)
 class OcrReading:
-    """The OCR reading a run used: the engine, the DPI and the pages it read, by physical page number."""
+    """The OCR reading a run used: the engine, the DPI cap and the pages it read, by physical page number."""
 
     engine: str
     engine_version: str
-    dpi: int
+    dpi_cap: int
     pages: Mapping[int, OcrPage]
 
 
@@ -53,7 +53,7 @@ def ocr_evidence_for(
     return OcrEvidence(
         engine=reading.engine,
         engine_version=reading.engine_version,
-        dpi=reading.dpi,
+        dpi=page.dpi if page.dpi is not None else reading.dpi_cap,  # the engine records the resolution it used
         min_word_confidence=confidence(min(words)) if words else None,
         mean_word_confidence=mean_confidence(words),
         page_mean_confidence=mean_confidence([w.confidence for w in page.words]),
@@ -62,24 +62,25 @@ def ocr_evidence_for(
 
 @dataclass(frozen=True)
 class OcrRunRecord:
-    """What the manifest records of a run that used OCR (FR-001A.8): the engine, DPI and language, and for each used page
-    whether its text came from the text layer or from OCR, with each OCR page's mean word confidence."""
+    """What the manifest records of a run that used OCR (FR-001A.8): the engine, DPI cap and language, and for each used page
+    whether its text came from the text layer or from OCR, with each OCR page's resolution and mean word confidence."""
 
     engine: str
     engine_version: str
-    dpi: int
+    dpi_cap: int
     language: str
     ocr_pages: Mapping[int, Decimal | None]  # page number -> the page's mean word confidence, or None for no words
+    page_dpi: Mapping[int, int]  # page number -> the resolution the page was rendered at
     text_layer_pages: tuple[int, ...]
 
     def to_manifest(self) -> dict:
         return {
             "engine": self.engine,
             "engine_version": self.engine_version,
-            "dpi": self.dpi,
+            "dpi_cap": self.dpi_cap,
             "language": self.language,
             "pages_ocr": [
-                {"page": page, "mean_word_confidence": None if value is None else format(value, "f")}
+                {"page": page, "dpi": self.page_dpi[page], "mean_word_confidence": None if value is None else format(value, "f")}
                 for page, value in sorted(self.ocr_pages.items())
             ],
             "pages_text_layer": sorted(self.text_layer_pages),

@@ -38,8 +38,8 @@ EVIDENCE = {
     "min_word_confidence": "62.5", "mean_word_confidence": "82.2", "page_mean_confidence": "89.3",
 }  # fmt: skip
 BLOCK = {
-    "engine": "fake-ocr", "engine_version": "1.0", "dpi": 300, "language": "eng",
-    "pages_ocr": [{"page": 1, "mean_word_confidence": "89.3"}], "pages_text_layer": [2, 3],
+    "engine": "fake-ocr", "engine_version": "1.0", "dpi_cap": 300, "language": "eng",
+    "pages_ocr": [{"page": 1, "dpi": 150, "mean_word_confidence": "89.3"}], "pages_text_layer": [2, 3],
 }  # fmt: skip
 
 
@@ -101,7 +101,7 @@ def test_section_2_says_which_pages_were_read_by_ocr_with_the_engine_and_setting
     data, _ = with_ocr()
     two = section(memo_of(data), 2)
 
-    assert "- **Text read by OCR:** page 1 (engine fake-ocr 1.0, 300 dpi, language eng) [CALCULATED: extraction]" in two
+    assert "- **Text read by OCR:** page 1 (engine fake-ocr 1.0, at each page image's own resolution, up to 300 dpi, language eng) [CALCULATED: extraction]" in two
     assert "- **Text read from the text layer:** pages 2–3 [CALCULATED: extraction]" in two
 
 
@@ -266,7 +266,7 @@ def run_result(tmp_path, ocr):
 
 
 def test_results_have_an_ocr_block_only_when_ocr_was_used(tmp_path):
-    record = OcrRunRecord("fake-ocr", "1.0", 300, "eng", {1: Decimal("89.3")}, (2,))
+    record = OcrRunRecord("fake-ocr", "1.0", 300, "eng", {1: Decimal("89.3")}, {1: 150}, (2,))
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
 

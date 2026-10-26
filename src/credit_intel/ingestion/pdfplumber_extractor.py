@@ -183,5 +183,22 @@ class PdfplumberExtractor:
                 ]
                 area = width * height
                 share = union_area(clipped) / area if area > 0 else 0.0
-                result.append(PageImageCoverage(page_number=page_number, area_share=share))
+                result.append(PageImageCoverage(page_number=page_number, area_share=share, native_dpi=_native_dpi(images)))
         return result
+
+
+def _native_dpi(images: list[dict]) -> int | None:
+    """Pixels per inch of the largest image (by displayed area) across its displayed width; ``None`` if it cannot be read."""
+    best: tuple[float, int] | None = None
+    for image in images:
+        try:
+            width_pt = float(image["x1"]) - float(image["x0"])
+            height_pt = float(image["bottom"]) - float(image["top"])
+            pixels = int(image["srcsize"][0])
+        except (KeyError, TypeError, ValueError, IndexError):
+            continue
+        if width_pt <= 0 or height_pt <= 0 or pixels <= 0:
+            continue
+        if best is None or width_pt * height_pt > best[0]:
+            best = (width_pt * height_pt, max(1, round(pixels * 72.0 / width_pt)))
+    return None if best is None else best[1]

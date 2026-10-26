@@ -44,7 +44,7 @@ from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.extractor import OcrExtractor, TextExtractor, WordExtractor
 from credit_intel.ingestion.ingest import ingest
 from credit_intel.ingestion.locator import check_statement_basis, locate_statements, parse_page_range
-from credit_intel.ingestion.ocr_pages import plan_ocr_pages, require_page_range_for_scan
+from credit_intel.ingestion.ocr_pages import plan_ocr_pages, render_dpis, require_page_range_for_scan
 from credit_intel.ingestion.models import IngestedDocument, LocatorResult, OcrPage
 from credit_intel.llm.budget import TokenBudget
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR, ResponseCache
@@ -118,9 +118,10 @@ def _ocr_record(engine: OcrExtractor, settings: OcrSettings, pages: dict[int, Oc
     return OcrRunRecord(
         engine=engine.name,
         engine_version=engine.version,
-        dpi=settings.dpi,
+        dpi_cap=settings.dpi,
         language=OCR_LANGUAGE,
         ocr_pages={n: mean_confidence([w.confidence for w in page.words]) for n, page in pages.items()},
+        page_dpi={n: page.dpi for n, page in pages.items() if page.dpi is not None},
         text_layer_pages=tuple(n for n in used if n not in pages),
     )
 
@@ -155,7 +156,7 @@ def _read_by_ocr(
     if engine is None:
         raise IngestionError(ErrorCode.OCR_UNAVAILABLE)
     assert settings.timeout_seconds is not None
-    read = {page.page_number: page for page in engine.ocr_pages(document.file_info.path, planned, dpi=settings.dpi, timeout_seconds=settings.timeout_seconds)}
+    read = {page.page_number: page for page in engine.ocr_pages(document.file_info.path, planned, dpi=render_dpis(planned, coverage, settings.dpi), timeout_seconds=settings.timeout_seconds)}
     replaced = tuple(read[p.page_number].page_text() if p.page_number in read else p for p in document.pages)
     return IngestedDocument(file_info=document.file_info, pages=replaced), read
 

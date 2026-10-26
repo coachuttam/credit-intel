@@ -10,7 +10,7 @@ import io
 import re
 import subprocess
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from credit_intel.config import OCR_LANGUAGE
@@ -74,26 +74,27 @@ class TesseractExtractor:
             raise IngestionError(ErrorCode.OCR_UNAVAILABLE)  # the English data is not installed
         return found.group(1)
 
-    def ocr_pages(self, path: Path, page_numbers: Sequence[int], *, dpi: int, timeout_seconds: float) -> list[OcrPage]:
+    def ocr_pages(self, path: Path, page_numbers: Sequence[int], *, dpi: Mapping[int, int], timeout_seconds: float) -> list[OcrPage]:
         requested = list(page_numbers)
         self.version  # noqa: B018  (unavailable is reported before a bad page range, as the contract says)
-        if not requested or len(set(requested)) != len(requested):
+        if not requested or len(set(requested)) != len(requested) or any(n not in dpi for n in requested):
             raise IngestionError(ErrorCode.PAGE_RANGE)
         deadline = time.monotonic() + timeout_seconds
         result = []
         for number, (png, width, height) in zip(sorted(requested), self._render(path, sorted(requested), dpi)):
+            page_dpi = dpi[number]
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise IngestionError(ErrorCode.OCR_FAILED)
-            done = self._run(["stdin", "stdout", "-l", OCR_LANGUAGE, "--dpi", str(dpi), "--psm", PAGE_SEGMENTATION_MODE, "tsv"], stdin=png, timeout=remaining)
+            done = self._run(["stdin", "stdout", "-l", OCR_LANGUAGE, "--dpi", str(page_dpi), "--psm", PAGE_SEGMENTATION_MODE, "tsv"], stdin=png, timeout=remaining)
             if done.returncode != 0:
                 raise IngestionError(ErrorCode.OCR_FAILED)
-            result.append(_page_from_tsv(number, done.stdout.decode("utf-8", "replace"), width, height, dpi))
+            result.append(_page_from_tsv(number, done.stdout.decode("utf-8", "replace"), width, height, page_dpi))
         return result
 
     @staticmethod
-    def _render(path: Path, numbers: list[int], dpi: int):
-        """Yield ``(png bytes, width in points, height in points)`` for each page, rendered in memory at ``dpi``."""
+    def _render(path: Path, numbers: list[int], dpi: Mapping[int, int]):
+        """Yield ``(png bytes, width in points, height in points)`` for each page, rendered in memory at its ``dpi``."""
         import pypdfium2 as pdfium
 
         try:
@@ -107,7 +108,7 @@ class TesseractExtractor:
                 try:
                     page = document[number - 1]
                     width, height = page.get_size()
-                    image = page.render(scale=dpi / _POINTS_PER_INCH).to_pil().convert("RGB")
+                    image = page.render(scale=dpi[number] / _POINTS_PER_INCH).to_pil().convert("RGB")
                     buffer = io.BytesIO()
                     image.save(buffer, format="PNG")
                 except Exception:
@@ -137,4 +138,4 @@ def _page_from_tsv(number: int, tsv: str, width: float, height: float, dpi: int)
     ordered = [sorted(words, key=lambda x: x.x0) for _, words in sorted(lines.items(), key=lambda item: tuple(int(k) for k in item[0]))]
     text = "\n".join(" ".join(word.text for word in words) for words in ordered)
     words = tuple(sorted((w for line in ordered for w in line), key=lambda w: (w.top, w.x0, w.text)))
-    return OcrPage(page_number=number, width=width, height=height, text=text, words=words)
+    return OcrPage(page_number=number, width=width, height=height, text=text, words=words, dpi=dpi)

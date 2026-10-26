@@ -2,11 +2,11 @@
 
 | Item | Value |
 |---|---|
-| Status | **Draft. Not applied.** `docs/PRD.md` is unchanged (0.4.45). Needs the owner's word and a version bump. |
+| Status | **Adopted on 2026-10-26** ("Option (a), no floor, separate version bump") and applied to `docs/PRD.md` as v0.4.46, with the implementation. Kept as the record. |
 | Drafted | 2026-10-26 |
 | Source | The OCR step 4 tuning run on S1 and S2 (`PROGRESS.md`, `671dded`), and the owner's choice of follow-up (d) on 2026-10-26. |
 | Kind | A change to a specified and implemented behaviour (FR-001A.6). Code, tests and the manifest change with it. |
-| Version | 0.4.46 if applied alone. The OD-17 disclosed-exception wording and the K.9 "no OCR" line are separate, also unapproved, amendments; they could share one bump if the owner prefers. |
+| Version | 0.4.46, on its own. The OD-17 disclosed-exception wording and the K.9 "no OCR" line are separate, not yet approved amendments with their own bump. |
 
 ## 1. The problem, from the evidence
 

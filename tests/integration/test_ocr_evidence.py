@@ -318,14 +318,14 @@ def test_no_metric_or_derived_value_takes_an_ocr_field_id_as_a_usable_input(env)
 
 
 def record(**kw):
-    base = dict(engine="fake-ocr", engine_version="1.0", dpi=300, language="eng", ocr_pages={5: Decimal("91.3"), 2: None}, text_layer_pages=(7, 3))
+    base = dict(engine="fake-ocr", engine_version="1.0", dpi_cap=300, language="eng", ocr_pages={5: Decimal("91.3"), 2: None}, page_dpi={5: 150, 2: 300}, text_layer_pages=(7, 3))
     return OcrRunRecord(**{**base, **kw})
 
 
 def test_the_manifest_block_names_the_engine_settings_and_the_source_of_each_page():
     assert record().to_manifest() == {
-        "engine": "fake-ocr", "engine_version": "1.0", "dpi": 300, "language": "eng",
-        "pages_ocr": [{"page": 2, "mean_word_confidence": None}, {"page": 5, "mean_word_confidence": "91.3"}],
+        "engine": "fake-ocr", "engine_version": "1.0", "dpi_cap": 300, "language": "eng",
+        "pages_ocr": [{"page": 2, "dpi": 300, "mean_word_confidence": None}, {"page": 5, "dpi": 150, "mean_word_confidence": "91.3"}],
         "pages_text_layer": [3, 7],
     }  # fmt: skip
 

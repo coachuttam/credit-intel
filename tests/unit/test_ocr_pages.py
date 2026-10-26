@@ -12,7 +12,7 @@ from credit_intel.config import OcrSettings
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.ingest import ingest
 from credit_intel.ingestion.models import PageImageCoverage, PageText
-from credit_intel.ingestion.ocr_pages import is_image_only, plan_ocr_pages, require_page_range_for_scan
+from credit_intel.ingestion.ocr_pages import is_image_only, plan_ocr_pages, render_dpis, require_page_range_for_scan
 from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor, union_area
 
 PAGE_W, PAGE_H = 612.0, 792.0
@@ -265,3 +265,58 @@ def test_with_ocr_enabled_a_scan_is_returned_for_the_caller_to_decide(tmp_path):
 def test_with_ocr_enabled_a_document_with_text_is_unchanged(tmp_path):
     path = make_pdf(tmp_path / "t.pdf", [("hello", [])])
     assert ingest(path, ocr_enabled=True) == ingest(path)
+
+
+# --- the resolution a page is rendered at (v0.4.46, FR-001A.6) -----------------------------------------------------------------------------------
+
+
+def picture_pdf(path, images):
+    """One page with the given images: (pixel width, pixel height, x, y, displayed width, displayed height in points)."""
+    pdf = canvas.Canvas(str(path), pagesize=(PAGE_W, PAGE_H), invariant=1)
+    for px, py, x, y, w, h in images:
+        pdf.drawImage(ImageReader(Image.new("RGB", (px, py), "white")), x, y, w, h)
+    pdf.showPage()
+    pdf.save()
+    return path
+
+
+def native(path):
+    return PdfplumberExtractor().image_coverage(path)[0].native_dpi
+
+
+def test_the_native_resolution_is_the_image_pixels_over_its_displayed_width_in_inches(tmp_path):
+    assert native(picture_pdf(tmp_path / "a.pdf", [(1700, 2200, 0, 0, PAGE_W, PAGE_H)])) == 200
+    assert native(picture_pdf(tmp_path / "b.pdf", [(612, 792, 0, 0, PAGE_W, PAGE_H)])) == 72
+    assert native(picture_pdf(tmp_path / "c.pdf", [(1200, 800, 0, 0, 306, 200)])) == 282  # 1200 px over 306 pt = 4.25 in
+
+
+def test_the_largest_image_by_displayed_area_gives_the_resolution(tmp_path):
+    path = picture_pdf(tmp_path / "a.pdf", [(2000, 2000, 10, 10, 100, 100), (1700, 2200, 0, 0, PAGE_W, PAGE_H)])
+    assert native(path) == 200
+
+
+def test_a_page_with_no_image_has_no_native_resolution(tmp_path):
+    assert native(make_pdf(tmp_path / "a.pdf", [("text", [])])) is None
+
+
+def coverage_of(number, native_dpi):
+    return PageImageCoverage(number, 1.0, native_dpi)
+
+
+def test_a_page_is_rendered_at_its_image_resolution_up_to_the_cap():
+    got = render_dpis([1, 2, 3], [coverage_of(1, 150), coverage_of(2, 297), coverage_of(3, 300)], 300)
+    assert got == {1: 150, 2: 297, 3: 300}
+    assert render_dpis([1], [coverage_of(1, 600)], 300) == {1: 300}
+
+
+def test_a_page_whose_resolution_is_unknown_is_rendered_at_the_cap():
+    assert render_dpis([1, 2], [coverage_of(1, None), PageImageCoverage(2, 1.0)], 300) == {1: 300, 2: 300}
+
+
+def test_there_is_no_lower_bound_so_a_low_resolution_page_is_not_upscaled():
+    assert render_dpis([1], [coverage_of(1, 2)], 300) == {1: 2}
+    assert render_dpis([1], [coverage_of(1, 72)], 300) == {1: 72}
+
+
+def test_only_the_pages_asked_for_are_given_a_resolution():
+    assert render_dpis([2], [coverage_of(1, 100), coverage_of(2, 200)], 300) == {2: 200}

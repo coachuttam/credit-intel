@@ -170,7 +170,7 @@ def section_2(results: dict[str, Any], generated_at: str) -> list[str]:
     if ocr is not None:
         read = [item["page"] for item in ocr["pages_ocr"]]
         lines.append(
-            f"- **Text read by OCR:** {page_phrase(read)} (engine {esc(ocr['engine'])} {esc(ocr['engine_version'])}, {ocr['dpi']} dpi, language {esc(ocr['language'])}) {calculated('extraction')}"
+            f"- **Text read by OCR:** {page_phrase(read)} (engine {esc(ocr['engine'])} {esc(ocr['engine_version'])}, at each page image's own resolution, up to {ocr['dpi_cap']} dpi, language {esc(ocr['language'])}) {calculated('extraction')}"
         )
         if ocr["pages_text_layer"]:
             lines.append(f"- **Text read from the text layer:** {page_phrase(ocr['pages_text_layer'])} {calculated('extraction')}")
