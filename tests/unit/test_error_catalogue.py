@@ -33,6 +33,8 @@ G1 = [
     ("E-INPUT-ENCRYPTED", "validated", "Supply an unencrypted copy.", 3, "No"),
     ("E-INPUT-TOO-MANY-PAGES", "validated", "Supply only the relevant pages.", 3, "No"),
     ("E-INPUT-NO-TEXT-LAYER", "text_extracted / statements_located", "Supply a text-based PDF, or a page range that contains text.", 3, "No"),
+    ("E-INPUT-OCR-UNAVAILABLE", "text_extracted", "Install the engine, or run without --ocr.", 3, "No"),
+    ("E-INPUT-OCR-FAILED", "text_extracted", "Narrow --pages, or raise the limits deliberately.", 3, "No"),
     ("E-INPUT-PAGE-RANGE", "statements_located", "Correct --pages (e.g. 110-115,120).", 3, "No"),
     ("E-INPUT-PROFILE-INVALID", "received", "Fix the profile file to the documented keys and limits.", 3, "No"),
     ("E-INPUT-SEND-REFUSED", "received", "If the document is public and is not recorded as held out, re-run with --confirm-public-document; a held-out document cannot be sent.", 3, "No"),
@@ -47,8 +49,8 @@ G1 = [
 ]  # fmt: skip
 
 
-def test_the_catalogue_has_exactly_the_eighteen_codes_of_g1():
-    assert {c.value for c in CATALOGUE} == {row[0] for row in G1} and len(G1) == 18
+def test_the_catalogue_has_exactly_the_twenty_codes_of_g1():  # eighteen implemented, two specified by PRD v0.4.44
+    assert {c.value for c in CATALOGUE} == {row[0] for row in G1} and len(G1) == 20
     assert set(CATALOGUE) == set(ErrorCode) == set(MESSAGES)
 
 
@@ -79,7 +81,7 @@ def test_exit_codes_group_by_kind_and_none_collides_with_success_usage_or_intern
         assert {CATALOGUE[c].exit_code for c in codes} == {exit_}
     assert (EXIT_OK, EXIT_INTERNAL, EXIT_USAGE) == (0, 1, 2) and {3, 4, 5, 6, 7} == set(groups)
     assert not {CATALOGUE[c].exit_code for c in ErrorCode} & {EXIT_OK, EXIT_INTERNAL, EXIT_USAGE}
-    assert sum(len(c) for c in groups.values()) == 18  # every code in exactly one group
+    assert sum(len(c) for c in groups.values()) == 20  # every code in exactly one group
 
 
 @pytest.mark.parametrize("code", list(ErrorCode))

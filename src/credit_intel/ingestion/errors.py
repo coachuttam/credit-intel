@@ -17,6 +17,8 @@ class ErrorCode(StrEnum):
     ENCRYPTED = "E-INPUT-ENCRYPTED"
     TOO_MANY_PAGES = "E-INPUT-TOO-MANY-PAGES"
     NO_TEXT_LAYER = "E-INPUT-NO-TEXT-LAYER"
+    OCR_UNAVAILABLE = "E-INPUT-OCR-UNAVAILABLE"
+    OCR_FAILED = "E-INPUT-OCR-FAILED"
     PAGE_RANGE = "E-INPUT-PAGE-RANGE"
     BASIS_UNAVAILABLE = "E-EXTRACT-BASIS-UNAVAILABLE"
     CONFIG_INVALID = "E-CONFIG-INVALID"
@@ -71,6 +73,10 @@ CATALOGUE: dict[ErrorCode, CatalogueEntry] = {
         _E(C.NO_TEXT_LAYER, "text_extracted / statements_located",
            "The PDF has no extractable text layer. Scanned or image-only PDFs are not supported (OCR is not supported).",
            "Supply a text-based PDF, or a page range that contains text.", EXIT_INPUT, "No"),
+        _E(C.OCR_UNAVAILABLE, "text_extracted", "OCR is turned on but the OCR engine is not installed or not configured.",
+           "Install the engine, or run without --ocr.", EXIT_INPUT, "No"),
+        _E(C.OCR_FAILED, "text_extracted", "The OCR engine failed, or the OCR page cap or time limit was exceeded.",
+           "Narrow --pages, or raise the limits deliberately.", EXIT_INPUT, "No"),
         _E(C.PAGE_RANGE, "statements_located",
            "The page range is invalid: it must be comma-separated 1-based page numbers or ranges within the document and no larger than the candidate-page limit.",
            "Correct --pages (e.g. 110-115,120).", EXIT_INPUT, "No"),

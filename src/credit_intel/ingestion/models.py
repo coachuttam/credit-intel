@@ -120,3 +120,55 @@ class PageWords:
     height: float
     rotation: int
     words: tuple[Word, ...]
+
+
+@dataclass(frozen=True)
+class OcrWord:
+    """One word read by an OCR engine, in PDF points, top-left origin (FR-001A).
+
+    ``confidence`` is the engine's own figure for the word, from 0 to 100. It is recorded and shown as the engine's
+    number; it is not a probability that the word is right.
+    """
+
+    text: str
+    x0: float
+    x1: float
+    top: float
+    bottom: float
+    confidence: float
+
+
+@dataclass(frozen=True)
+class OcrPage:
+    """What an OCR engine read from one physical page (FR-001A, FR-005 criterion 11).
+
+    ``text`` and ``words`` come from the same reading. Nothing here is a text layer: a field that rests on it is OCR
+    evidence. ``width`` and ``height`` are the page's size in points. ``words`` are ordered by ``(top, x0, text)``.
+    """
+
+    page_number: int  # 1-based physical page number
+    width: float
+    height: float
+    text: str
+    words: tuple[OcrWord, ...]
+
+    @property
+    def mean_confidence(self) -> float | None:
+        """The mean of the word confidences, or ``None`` for a page with no words."""
+        if not self.words:
+            return None
+        return sum(word.confidence for word in self.words) / len(self.words)
+
+    def page_text(self) -> PageText:
+        """The page as a ``PageText``, so the text checks read it as they read a text layer."""
+        return PageText(page_number=self.page_number, text=self.text)
+
+    def page_words(self) -> PageWords:
+        """The page as a ``PageWords`` (never rotated), so the period-column check reads its word boxes."""
+        return PageWords(
+            page_number=self.page_number,
+            width=self.width,
+            height=self.height,
+            rotation=0,
+            words=tuple(Word(w.text, w.x0, w.x1, w.top, w.bottom) for w in self.words),
+        )
