@@ -42,6 +42,18 @@ class PageText:
 
 
 @dataclass(frozen=True)
+class PageImageCoverage:
+    """How much of one physical page its images cover (FR-001A.2).
+
+    ``area_share`` is the area of the union of the page's images, clipped to the page, divided by the page area: from 0
+    (no image) to 1. Overlapping images are counted once.
+    """
+
+    page_number: int  # 1-based physical page number
+    area_share: float
+
+
+@dataclass(frozen=True)
 class IngestedDocument:
     """A validated PDF and its page texts, one entry per physical page."""
 

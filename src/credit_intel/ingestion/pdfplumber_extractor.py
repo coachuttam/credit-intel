@@ -12,7 +12,7 @@ from pdfminer.pdfdocument import PDFDocument, PDFEncryptionError, PDFPasswordInc
 from pdfplumber.page import Page
 
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
-from credit_intel.ingestion.models import PageText, PageWords, PdfInspection, Word
+from credit_intel.ingestion.models import PageImageCoverage, PageText, PageWords, PdfInspection, Word
 
 _ENCRYPTION_ERRORS = (PDFPasswordIncorrect, PDFEncryptionError)
 
@@ -76,6 +76,23 @@ def _page_labels(doc: PDFDocument, page_count: int) -> list[str | None]:
     except Exception:  # PDFNoPageLabels, or a malformed label tree
         return [None] * page_count
     return labels + [None] * (page_count - len(labels))
+
+
+def union_area(rectangles: Sequence[tuple[float, float, float, float]]) -> float:
+    """The area covered by ``(x0, top, x1, bottom)`` rectangles, overlaps counted once."""
+    rects = sorted(set(rectangles))
+    xs = sorted({x for r in rects for x in (r[0], r[2])})
+    total = 0.0
+    for left, right in zip(xs, xs[1:]):
+        spans = sorted((r[1], r[3]) for r in rects if r[0] <= left and r[2] >= right)
+        covered, end = 0.0, float("-inf")
+        for top, bottom in spans:
+            top = max(top, end)
+            if bottom > top:
+                covered += bottom - top
+                end = bottom
+        total += covered * (right - left)
+    return total
 
 
 class PdfplumberExtractor:
@@ -144,4 +161,27 @@ class PdfplumberExtractor:
                         words=tuple(words),
                     )
                 )
+        return result
+
+    def image_coverage(self, path: Path) -> list[PageImageCoverage]:
+        with _open(path) as pdf:
+            result = []
+            for page_number, page in enumerate(_load_pages(pdf), start=1):
+                width, height = float(page.width), float(page.height)
+                try:
+                    images = page.images
+                except Exception as exc:
+                    raise IngestionError(ErrorCode.CORRUPT) from exc
+                clipped = [
+                    (
+                        max(float(i["x0"]), 0.0),
+                        max(float(i["top"]), 0.0),
+                        min(float(i["x1"]), width),
+                        min(float(i["bottom"]), height),
+                    )
+                    for i in images
+                ]
+                area = width * height
+                share = union_area(clipped) / area if area > 0 else 0.0
+                result.append(PageImageCoverage(page_number=page_number, area_share=share))
         return result

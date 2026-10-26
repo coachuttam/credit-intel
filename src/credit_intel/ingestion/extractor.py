@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
-from credit_intel.ingestion.models import OcrPage, PageText, PageWords, PdfInspection
+from credit_intel.ingestion.models import OcrPage, PageImageCoverage, PageText, PageWords, PdfInspection
 
 
 class TextExtractor(Protocol):
@@ -41,6 +41,17 @@ class WordExtractor(Protocol):
         document; otherwise ``IngestionError`` with ``ErrorCode.PAGE_RANGE``.
         Must be deterministic for the same file, and must raise
         ``IngestionError`` instead of library-specific exceptions.
+        """
+        ...
+
+
+class ImageCoverageExtractor(Protocol):
+    """Image coverage, kept apart from ``TextExtractor`` so existing implementations and fakes need no change."""
+
+    def image_coverage(self, path: Path) -> list[PageImageCoverage]:
+        """Return one ``PageImageCoverage`` per physical page, numbered from 1.
+
+        Must be deterministic for the same file, and must raise ``IngestionError`` instead of library-specific exceptions.
         """
         ...
 

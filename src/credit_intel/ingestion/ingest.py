@@ -19,11 +19,14 @@ def ingest(
     settings: IngestionSettings | None = None,
     extractor: TextExtractor | None = None,
     on_validated: Callable[[FileInfo], None] | None = None,
+    *,
+    ocr_enabled: bool = False,
 ) -> IngestedDocument:
     """Validate ``path`` and return its pages, or raise ``IngestionError``.
 
     ``on_validated`` is called with the file information once validation has passed and before the
-    text is read, so a caller can tell which of the two a later failure belongs to.
+    text is read, so a caller can tell which of the two a later failure belongs to. A document with no text layer is
+    refused with ``E-INPUT-NO-TEXT-LAYER`` unless ``ocr_enabled``; then the caller decides what to do with it (FR-001A).
     """
     if extractor is None:
         from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
@@ -42,7 +45,7 @@ def ingest(
             f"extractor returned page numbers that are not 1..{file_info.page_count} in order"
         )
 
-    if not any(page.has_text for page in pages):
+    if not ocr_enabled and not any(page.has_text for page in pages):
         raise IngestionError(ErrorCode.NO_TEXT_LAYER)
 
     return IngestedDocument(file_info=file_info, pages=pages)
