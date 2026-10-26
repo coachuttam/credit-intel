@@ -2,3 +2,5 @@
 {"document_id":"R2","sha256":"dfc1ed6c9bcd879a3cfedc06b8f6123d1d7caaf81340f7a437afe395f9b00ea6","set":"tuning","assigned_on":"2026-10-13","event":"assigned","moved_from":null,"reason":null}
 {"document_id":"H1","sha256":"9ee8a3c5460cabd27443a55ebf1c569be106881f5f553540009b2f32645d885f","set":"held_out","assigned_on":"2026-10-24","event":"assigned","moved_from":null,"reason":null}
 {"document_id":"H2","sha256":"dcdc67ff84977e2beeb6b7a8113b6862fae1880838c613eceac42ba4b605d9d7","set":"held_out","assigned_on":"2026-10-24","event":"assigned","moved_from":null,"reason":null}
+{"document_id":"H3","sha256":"3d314c8125ab01d55a1c9d0c6d467043ce39064109ea0166475a5d2da1af0045","set":"held_out","assigned_on":"2026-10-26","event":"assigned","moved_from":null,"reason":null}
+{"document_id":"H4","sha256":"a3ef37d848fca940f85b6c33815a5d47d1f32726fd389a03910653e24af0f4d2","set":"held_out","assigned_on":"2026-10-26","event":"assigned","moved_from":null,"reason":null}
