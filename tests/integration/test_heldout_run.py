@@ -275,3 +275,46 @@ def test_a_directory_that_is_not_a_repository_is_not_frozen(tmp_path):
         heldout.git_state(tmp_path)
 
     assert raised.value.reason == "not_frozen"
+
+
+# --- PRD v0.4.42: the required set is the held-out documents no earlier run has used -----------------------------------------------------
+
+
+def _used_line(sha, run_id="H-earlier"):
+    return json.dumps(dict(zip(heldout.LEDGER_MEMBERS, ("H8", sha, run_id, "completed", "2026-10-25T00:00:00Z", HEAD, "x"), strict=True)), separators=(",", ":")) + "\n"
+
+
+def _two_documents(tmp_path, pdf):
+    other = fx.balance_sheet_pdf(tmp_path / "other.pdf", rows=[*g.ROWS, ("Total borrowings", "", "1.00", "2.00")])
+    return other, Setup(tmp_path, pdf, extra_rows=[("H8", file_sha256(other), "held_out")])
+
+
+def test_b6_142_a_used_held_out_document_is_neither_required_nor_run_again(tmp_path, pdf):
+    other, setup = _two_documents(tmp_path, pdf)
+    setup.ledger.write_text(_used_line(file_sha256(other)), encoding="utf-8")  # H8 was used by an earlier run
+
+    code = setup.run()  # only the unused document is given
+
+    assert code == 0 and setup.output[-1] == "HELD-OUT RUN COMPLETE"
+    assert {(r["document_id"], r["event"]) for r in setup.ledger_lines()} == {("H8", "completed"), ("H9", "started"), ("H9", "completed")}
+
+
+def test_b6_143_when_every_held_out_document_is_used_the_run_is_refused(tmp_path, pdf):
+    setup = Setup(tmp_path, pdf)
+    setup.ledger.write_text(_used_line(file_sha256(pdf)), encoding="utf-8")
+
+    setup.refused("already_used", documents=[])
+    setup.refused("already_used")
+
+
+def test_b6_144_a_used_document_given_with_an_unused_one_refuses_the_whole_run(tmp_path, pdf):
+    other, setup = _two_documents(tmp_path, pdf)
+    setup.ledger.write_text(_used_line(file_sha256(other)), encoding="utf-8")
+
+    setup.refused("already_used", documents=[(pdf, setup.reference), (other, setup.reference)])
+
+
+def test_a_still_unused_held_out_document_left_out_still_refuses_the_run(tmp_path, pdf):
+    other, setup = _two_documents(tmp_path, pdf)  # nothing used: both are required
+
+    setup.refused("not_the_held_out_set")

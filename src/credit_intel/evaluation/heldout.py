@@ -2,7 +2,8 @@
 
 ``python -m credit_intel.evaluation.heldout --held-out-run --document PDF REFERENCE [--document ...]``
 
-It runs the pipeline once over **every** document the assignment record shows as held out, compares each with the owner's
+It runs the pipeline once over **every** document the assignment record shows as held out and the ledger shows as not yet used
+(PRD v0.4.42: a document used by an earlier run is neither required nor allowed), compares each with the owner's
 reference (the gate's format and comparison, three fields) and prints counts only: no value, quote, label, path or hash.
 It refuses, before anything is sent, unless the configuration is frozen (a clean tree at the commit the owner named), the
 documents are exactly the held-out set, none has been used before (the ledger), the response cache is empty, no second
@@ -156,7 +157,7 @@ def run_held_out(
         raise HeldOutRefused("no_approval")
     if changed:
         raise HeldOutRefused("not_frozen")
-    # 3. Exactly the held-out set, and nothing else.
+    # 3. Exactly the held-out documents that no earlier run has used, and nothing else (v0.4.42).
     shas = []
     try:
         for pdf, _ in documents:
@@ -171,11 +172,12 @@ def run_held_out(
         raise HeldOutRefused("record_unreadable" if unreadable else "not_held_out") from None
     except OSError:
         raise HeldOutRefused("not_held_out") from None
-    if len(set(shas)) != len(shas) or set(shas) != held_out:
-        raise HeldOutRefused("not_the_held_out_set")
-    # 4. One shot per document.
-    if {record["sha256"] for record in load_ledger(ledger)} & set(shas):
+    # 4. One shot per document: a used document is refused, and nothing left to run is refused too.
+    used = {record["sha256"] for record in load_ledger(ledger)}
+    if set(shas) & used or not held_out - used:
         raise HeldOutRefused("already_used")
+    if len(set(shas)) != len(shas) or set(shas) != held_out - used:
+        raise HeldOutRefused("not_the_held_out_set")
     # 5. An empty response cache, so no earlier reply answers a held-out page.
     if cache_dir.exists() and any(cache_dir.iterdir()):
         raise HeldOutRefused("cache_not_empty")
