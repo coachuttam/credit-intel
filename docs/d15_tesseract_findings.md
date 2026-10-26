@@ -25,7 +25,7 @@
 | Item | What the installed files say |
 |---|---|
 | Tesseract | `/opt/homebrew/Cellar/tesseract/5.5.3_1/LICENSE` is the full text of the **Apache License, Version 2.0** (202 lines). Homebrew's `brew info` says `License: Apache-2.0`, and the installed `sbom.spdx.json` lists `tesseract 5.5.3_1 Apache-2.0`. |
-| English language data | **No licence file is installed with `eng.traineddata`** (the data directory holds `configs`, `eng.traineddata`, `osd.traineddata`, `pdf.ttf`, `tessconfigs`; no LICENSE or COPYING anywhere under the tesseract install besides the one above). The installed SBOM does not list the language data as a package. The file's embedded strings contain no licence or copyright text. **So the installed files do not state the licence of the English data.** (I believe the upstream data repositories are Apache-2.0, but that is from memory and I have not read it from a source; I have not fetched anything.) |
+| English language data | **No licence file is installed with `eng.traineddata`** (the data directory holds `configs`, `eng.traineddata`, `osd.traineddata`, `pdf.ttf`, `tessconfigs`; no LICENSE or COPYING anywhere under the tesseract install besides the one above). The installed SBOM does not list the language data as a package. The file's embedded strings contain no licence or copyright text. **So the installed files do not state the licence of the English data.** Recorded as the owner directed (2026-10-26): *external reference only, not from the installed files and not verified here:* Tesseract and its English trained data are typically described as Apache-2.0 upstream. **This is not settled; it is flagged for the owner's confirmation** (for example from the upstream repositories' own licence files), and nothing in the platform relies on it. |
 | Dependencies of the Homebrew build | The installed SBOM lists, among others, **GPL and LGPL components** (libunistring GPL-2.0-or-later OR LGPL-3.0-or-later; gettext GPL-3.0-or-later AND LGPL-2.1-or-later; glib, pango, cairo, libdatrie, libthai LGPL; lzo and fribidi GPL-2.0-or-later; xz 0BSD AND GPL-2.0-or-later), and permissive ones (Leptonica BSD-2-Clause, libpng, FreeType FTL, libtiff, libjpeg-turbo and others). The platform runs Tesseract as a **separate command-line process**; it does not link to them. |
 | This project | Nothing from Tesseract is vendored or distributed by the repository; the engine is a system install (FR-001A.5). Pillow and pypdfium2, now declared direct dependencies, were already locked as pdfplumber's dependencies (no new package). their licences are in the dependency table in `PROGRESS.md` (pypdfium2 Apache-2.0 / BSD-3-Clause with a note on its bundled libraries; Pillow MIT-CMU), read earlier from installed metadata and not re-read here. |
 
@@ -132,11 +132,16 @@ No metric was defined in any of these runs and all fields were `requires_review`
 - A threshold, a DPI, a column margin or a page-segmentation mode for the platform: none was chosen or set; nothing in the repository was tuned (AC-E-7: OCR settings are tuned only on an owner-assigned scan).
 - The licence of the English language data (section 2): the installed files do not state it.
 
-## 7. Options this evidence bears on (for the owner; none is chosen)
+## 7. Decisions taken on this evidence (owner, 2026-10-26) and options still open
 
-- Whether Tesseract stays the default engine.
-- If it does: whether the adapter should pass a page-segmentation mode (the experiment used `--psm 6` and `--psm 4`), or build its text lines from word boxes by vertical position (as the text-layer lines are formed) instead of Tesseract's line numbers.
+**Decided:**
+- **Skew and rotation:** skewed pages are to be refused for now; there is **no de-skew or orientation handling in this step**; it is documented as a limitation (README, memo section 9 for runs that used OCR, and here). What is built today is not a refusal: a skewed or rotated page is read as it is, and the checks send it to review (`period_not_verified`, or an unreadable page), never to `extracted` (an OCR value is never extracted). A refusal at the door (detecting skew and stopping the page with a catalogued error) would need a skew measure, a new error code and a PRD change, and has not been built.
+- **English data licence:** the installed files do not state it (section 2); the Apache-2.0-upstream statement is external, unverified and flagged for the owner's confirmation.
+- **Page segmentation:** mode 6 (done, step 3).
+- **Step 4 (OCR column settings) is on hold** until the owner has real scanned documents to assign (OD-17).
+
+**Still open (the owner's):**
+- Whether Tesseract stays the default engine (not yet said).
+- Whether the adapter should build its text lines from word boxes by vertical position (as the text-layer lines are formed) instead of Tesseract's line numbers (mode 6 is in; about 8 of 228 rows still split in the experiment).
 - Whether `ocr.dpi` should be higher than 300 (400 was worse here) and what resolution of input the platform should require.
-- Whether orientation (the installed `osd` data) and a small de-skew should be added, or the platform should instead refuse such pages.
 - Whether the OCR period-column margin (`ocr.column_margin_pt`, step 4) should be tuned on an owner-assigned scan, given 1° skew failed the check at 3 pt.
-- What to record about the English data's licence, if the installed files remain silent.

@@ -118,7 +118,7 @@ These are the limits of Release 1. The memo's last section states them too, and 
 
 **Scope**
 
-- Only text-based PDF files are read. There is no OCR, so a scanned page cannot be read.
+- Only text-based PDF files are read. There is no OCR, so a scanned page cannot be read. **That is the default and the whole of Release 1.** OCR of scanned pages is in progress (PRD v0.4.44) and is off unless you give `--ocr` with `--pages`: it needs Tesseract installed, it reads English only, a value it reads is never accepted as extracted and is used in no ratio or rule, and skewed or rotated pages are not corrected, so they may be read wrongly, fail the period-column check or not be readable at all. OCR has been tried on synthetic scans only (`docs/d15_tesseract_findings.md`) and has not been tuned or measured on real scanned reports.
 - One document is reviewed per run. Documents are not compared with each other.
 - Two consecutive annual periods are read: the current period and the comparative period. 52/53-week reporting years, quarterly and interim periods are out of scope.
 - No currency conversion is done. If the figures a ratio needs are in different currencies, the ratio is not defined.
@@ -137,6 +137,7 @@ These are the limits of Release 1. The memo's last section states them too, and 
 **Extraction and automation**
 
 - An AI model proposes the figures. Each is accepted only if its quote is found on the cited page and passes the checks for value, label, period column, sign, scale and currency. The model can miss an item or misread a page, so a field reported as not found is not proof that it is absent from the document.
+- Non-current borrowings, current borrowings, current maturities of long-term borrowings and operating profit have often not been found when the system was tried on real annual reports. Without a reported total of borrowings or its components, debt-to-equity is not defined, and without operating profit EBIT comes from profit before tax plus interest expense.
 - All arithmetic, the risk rules and the text of this memo are produced by fixed programs, not by the model. This memo contains no AI-generated commentary.
 - Values supplied by the analyst in a profile are shown as given. They are not checked against the document and are not used in any calculation or rule.
 

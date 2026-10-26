@@ -26,13 +26,16 @@ METRICS = [
 ]
 EXTRACTION = [
     "An AI model proposes the figures. Each is accepted only if its quote is found on the cited page and passes the checks for value, label, period column, sign, scale and currency. The model can miss an item or misread a page, so a field reported as not found is not proof that it is absent from the document.",
+    "Non-current borrowings, current borrowings, current maturities of long-term borrowings and operating profit have often not been found when the system was tried on real annual reports. Without a reported total of borrowings or its components, debt-to-equity is not defined, and without operating profit EBIT comes from profit before tax plus interest expense.",
     "All arithmetic, the risk rules and the text of this memo are produced by fixed programs, not by the model. This memo contains no AI-generated commentary.",
     "Values supplied by the analyst in a profile are shown as given. They are not checked against the document and are not used in any calculation or rule.",
 ]
 OCR_SCOPE = (
     "Pages without a text layer were read by OCR, an engine's reading of a page image, and the other pages from the text layer. "
     "A figure read by OCR is never accepted as extracted, is not used in any ratio or risk indicator, and must be checked against the page image. "
-    "OCR reads English only, and its confidence is the engine's own figure, not a measure of correctness."
+    "OCR reads English only, and its confidence is the engine's own figure, not a measure of correctness. "
+    "Skewed or rotated pages are not corrected, so they may be read wrongly or fail the period column check, and a rotated page may not be readable at all. "
+    "OCR has not been tuned or measured on real scanned reports."
 )
 REVIEW = (
     "**This memo is a draft. A qualified human must review it, verify every figure against the cited source pages, and make any credit "
