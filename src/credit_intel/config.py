@@ -525,6 +525,12 @@ def _positive_number(value: object, setting: str) -> float:
     return float(value)
 
 
+def _non_negative_number(value: object, setting: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= float(value) < 100_000:
+        raise _invalid(setting)
+    return float(value)
+
+
 def _small_int(value: object, setting: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 10_000:
         raise _invalid(setting)
@@ -642,9 +648,11 @@ def load_ocr_settings(path: Path = DEFAULT_SETTINGS_PATH, flag: bool = False) ->
         values["min_image_area_share"] = _fraction(table["min_image_area_share"], "ocr.min_image_area_share")
     if "max_pages" in table:
         values["max_pages"] = _small_int(table["max_pages"], "ocr.max_pages")
-    for name in ("timeout_seconds", "column_margin_pt", "split_figure_gap_pt"):
+    for name in ("timeout_seconds", "column_margin_pt"):
         if name in table:
             values[name] = _positive_number(table[name], f"ocr.{name}")
+    if "split_figure_gap_pt" in table:  # 0 turns the joining of split figures off, as for the text layer (FR-005.7)
+        values["split_figure_gap_pt"] = _non_negative_number(table["split_figure_gap_pt"], "ocr.split_figure_gap_pt")
     if enabled:
         for name in OCR_REQUIRED_WHEN_ENABLED:
             if name not in values:

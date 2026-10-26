@@ -28,3 +28,13 @@ timeout_seconds = 10.0          # per call
 time_budget_seconds = 60.0      # per document; then Jev is skipped for its remaining pages
 state_lines = 40                # lines from the top of a page that Jev reads
 max_consecutive_failures = 3    # then Jev is skipped for the rest of the run
+
+# OCR of scanned pages (PRD v0.4.44, FR-001A). OCR is OFF unless `enabled = true` here or `--ocr` is given, and it runs only with
+# `--pages`. Once on, the five settings below are REQUIRED and have no default; a missing one fails with E-CONFIG-INVALID.
+# Values set by the owner on 2026-10-27; the three measured ones come from the two tuning scans (S1, S2). They are provisional and not measured on a held-out scan.
+[ocr]
+min_image_area_share = 0.5   # an image must cover at least this share of a page for it to count as image-only (tuning pages: 0.85 to 1.0)
+column_margin_pt = 3         # period-column margin; the tuning pages did not distinguish 1 to 12 pt, so the text-layer value is kept
+split_figure_gap_pt = 0      # 0 turns the joining of split figures off: no split figure was seen in the OCR output of the tuning pages
+max_pages = 10               # the page cap (OD-18): more image-only pages than this in a run is E-INPUT-OCR-FAILED
+timeout_seconds = 120        # the time limit for one OCR call (OD-18), whole call; measured 1 to 3.5 s per page on the tuning pages

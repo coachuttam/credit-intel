@@ -80,7 +80,7 @@ def test_nothing_is_required_while_off_but_a_present_value_is_checked(tmp_path):
         ("timeout_seconds = 0", "ocr.timeout_seconds"),
         ('timeout_seconds = "9"', "ocr.timeout_seconds"),
         ("column_margin_pt = -3", "ocr.column_margin_pt"),
-        ("split_figure_gap_pt = 0", "ocr.split_figure_gap_pt"),
+        ("split_figure_gap_pt = -1", "ocr.split_figure_gap_pt"),
         ("split_figure_gap_pt = false", "ocr.split_figure_gap_pt"),
         ("unknown = 1", "ocr.unknown"),
     ],
@@ -137,3 +137,35 @@ def test_with_valid_settings_the_run_goes_on_and_says_nothing_about_ocr_not_bein
     for flags, text in (("--ocr",), LLM + FULL), ((), LLM + FULL):  # the flag, or the table alone, turns it on
         code, err = run(tmp_path, text, *flags)
         assert "not built yet" not in err and "E-CONFIG-INVALID" not in err and code == 3  # on to the (empty) file: E-INPUT-CORRUPT
+
+
+# --- the values shipped in config/settings.toml (owner, 2026-10-27) -------------------------------------------------------
+
+
+from pathlib import Path  # noqa: E402
+
+REPO_SETTINGS = Path(__file__).resolve().parents[2] / "config" / "settings.toml"
+
+
+def test_a_gap_of_zero_is_accepted_and_means_joining_is_off(tmp_path):
+    got = load_ocr_settings(write(tmp_path, FULL.replace("split_figure_gap_pt = 2.5", "split_figure_gap_pt = 0")))
+    assert got.split_figure_gap_pt == 0.0
+
+
+def test_the_shipped_settings_leave_ocr_off_and_hold_the_owner_values():
+    got = load_ocr_settings(REPO_SETTINGS)
+    assert not got.enabled
+    assert (got.min_image_area_share, got.column_margin_pt, got.split_figure_gap_pt) == (0.5, 3.0, 0.0)
+    assert (got.max_pages, got.timeout_seconds, got.dpi) == (10, 120.0, 300)
+
+
+def test_with_ocr_on_the_shipped_settings_are_complete():
+    got = load_ocr_settings(REPO_SETTINGS, flag=True)
+    assert got.enabled and all(getattr(got, name) is not None for name in OCR_REQUIRED_WHEN_ENABLED)
+
+
+def test_removing_the_page_cap_or_the_time_limit_from_the_shipped_settings_is_named(tmp_path):
+    text = REPO_SETTINGS.read_text(encoding="utf-8")
+    for name in ("max_pages", "timeout_seconds"):
+        stripped = "".join(line + "\n" for line in text.splitlines() if not line.startswith(f"{name} "))
+        assert fails(write(tmp_path, stripped), flag=True) == f"ocr.{name}"
