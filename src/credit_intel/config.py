@@ -592,3 +592,60 @@ def load_jev_settings(
         max_consecutive_failures=_small_int(table.get("max_consecutive_failures", defaults.max_consecutive_failures), "jev.max_consecutive_failures"),
         price_input_per_million=price,
     )
+
+
+# --- OCR of scanned pages (PRD v0.4.44, FR-001A; specified, built in steps) --------------------------------------------------
+
+OCR_SETTING_NAMES = ("enabled", "dpi", "min_image_area_share", "max_pages", "timeout_seconds", "column_margin_pt", "split_figure_gap_pt")
+OCR_DEFAULT_DPI = 300  # FR-001A.6: provisional
+# Required, with no default, once OCR is on. The page cap and the time limit are OD-18 (option b); the other three are
+# provisional values that are set only from an assigned scan (FR-001A.2, FR-005 criterion 11, AC-E-7).
+OCR_REQUIRED_WHEN_ENABLED = ("min_image_area_share", "max_pages", "timeout_seconds", "column_margin_pt", "split_figure_gap_pt")
+
+
+@dataclass(frozen=True)
+class OcrSettings:
+    """The ``[ocr]`` table and the ``--ocr`` flag (FR-001A). OCR is off unless one of them turns it on (OD-14).
+
+    ``dpi`` has the PRD's provisional default. The other values have none: they are ``None`` until given, and once OCR is
+    on a missing one is an error, so no limit or margin is ever assumed.
+    """
+
+    enabled: bool = False
+    dpi: int = OCR_DEFAULT_DPI
+    min_image_area_share: float | None = None
+    max_pages: int | None = None
+    timeout_seconds: float | None = None
+    column_margin_pt: float | None = None
+    split_figure_gap_pt: float | None = None
+
+
+def load_ocr_settings(path: Path = DEFAULT_SETTINGS_PATH, flag: bool = False) -> OcrSettings:
+    """The ``[ocr]`` table of the settings file, switched on by ``enabled = true`` or by ``flag`` (the ``--ocr`` option).
+
+    With neither, OCR is off. A setting that is present is checked even then, so a typo is found early, but none is required. Once OCR is on, every setting in ``OCR_REQUIRED_WHEN_ENABLED`` must
+    be given. A failure is ``E-CONFIG-INVALID`` naming the setting (``ocr.<name>``) and never its value.
+    """
+    table = _settings_table(path, "ocr")
+    for name in table:
+        if name not in OCR_SETTING_NAMES:
+            raise _invalid(f"ocr.{name}")
+    in_file = table.get("enabled", False)
+    if not isinstance(in_file, bool):
+        raise _invalid("ocr.enabled")
+    enabled = in_file or flag
+    values: dict[str, object] = {}
+    if "dpi" in table:
+        values["dpi"] = _small_int(table["dpi"], "ocr.dpi")
+    if "min_image_area_share" in table:
+        values["min_image_area_share"] = _fraction(table["min_image_area_share"], "ocr.min_image_area_share")
+    if "max_pages" in table:
+        values["max_pages"] = _small_int(table["max_pages"], "ocr.max_pages")
+    for name in ("timeout_seconds", "column_margin_pt", "split_figure_gap_pt"):
+        if name in table:
+            values[name] = _positive_number(table[name], f"ocr.{name}")
+    if enabled:
+        for name in OCR_REQUIRED_WHEN_ENABLED:
+            if name not in values:
+                raise _invalid(f"ocr.{name}")
+    return OcrSettings(enabled=enabled, **values)

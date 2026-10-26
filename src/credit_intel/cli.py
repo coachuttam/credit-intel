@@ -31,6 +31,7 @@ from credit_intel.config import (
     LLMSettings,
     load_jev_settings,
     load_llm_settings,
+    load_ocr_settings,
     load_pricing,
     load_step_settings,
 )
@@ -92,6 +93,8 @@ def build_parser(stream: IO[str]) -> argparse.ArgumentParser:
     p.add_argument("--profile", type=Path, metavar="PROFILE_JSON", help="analyst-provided borrower profile (JSON)")
     p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, metavar="DIR", help="where run folders are written (default: runs)")
     p.add_argument("--config", type=Path, default=DEFAULT_SETTINGS_PATH, metavar="SETTINGS_TOML", help="settings file (default: config/settings.toml)")
+    p.add_argument("--ocr", action="store_true",
+                   help="turn on OCR of scanned pages (PRD v0.4.44; not built yet: the [ocr] settings are checked and the run reads the text layer only)")  # fmt: skip
     p.add_argument("--confirm-public-document", action="store_true",
                    help="confirm that a document not on the assignment record is public, so its statement pages may be sent to the hosted API")  # fmt: skip
     return p
@@ -149,6 +152,8 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     args = call.args
     call.llm = llm = load_llm_settings(args.config, env)
     pricing = load_pricing(args.config, env)
+    if load_ocr_settings(args.config, args.ocr).enabled:
+        print("ocr: settings checked; OCR is not built yet, so this run reads the text layer only", file=err)  # FR-001A is built in steps
     page_filter = _page_filter(args, llm, env, classifier_factory)
     try:
         call.sha256 = file_sha256(args.pdf_path)
