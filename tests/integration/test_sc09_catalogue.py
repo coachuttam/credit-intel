@@ -1,7 +1,7 @@
 """SC-09: every catalogued failure scenario gives its documented code, a non-zero exit and no output that looks complete
 (PRD SC-09, FR-011.6, G.1, FR-014.3, Definition of Done item 6; Phase 5 step 5m; B-272).
 
-Each of the eighteen implemented codes of the error catalogue is provoked through the command line with synthetic input and a fake
+Each of the twenty codes of the error catalogue is provoked through the command line with synthetic input and a fake
 provider. A test fails if a code has no scenario, so a code added to the catalogue without one cannot go unnoticed.
 """
 
@@ -35,9 +35,12 @@ def in_a_scratch_directory(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
 
-def settings(tmp_path, provider="fake", ceiling=1_000_000):
+OCR_TABLE = "[ocr]\nenabled = true\nmin_image_area_share = 0.5\nmax_pages = 5\ntimeout_seconds = 60\ncolumn_margin_pt = 3\nsplit_figure_gap_pt = 2.0\n"
+
+
+def settings(tmp_path, provider="fake", ceiling=1_000_000, ocr=False):
     path = tmp_path / "settings.toml"
-    path.write_text(f'[llm]\nprovider = "{provider}"\nmodel_id = "m"\ntoken_ceiling = {ceiling}\nmax_output_tokens = 2000\n', encoding="utf-8")
+    path.write_text(f'[llm]\nprovider = "{provider}"\nmodel_id = "m"\ntoken_ceiling = {ceiling}\nmax_output_tokens = 2000\n' + (OCR_TABLE if ocr else ""), encoding="utf-8")
     return path
 
 
@@ -45,11 +48,12 @@ def balance_sheet(tmp_path):
     return fx.balance_sheet_pdf(tmp_path / "statement.pdf")
 
 
-def invoke(tmp_path, pdf, *extra, replies=None, factory=None, provider="fake", ceiling=1_000_000, config=None, env=None):
+def invoke(tmp_path, pdf, *extra, replies=None, factory=None, provider="fake", ceiling=1_000_000, config=None, env=None, ocr=False, ocr_factory=None):
     out, err = io.StringIO(), io.StringIO()
-    argv = [str(pdf), *extra, "--config", str(config or settings(tmp_path, provider, ceiling))]
+    argv = [str(pdf), *extra, "--config", str(config or settings(tmp_path, provider, ceiling, ocr))]
+    engine = {} if ocr_factory is None else {"ocr_factory": ocr_factory}
     code = main(argv, provider_factory=factory or (lambda s, e: FakeProvider(script=replies or [])), clock=clock(), stdout=out, stderr=err,
-                assignments=tmp_path / "none.jsonl", env=env if env is not None else {})  # fmt: skip
+                assignments=tmp_path / "none.jsonl", env=env if env is not None else {}, **engine)  # fmt: skip
     return code, out.getvalue(), err.getvalue()
 
 
@@ -162,6 +166,28 @@ def export_failed(tmp_path):
     return invoke(tmp_path, pdf, replies=[fx.good_response(pdf)])  # the same clock gives the same run ID: the folder exists
 
 
+def scanned_pdf(tmp_path):
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+
+    path = tmp_path / "scan.pdf"
+    pdf = canvas.Canvas(str(path), pagesize=(612, 792), invariant=1)
+    pdf.drawImage(ImageReader(Image.new("RGB", (20, 20), "white")), 0, 0, 612, 792)  # one full-page image and no text
+    pdf.showPage()
+    pdf.save()
+    return path
+
+
+def ocr_unavailable(tmp_path):
+    return invoke(tmp_path, scanned_pdf(tmp_path), "--ocr", "--pages", "1", ocr=True)  # no engine is installed: the default engine says so
+
+
+def ocr_failed(tmp_path):
+    from credit_intel.ingestion.fake_ocr import FakeOcrExtractor
+
+    return invoke(tmp_path, scanned_pdf(tmp_path), "--ocr", "--pages", "1", ocr=True, ocr_factory=lambda: FakeOcrExtractor({}, page_count=1, fail=True))
+
+
 SCENARIOS = {
     ErrorCode.NOT_FOUND: not_found,
     ErrorCode.TOO_LARGE: too_large,
@@ -181,18 +207,13 @@ SCENARIOS = {
     ErrorCode.LLM_BUDGET_EXCEEDED: llm_budget,
     ErrorCode.CONFIG_INVALID: config_invalid,
     ErrorCode.EXPORT_FAILED: export_failed,
+    ErrorCode.OCR_UNAVAILABLE: ocr_unavailable,
+    ErrorCode.OCR_FAILED: ocr_failed,
 }
 
 
-# Codes specified by PRD v0.4.44 (FR-001A) whose failure the command line cannot yet provoke, because OCR is built in steps
-# (step 1b adds the codes and the fake engine; the command-line scenarios come with the end-to-end step). The set must shrink
-# to empty; a code may not be added to it for any other reason.
-NOT_YET_PROVOKABLE = {ErrorCode.OCR_UNAVAILABLE, ErrorCode.OCR_FAILED}
-
-
 def test_every_code_in_the_catalogue_has_a_scenario_and_no_scenario_is_for_an_unknown_code():
-    assert set(SCENARIOS) | NOT_YET_PROVOKABLE == set(CATALOGUE) == set(ErrorCode)
-    assert not set(SCENARIOS) & NOT_YET_PROVOKABLE and len(SCENARIOS) == 18
+    assert set(SCENARIOS) == set(CATALOGUE) == set(ErrorCode) and len(SCENARIOS) == 20
 
 
 @pytest.mark.parametrize("code", list(SCENARIOS), ids=[c.value for c in SCENARIOS])

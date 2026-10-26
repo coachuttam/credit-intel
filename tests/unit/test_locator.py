@@ -355,7 +355,7 @@ def test_range_with_no_text_is_rejected_even_if_other_pages_have_text():
         locate_statements(pages, page_range="5-7")
 
     assert excinfo.value.code is ErrorCode.NO_TEXT_LAYER
-    assert "OCR is not supported" in str(excinfo.value)
+    assert "appears to be scanned" in str(excinfo.value)
 
 
 def test_whitespace_only_pages_in_a_range_count_as_without_text():

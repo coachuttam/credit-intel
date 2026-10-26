@@ -32,7 +32,7 @@ G1 = [
     ("E-INPUT-CORRUPT", "validated / text_extracted", "Re-download or re-export the PDF.", 3, "No"),
     ("E-INPUT-ENCRYPTED", "validated", "Supply an unencrypted copy.", 3, "No"),
     ("E-INPUT-TOO-MANY-PAGES", "validated", "Supply only the relevant pages.", 3, "No"),
-    ("E-INPUT-NO-TEXT-LAYER", "text_extracted / statements_located", "Supply a text-based PDF, or a page range that contains text.", 3, "No"),
+    ("E-INPUT-NO-TEXT-LAYER", "text_extracted / statements_located", "Supply a text-based PDF or a page range that contains text, or turn OCR on with --ocr and --pages.", 3, "No"),
     ("E-INPUT-OCR-UNAVAILABLE", "text_extracted", "Install the engine, or run without --ocr.", 3, "No"),
     ("E-INPUT-OCR-FAILED", "text_extracted", "Narrow --pages, or raise the limits deliberately.", 3, "No"),
     ("E-INPUT-PAGE-RANGE", "statements_located", "Correct --pages (e.g. 110-115,120).", 3, "No"),

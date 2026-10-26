@@ -95,6 +95,7 @@ class VerificationContext:
     column_settings: ColumnSettings | None = None
     locator_settings: LocatorSettings | None = None
     assertion: BasisAssertion | None = None  # the analyst's assertion of the basis (H.4.6, v0.4.24)
+    ocr_column_settings: ColumnSettings | None = None  # the column settings for pages read by OCR, instead of column_settings (v0.4.44)
     ocr: OcrReading | None = None  # the pages whose text is an OCR reading; a field cited on one is OCR evidence (v0.4.44)
 
 
@@ -155,6 +156,13 @@ class FieldVerifier:
         self.refilings: tuple[FieldRefiling, ...] = ()
         self.scans: tuple[FieldScan, ...] = ()
 
+    def _columns(self, page_number: int) -> ColumnSettings | None:
+        """The column settings for a page: the OCR ones for a page read by OCR (FR-005 criterion 11), else the text-layer ones."""
+        ctx = self._ctx
+        if ctx.ocr is not None and ctx.ocr_column_settings is not None and page_number in ctx.ocr.pages:
+            return ctx.ocr_column_settings
+        return ctx.column_settings
+
     def _structure(self, page_number: int) -> PageStructure | None:
         if page_number not in self._structures:
             ctx = self._ctx
@@ -165,12 +173,12 @@ class FieldVerifier:
                 resolver = page_period_resolver(
                     words,
                     page.text,
-                    ctx.column_settings,
+                    self._columns(page_number),
                     ctx.locator_settings,
                     known_current=ctx.attributes.period_end(PeriodRole.CURRENT),
                 )
                 self._structures[page_number] = analyse_structure(
-                    words, resolver, ctx.column_settings, ctx.locator_settings
+                    words, resolver, self._columns(page_number), ctx.locator_settings
                 )
         return self._structures[page_number]
 
@@ -345,7 +353,7 @@ class FieldVerifier:
             else:
                 column = check_column(
                     structure, ColumnClaim(period_end, proposed.raw_value, proposed.evidence_quote, True),
-                    (ctx.column_settings or ColumnSettings()).split_figure_gap_pt,
+                    (self._columns(proposed.page_number) or ColumnSettings()).split_figure_gap_pt,
                 )  # fmt: skip
                 column_verified = column.outcome is Outcome.PASS
             if not column_verified:

@@ -291,7 +291,7 @@ def test_every_error_code_has_a_message():
 
 
 def test_no_text_layer_message_states_ocr_is_not_supported():
-    assert "OCR is not supported" in MESSAGES[ErrorCode.NO_TEXT_LAYER]
+    assert "appears to be scanned" in MESSAGES[ErrorCode.NO_TEXT_LAYER]
 
 
 def test_not_found_message_names_file_but_not_its_directory(tmp_path):

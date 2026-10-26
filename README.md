@@ -77,7 +77,7 @@ credit-intel <pdf_path> [--pages RANGE] [--basis consolidated|standalone] [--ass
 | `--profile PROFILE_JSON` | An optional JSON object with the keys `borrower_name`, `industry`, `facility_requested` and `notes`, each a string of at most 500 characters. The values appear in the memo labelled `[ANALYST-PROVIDED]` and are never used as evidence, in calculations or in rules. |
 | `--output-dir DIR` | Where run folders are written. Default `runs`. |
 | `--config SETTINGS_TOML` | The settings file. Default `config/settings.toml`. |
-| `--ocr` | Turns on OCR of scanned pages (specified in PRD v0.4.44, built in steps). **Not built yet:** the `[ocr]` settings are checked and the run reads the text layer only. |
+| `--ocr` | Reads the image-only pages of `--pages` by OCR (PRD v0.4.44). Needs the `[ocr]` settings and an OCR engine, and a scanned document needs `--pages`. **No engine is installed yet** (the Tesseract adapter is the next step of the build), so a scanned page currently ends with `E-INPUT-OCR-UNAVAILABLE`. Text read by OCR is never accepted as extracted. |
 | `--confirm-public-document` | Confirms that a document that is not on the assignment record is public, so its pages may be sent. |
 
 On success the command prints the run folder path and exits 0. On a failure it prints one line with an error code (`E-...`), the reason and what to do, and exits with the code in this table. A run that failed after its input was read also leaves a folder with only `manifest.json`, which records the failed state and the error code.

@@ -133,8 +133,7 @@ def test_without_the_flag_or_the_table_nothing_about_ocr_is_said(tmp_path):
     assert "ocr" not in err.lower()
 
 
-def test_with_valid_settings_the_run_says_ocr_is_not_built_yet(tmp_path):
-    _, err = run(tmp_path, LLM + FULL, "--ocr")
-    assert "OCR is not built yet" in err
-    _, err = run(tmp_path, LLM + FULL)  # the table alone turns it on
-    assert "OCR is not built yet" in err
+def test_with_valid_settings_the_run_goes_on_and_says_nothing_about_ocr_not_being_built(tmp_path):
+    for flags, text in (("--ocr",), LLM + FULL), ((), LLM + FULL):  # the flag, or the table alone, turns it on
+        code, err = run(tmp_path, text, *flags)
+        assert "not built yet" not in err and "E-CONFIG-INVALID" not in err and code == 3  # on to the (empty) file: E-INPUT-CORRUPT

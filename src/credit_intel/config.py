@@ -597,6 +597,7 @@ def load_jev_settings(
 # --- OCR of scanned pages (PRD v0.4.44, FR-001A; specified, built in steps) --------------------------------------------------
 
 OCR_SETTING_NAMES = ("enabled", "dpi", "min_image_area_share", "max_pages", "timeout_seconds", "column_margin_pt", "split_figure_gap_pt")
+OCR_LANGUAGE = "eng"  # FR-001A.9: English only
 OCR_DEFAULT_DPI = 300  # FR-001A.6: provisional
 # Required, with no default, once OCR is on. The page cap and the time limit are OD-18 (option b); the other three are
 # provisional values that are set only from an assigned scan (FR-001A.2, FR-005 criterion 11, AC-E-7).

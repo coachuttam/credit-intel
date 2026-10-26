@@ -39,6 +39,8 @@ from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, ENV_PRIVATE_APPROVED
 from credit_intel.export.manifest import code_version, package_versions, run_id
 from credit_intel.export.run_export import export_failure, export_run
 from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, ErrorCode, IngestionError, exit_code
+from credit_intel.ingestion.extractor import OcrExtractor
+from credit_intel.ingestion.ocr_engine import default_ocr_extractor
 from credit_intel.llm.factory import build_provider
 from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
 from credit_intel.memo.trace import MemoCheckFailed
@@ -56,6 +58,7 @@ EXIT_INTERRUPTED = 130
 logger = logging.getLogger("credit_intel.cli")
 
 ProviderFactory = Callable[[LLMSettings, Mapping[str, str]], LLMProvider]
+OcrFactory = Callable[[], OcrExtractor]
 
 
 class LazyProvider:
@@ -94,7 +97,7 @@ def build_parser(stream: IO[str]) -> argparse.ArgumentParser:
     p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, metavar="DIR", help="where run folders are written (default: runs)")
     p.add_argument("--config", type=Path, default=DEFAULT_SETTINGS_PATH, metavar="SETTINGS_TOML", help="settings file (default: config/settings.toml)")
     p.add_argument("--ocr", action="store_true",
-                   help="turn on OCR of scanned pages (PRD v0.4.44; not built yet: the [ocr] settings are checked and the run reads the text layer only)")  # fmt: skip
+                   help="read image-only pages of --pages by OCR (PRD v0.4.44; needs the [ocr] settings and an OCR engine; a scanned document needs --pages)")  # fmt: skip
     p.add_argument("--confirm-public-document", action="store_true",
                    help="confirm that a document not on the assignment record is public, so its statement pages may be sent to the hosted API")  # fmt: skip
     return p
@@ -148,12 +151,11 @@ def _page_filter(args: argparse.Namespace, llm: LLMSettings, env: Mapping[str, s
 
 
 def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[str], assignments: Path, env: Mapping[str, str],
-             classifier_factory: ClassifierFactory = build_classifier) -> int:  # fmt: skip
+             classifier_factory: ClassifierFactory = build_classifier, ocr_factory: OcrFactory = default_ocr_extractor) -> int:  # fmt: skip
     args = call.args
     call.llm = llm = load_llm_settings(args.config, env)
     pricing = load_pricing(args.config, env)
-    if load_ocr_settings(args.config, args.ocr).enabled:
-        print("ocr: settings checked; OCR is not built yet, so this run reads the text layer only", file=err)  # FR-001A is built in steps
+    ocr = load_ocr_settings(args.config, args.ocr)
     page_filter = _page_filter(args, llm, env, classifier_factory)
     try:
         call.sha256 = file_sha256(args.pdf_path)
@@ -171,7 +173,7 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     basis = StatementBasis(args.basis)
     result = run_pipeline(
         args.pdf_path, LazyProvider(lambda: factory(llm, env)), llm, recorder=call.recorder, basis=basis, page_range=args.pages,
-        pricing=pricing, profile_path=args.profile,
+        pricing=pricing, profile_path=args.profile, ocr_settings=ocr, ocr_extractor=ocr_factory() if ocr.enabled else None,
         assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, page_filter=page_filter,
     )  # fmt: skip
     path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),
@@ -190,8 +192,9 @@ def main(
     assignments: Path = ASSIGNMENTS_PATH,
     env: Mapping[str, str] | None = None,
     classifier_factory: ClassifierFactory = build_classifier,
+    ocr_factory: OcrFactory = default_ocr_extractor,
 ) -> int:
-    """Run the command and return its exit code. The streams, clock, environment and the provider and classifier factories can be replaced for tests."""
+    """Run the command and return its exit code. The streams, clock, environment and the provider, classifier and OCR engine factories can be replaced for tests."""
     out, err = stdout or sys.stdout, stderr or sys.stderr
     environment = os.environ if env is None else env
     try:
@@ -211,7 +214,7 @@ def main(
     package_logger.setLevel(handler.level)
     call = _Invocation(args, Recorder(clock))
     try:
-        return _execute(call, provider_factory, out, err, assignments, environment, classifier_factory)
+        return _execute(call, provider_factory, out, err, assignments, environment, classifier_factory, ocr_factory)
     except IngestionError as error:
         print(str(error), file=err)
         _record_failure(call, err, error)

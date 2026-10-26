@@ -17,11 +17,13 @@ hash, never document text, quotes, file names or values (FR-012.3).
 import logging
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from pathlib import Path
 
 from credit_intel.config import (
+    OCR_LANGUAGE,
+    OcrSettings,
     ColumnSettings,
     DeclarationSettings,
     IngestionSettings,
@@ -34,15 +36,16 @@ from credit_intel.extraction.assertion import BasisAssertion, apply_assertion
 from credit_intel.extraction.attributes import VerifiedAttributes, verify_attributes
 from credit_intel.extraction.extract import ExtractionResult, extract_fields
 from credit_intel.extraction.field_set import FieldSet, build_field_set
-from credit_intel.extraction.ocr_evidence import OcrRunRecord
+from credit_intel.extraction.ocr_evidence import OcrReading, OcrRunRecord, mean_confidence
 from credit_intel.extraction.prompt import Prompt, load_prompt
 from credit_intel.extraction.verify import FieldRefiling, FieldScan, FieldVerification, FieldVerifier, VerificationContext
 from credit_intel.extraction.bases import drop_unknown_basis_pages
-from credit_intel.ingestion.errors import IngestionError
-from credit_intel.ingestion.extractor import TextExtractor, WordExtractor
+from credit_intel.ingestion.errors import ErrorCode, IngestionError
+from credit_intel.ingestion.extractor import OcrExtractor, TextExtractor, WordExtractor
 from credit_intel.ingestion.ingest import ingest
-from credit_intel.ingestion.locator import check_statement_basis, locate_statements
-from credit_intel.ingestion.models import LocatorResult
+from credit_intel.ingestion.locator import check_statement_basis, locate_statements, parse_page_range
+from credit_intel.ingestion.ocr_pages import plan_ocr_pages, require_page_range_for_scan
+from credit_intel.ingestion.models import IngestedDocument, LocatorResult, OcrPage
 from credit_intel.llm.budget import TokenBudget
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR, ResponseCache
 from credit_intel.llm.cost import estimate_cost
@@ -105,6 +108,58 @@ class ExtractionRun:
     ocr: OcrRunRecord | None = None
 
 
+def _ocr_column_settings(column_settings: ColumnSettings | None, ocr: OcrSettings | None) -> ColumnSettings:
+    """The text-layer column settings with the two the OCR settings replace (PRD FR-005 criterion 11)."""
+    assert ocr is not None and ocr.column_margin_pt is not None and ocr.split_figure_gap_pt is not None
+    return replace(column_settings or ColumnSettings(), column_margin_pt=ocr.column_margin_pt, split_figure_gap_pt=ocr.split_figure_gap_pt)
+
+
+def _ocr_record(engine: OcrExtractor, settings: OcrSettings, pages: dict[int, OcrPage], used: list[int]) -> OcrRunRecord:
+    return OcrRunRecord(
+        engine=engine.name,
+        engine_version=engine.version,
+        dpi=settings.dpi,
+        language=OCR_LANGUAGE,
+        ocr_pages={n: mean_confidence([w.confidence for w in page.words]) for n, page in pages.items()},
+        text_layer_pages=tuple(n for n in used if n not in pages),
+    )
+
+
+def _ocr_range(document: IngestedDocument, page_range: str | None, locator_settings: LocatorSettings | None) -> tuple[int, ...] | None:
+    """The pages of the page range, checked before any OCR (FR-001A.3); ``None`` for a document with a text layer and no range.
+
+    A document without a text layer needs ``--pages``, and the range must lie inside the document: otherwise ``E-INPUT-PAGE-RANGE``.
+    """
+    require_page_range_for_scan(document.pages, page_range)
+    if page_range is None:
+        return None
+    return parse_page_range(page_range, len(document.pages), (locator_settings or LocatorSettings()).max_candidates)
+
+
+def _read_by_ocr(
+    document: IngestedDocument,
+    used: tuple[int, ...],
+    settings: OcrSettings,
+    engine: OcrExtractor | None,
+    extractor: object,
+) -> tuple[IngestedDocument, dict[int, OcrPage]]:
+    """Read the image-only pages among ``used`` by OCR (FR-001A); return the document with their text in place.
+
+    The page cap (``E-INPUT-OCR-FAILED``), an empty plan (``E-INPUT-NO-TEXT-LAYER``), a missing engine and the engine's own
+    errors all belong to the text stage (G.1).
+    """
+    coverage = extractor.image_coverage(document.file_info.path)  # type: ignore[attr-defined]
+    planned = plan_ocr_pages(document.pages, coverage, used, settings)
+    if not planned:
+        return document, {}
+    if engine is None:
+        raise IngestionError(ErrorCode.OCR_UNAVAILABLE)
+    assert settings.timeout_seconds is not None
+    read = {page.page_number: page for page in engine.ocr_pages(document.file_info.path, planned, dpi=settings.dpi, timeout_seconds=settings.timeout_seconds)}
+    replaced = tuple(read[p.page_number].page_text() if p.page_number in read else p for p in document.pages)
+    return IngestedDocument(file_info=document.file_info, pages=replaced), read
+
+
 def run_extraction(
     path: Path,
     provider: LLMProvider,
@@ -124,12 +179,18 @@ def run_extraction(
     assert_basis: StatementBasis | None = None,
     observer: Callable[[str, dict[str, object]], None] | None = None,
     page_filter: PageFilterSetup | None = None,
+    ocr_settings: OcrSettings | None = None,
+    ocr_extractor: OcrExtractor | None = None,
 ) -> ExtractionRun:
     """Run the pipeline on one PDF and return its field set and statistics.
 
     ``observer(state, counts)`` is told about each stage from ``validated`` onwards, with the same counts that
     are logged (the caller owns ``received``). Raises ``IngestionError`` for a catalogued failure (the input, no candidate pages, a
     missing configured basis, invalid model output twice, or the token ceiling).
+
+    With ``ocr_settings.enabled`` (PRD v0.4.44, FR-001A), a document without a text layer is not refused: its image-only pages
+    among those of ``page_range`` are read by ``ocr_extractor`` and their text takes the place of the empty text layer. OCR
+    runs only for a page range; a run without one locates statements in the text layer as before.
     """
     if basis not in (StatementBasis.CONSOLIDATED, StatementBasis.STANDALONE):
         raise ValueError("the configured basis is consolidated or standalone")
@@ -164,8 +225,21 @@ def run_extraction(
             log(VALIDATED, pages=info.page_count)
             stage = TEXT_EXTRACTED
 
-        document = ingest(path, ingestion_settings, extractor, on_validated=validated)  # type: ignore[arg-type]
-        log(TEXT_EXTRACTED, pages_with_text=sum(1 for p in document.pages if p.has_text))
+        ocr_on = ocr_settings is not None and ocr_settings.enabled
+        document = ingest(path, ingestion_settings, extractor, on_validated=validated, ocr_enabled=ocr_on)  # type: ignore[arg-type]
+        ocr_pages: dict[int, OcrPage] = {}
+        if ocr_on:
+            assert ocr_settings is not None
+            try:
+                used = _ocr_range(document, page_range, locator_settings)
+            except IngestionError:  # the text layer has been read; what is wrong is the page range, a statements_located failure (G.1)
+                log(TEXT_EXTRACTED, pages_with_text=sum(1 for p in document.pages if p.has_text))
+                stage = STATEMENTS_LOCATED
+                raise
+            if used is not None:
+                document, ocr_pages = _read_by_ocr(document, used, ocr_settings, ocr_extractor, extractor)
+        counts = {"ocr_pages": len(ocr_pages)} if ocr_pages else {}
+        log(TEXT_EXTRACTED, pages_with_text=sum(1 for p in document.pages if p.has_text), **counts)
 
         stage = STATEMENTS_LOCATED
         located = locate_statements(document.pages, locator_settings, page_range)
@@ -212,7 +286,9 @@ def run_extraction(
         candidates = sorted(c.page_number for c in located.candidates)
         by_number = {p.page_number: p for p in document.pages}
         pages = {n: by_number[n] for n in candidates}
-        words = {w.page_number: w for w in extractor.extract_words(document.file_info.path, candidates)}  # type: ignore[union-attr]
+        layer_pages = [n for n in candidates if n not in ocr_pages]
+        words = {w.page_number: w for w in extractor.extract_words(document.file_info.path, layer_pages)} if layer_pages else {}  # type: ignore[union-attr]
+        words.update({n: ocr_pages[n].page_words() for n in candidates if n in ocr_pages})  # an OCR page's boxes are the engine's
         source = SourceDocument(file_name=document.file_info.file_name, sha256=document.file_info.sha256)
         attributes = verify_attributes(
             list(extraction.response.attributes),
@@ -234,6 +310,8 @@ def run_extraction(
                 column_settings=column_settings,
                 locator_settings=locator_settings,
                 assertion=assertion,
+                ocr_column_settings=_ocr_column_settings(column_settings, ocr_settings) if ocr_pages else None,
+                ocr=OcrReading(ocr_extractor.name, ocr_extractor.version, ocr_settings.dpi, ocr_pages) if ocr_pages and ocr_extractor and ocr_settings else None,
             )
         )
         verifications = verifier.verify_all(extraction.response)
@@ -272,4 +350,5 @@ def run_extraction(
         page_filter=page_filter_outcome,
         field_refilings=verifier.refilings,
         field_scans=verifier.scans,
+        ocr=_ocr_record(ocr_extractor, ocr_settings, ocr_pages, candidates) if ocr_pages and ocr_extractor and ocr_settings else None,
     )

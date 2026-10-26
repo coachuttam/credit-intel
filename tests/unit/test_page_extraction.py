@@ -72,7 +72,7 @@ def test_pdf_with_no_text_on_any_page_is_rejected(make_pdf):
         ingest(make_pdf(["", "", ""], draw_shapes=True))
 
     assert excinfo.value.code is ErrorCode.NO_TEXT_LAYER
-    assert "OCR is not supported" in str(excinfo.value)
+    assert "appears to be scanned" in str(excinfo.value)
 
 
 def test_whitespace_only_text_counts_as_no_text(tmp_path):
