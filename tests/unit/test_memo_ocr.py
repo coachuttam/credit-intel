@@ -173,7 +173,7 @@ def test_section_9_states_the_ocr_limitation_in_place_of_no_ocr():
     data, _ = with_ocr()
     nine = section(memo_of(data), 9)
 
-    assert OCR_SCOPE in nine and SCOPE[0] not in nine and "There is no OCR" not in nine
+    assert OCR_SCOPE in nine and SCOPE[0] not in nine and "was not used" not in nine
     assert "never accepted as extracted" in nine and "page image" in nine and "English only" in nine
     assert "Skewed or rotated pages are not corrected" in nine and "has not been measured on real scanned reports" in nine and "period of an OCR page is often not verified" in nine
     assert all(text in nine for text in SCOPE[1:]) and nine.count(OCR_SCOPE) == 1  # only the first scope line is replaced

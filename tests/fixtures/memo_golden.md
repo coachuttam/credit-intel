@@ -203,7 +203,7 @@ Indicators are prompts for a human to investigate. They are not a rating, a scor
 
 **Scope**
 
-- Only text-based PDF files are read. There is no OCR, so a scanned page cannot be read.
+- Only text-based PDF files are read in this run. OCR of scanned pages is available but was not used, so a scanned page cannot be read here.
 - One document is reviewed per run. Documents are not compared with each other.
 - Two consecutive annual periods are read: the current period and the comparative period. 52/53-week reporting years, quarterly and interim periods are out of scope.
 - No currency conversion is done. If the figures a ratio needs are in different currencies, the ratio is not defined.

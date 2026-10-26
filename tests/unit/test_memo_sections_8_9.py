@@ -195,7 +195,7 @@ def test_the_limitations_open_with_the_human_review_statement(golden):
     assert "It is not a credit decision, a rating or a score.**" in text
 
 
-@pytest.mark.parametrize("phrase", ["text-based PDF", "no OCR", "One document", "52/53-week", "No currency conversion", "never switched automatically",
+@pytest.mark.parametrize("phrase", ["text-based PDF", "OCR of scanned pages is available but was not used", "One document", "52/53-week", "No currency conversion", "never switched automatically",
                                     "Lease liabilities are excluded", "dash or the word nil", "acquisitions, disposals", "one-off items", "window dressing",
                                     "lease interest", "not proof that it is absent", "no AI-generated commentary", "not used in any calculation or rule",
                                     "not how creditworthy"])  # fmt: skip

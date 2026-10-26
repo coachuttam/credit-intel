@@ -188,7 +188,7 @@ def test_the_memo_labels_the_fields_as_ocr_asks_the_page_image_question_and_pass
     assert "[OCR p.1, confidence 88.0]" in memo and "- **Text read by OCR:** page 1" in memo
     assert memo.count("Check this value against the page image.") == 6
     assert "[SOURCE: p.1]" not in memo.split("## 7.")[1]
-    assert "There is no OCR" not in memo and "never accepted as extracted" in memo
+    assert "OCR of scanned pages is available but was not used" not in memo and "never accepted as extracted" in memo
 
 
 def test_results_and_memo_are_the_same_on_a_second_run(tmp_path):
