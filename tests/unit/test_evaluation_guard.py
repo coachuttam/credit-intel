@@ -40,7 +40,8 @@ def record(tmp_path, *lines, raw=None):
 def test_the_committed_record_allows_the_two_tuning_reports_and_refuses_every_held_out_one():
     assert check_may_send(R1) == "R1" and check_may_send(R2) == "R2"
     sets = load_current_sets()
-    assert {sha for sha, (_, kind) in sets.items() if kind == "tuning"} == {R1, R2}
+    # R1 and R2 are the text-layer tuning reports; S1 and S2 are the tuning scans (OD-17, 2026-10-26).
+    assert {document for document, kind in sets.values() if kind == "tuning"} == {"R1", "R2", "S1", "S2"}
     assert ASSIGNMENTS_PATH == ROOT / "tests/eval/assignments.jsonl"
     for sha, (_, kind) in sets.items():
         if kind == "held_out":  # whatever the record holds; no held-out value is copied into a test
