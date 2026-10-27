@@ -1,0 +1,8 @@
+DejaVu fonts 2.37 (DejaVuSans.ttf, DejaVuSans-Bold.ttf, DejaVuSans-Oblique.ttf, DejaVuSansMono.ttf), unchanged, with the project's
+LICENSE and AUTHORS files. The licence (Bitstream Vera licence; DejaVu changes in the public domain) allows use, copying and
+redistribution of the font files with the licence.
+
+Obtained 2026-10-27 from the project's own release:
+  https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-2.37.tar.bz2
+  SHA-256 of that archive: fa9ca4d13871dd122f61258a80d01751d603b4d3ee14095d65453b4e846e17d7
+Used by the PDF report (PRD FR-015, D-16) so that it can print the rupee sign and typographic quotes.

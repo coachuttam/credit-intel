@@ -7,37 +7,35 @@ name = "ai-credit-intelligence"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "markdown-it-py" },
     { name = "openai" },
     { name = "pdfplumber" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pypdfium2" },
+    { name = "reportlab" },
     { name = "typesafe-sdk" },
 ]
 
 [package.dev-dependencies]
 dev = [
-    { name = "markdown-it-py" },
     { name = "pytest" },
-    { name = "reportlab" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "markdown-it-py", specifier = ">=4.2.0" },
     { name = "openai", specifier = ">=3.35.1" },
     { name = "pdfplumber", specifier = ">=0.11.10" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2.14.1" },
     { name = "pypdfium2", specifier = ">=5.14.0" },
+    { name = "reportlab", specifier = ">=5.0.1" },
     { name = "typesafe-sdk", specifier = "==0.7.5" },
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "markdown-it-py", specifier = ">=4.2.0" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "reportlab", specifier = ">=5.0.1" },
-]
+dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
 name = "annotated-types"
