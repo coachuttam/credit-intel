@@ -7,6 +7,10 @@ PDF read-only, and writes the result, or the catalogued error code, to the outpu
 text reaches a log, the standard streams or an error message. The file is the channel (not a pipe) so a large result cannot block
 the worker while the parent is watching it. The parent turns a missing output or a non-zero exit into ``E-INPUT-CORRUPT``.
 
+A ``render_page`` operation (PRD SEC-12 step 2) renders one page for OCR with pypdfium2 and sends the PNG on the standard output, so the image
+is never written to a file (FR-001A.6): one header line of JSON, then the PNG bytes. Its argument list is
+``render_page <pdf> - <memory_mb> {"page": N, "dpi": D}``.
+
 On Linux the worker also asks the system for an address-space limit as a backstop (``BACKSTOP_FACTOR`` times the memory limit,
 because address space exceeds resident memory). The parent's resident-memory check is the stated mechanism on every platform:
 macOS cannot enforce such a limit.
@@ -21,6 +25,7 @@ from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.models import PageImageCoverage, PageText, PageWords, PdfInspection, Word
 
 OPERATIONS = ("inspect", "extract_pages", "extract_words", "image_coverage")
+RENDER = "render_page"
 BACKSTOP_FACTOR = 2
 
 
@@ -61,8 +66,34 @@ def from_jsonable(operation: str, data: object):
     raise ValueError("unknown operation")
 
 
+def render_main(pdf: Path, memory_mb: int, request: dict) -> int:
+    """Render one page and write ``header line + PNG`` to the standard output."""
+    set_address_space_backstop(memory_mb)
+    from credit_intel.ingestion.tesseract_ocr import open_document, render_page_png
+
+    out = sys.stdout.buffer
+    try:
+        document = open_document(pdf)
+        try:
+            png, width, height = render_page_png(document, request["page"], request["dpi"])
+        finally:
+            document.close()
+        header: dict = {"ok": True, "width": width, "height": height}
+    except IngestionError as error:
+        out.write(json.dumps({"ok": False, "code": error.code.value}).encode() + b"\n")
+        return 0
+    except MemoryError:
+        out.write(json.dumps({"ok": False, "memory": True}).encode() + b"\n")
+        return 0
+    out.write(json.dumps(header).encode() + b"\n" + png)
+    out.flush()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = sys.argv[1:] if argv is None else argv
+    if len(args) >= 5 and args[0] == RENDER:
+        return render_main(Path(args[1]), int(args[3]), json.loads(args[4]))
     if len(args) < 3 or args[0] not in OPERATIONS:
         return 2
     operation, pdf, output = args[0], Path(args[1]), Path(args[2])

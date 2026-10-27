@@ -14,6 +14,11 @@ watches:
   (for example ``E-INPUT-ENCRYPTED``) is re-raised as it is. No error, log or temporary file holds document text beyond the result file,
   which is removed at once.
 
+**Rendering for OCR (step 2).** ``render_page`` runs one page's rendering in a worker too, with the same budget, memory watch and kill. The PNG
+comes back on the worker's standard output, drained by a thread, so it is held in memory only (FR-001A.6). It can also carry a time
+limit of its own (the OCR call's remaining time): passing that is ``E-INPUT-OCR-FAILED``, as before; passing the parse budget or the
+memory limit is ``E-INPUT-PARSE-LIMIT``; a render worker that fails or crashes is ``E-INPUT-OCR-FAILED``.
+
 Windows is not tested: the process is started in its own session where the system supports it, and the resident-memory read uses ``ps``.
 """
 
@@ -23,6 +28,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -34,6 +40,7 @@ from credit_intel.ingestion.parse_worker import from_jsonable
 
 POLL_SECONDS = 0.1
 WORKER_COMMAND = (sys.executable, "-I", "-m", "credit_intel.ingestion.parse_worker")  # -I: no user site or environment-chosen paths
+MAX_RENDER_BYTES = 512 * 1024 * 1024  # a page image bigger than this is treated as a memory-limit breach
 TIME_DETAIL = "time limit; raise ingestion.parse_timeout_seconds"
 MEMORY_DETAIL = "memory limit; raise ingestion.parse_memory_mb"
 
@@ -45,6 +52,26 @@ def resident_mb(pid: int) -> float | None:
         return int(done.stdout.strip()) / 1024 if done.stdout.strip() else None
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
+
+
+class _Drain(threading.Thread):
+    """Reads a worker's standard output into memory until it closes, giving up (and saying so) past ``MAX_RENDER_BYTES``."""
+
+    def __init__(self, stream, limit: int | None = None) -> None:
+        super().__init__(daemon=True)
+        self._stream, self._limit = stream, MAX_RENDER_BYTES if limit is None else limit
+        self.data = bytearray()
+        self.exceeded = False
+
+    def run(self) -> None:
+        try:
+            while chunk := self._stream.read1(1 << 20):  # read1: what is there now, not a full block
+                self.data += chunk
+                if len(self.data) > self._limit:
+                    self.exceeded = True
+                    return
+        except (OSError, ValueError):
+            return
 
 
 def _kill(process: subprocess.Popen) -> None:
@@ -95,13 +122,60 @@ class SandboxedExtractor:
     def image_coverage(self, path: Path) -> list[PageImageCoverage]:
         return self._run("image_coverage", path)
 
-    # --- one operation in a worker -------------------------------------------------------------------------
+    def render_page(self, path: Path, page: int, dpi: int, *, timeout_seconds: float | None = None) -> tuple[bytes, float, float]:
+        """Render one page for OCR in a worker: ``(png bytes, width in points, height in points)`` (PRD SEC-12 step 2)."""
+        self._start_budget()
+        command = [*self._command, "render_page", str(path), "-", str(self._limits.memory_mb), json.dumps({"page": page, "dpi": dpi})]
+        own = None if timeout_seconds is None else self._clock() + timeout_seconds
+        try:
+            process = subprocess.Popen(  # noqa: S603 - a fixed command; the path is an argument, never a shell string
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                start_new_session=hasattr(os, "killpg"),
+            )  # fmt: skip
+        except OSError as exc:
+            raise IngestionError(ErrorCode.OCR_FAILED) from exc
+        drain = _Drain(process.stdout)
+        drain.start()
+        try:
+            self._watch(process, own, drain)
+        finally:
+            if process.poll() is None:
+                _kill(process)
+            drain.join(timeout=10)
+            process.stdout.close()
+        return self._render_result(process.returncode, bytes(drain.data), drain.exceeded)
 
-    def _run(self, operation: str, path: Path, argument: str | None = None):
+    @staticmethod
+    def _render_result(returncode: int | None, data: bytes, exceeded: bool) -> tuple[bytes, float, float]:
+        if exceeded:
+            raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
+        if returncode != 0:
+            raise IngestionError(ErrorCode.OCR_FAILED)
+        try:
+            line, _, png = data.partition(b"\n")
+            header = json.loads(line)
+            if header.get("memory"):
+                raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
+            if not header["ok"]:
+                raise IngestionError(ErrorCode(header["code"]))
+            if not png:
+                raise ValueError("no image")
+            return png, float(header["width"]), float(header["height"])
+        except IngestionError:
+            raise
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            raise IngestionError(ErrorCode.OCR_FAILED) from exc
+
+    def _start_budget(self) -> None:
         if self._deadline is None:
             self._deadline = self._clock() + self._limits.timeout_seconds
         if self._clock() >= self._deadline:
             raise IngestionError(ErrorCode.PARSE_LIMIT, detail=TIME_DETAIL)
+
+    # --- one operation in a worker -------------------------------------------------------------------------
+
+    def _run(self, operation: str, path: Path, argument: str | None = None):
+        self._start_budget()
         with tempfile.TemporaryDirectory(prefix="credit-intel-parse-") as scratch:
             output = Path(scratch) / "result.json"
             command = [*self._command, operation, str(path), str(output), str(self._limits.memory_mb)]
@@ -121,11 +195,17 @@ class SandboxedExtractor:
                     _kill(process)
             return self._result(operation, process.returncode, output)
 
-    def _watch(self, process: subprocess.Popen) -> None:
+    def _watch(self, process: subprocess.Popen, own_deadline: float | None = None, drain: _Drain | None = None) -> None:
         while process.poll() is None:
             if self._deadline is not None and self._clock() >= self._deadline:
                 _kill(process)
                 raise IngestionError(ErrorCode.PARSE_LIMIT, detail=TIME_DETAIL)
+            if own_deadline is not None and self._clock() >= own_deadline:
+                _kill(process)
+                raise IngestionError(ErrorCode.OCR_FAILED)  # the OCR call's own time limit, not the parse budget
+            if drain is not None and drain.exceeded:
+                _kill(process)
+                raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
             used = self._memory(process.pid)
             if used is not None and used > self._limits.memory_mb:
                 _kill(process)

@@ -90,3 +90,31 @@ def test_a_run_that_passes_the_time_limit_exits_3_with_the_new_code_and_no_docum
     assert code == 3 and out == "" and any(line.startswith("E-INPUT-PARSE-LIMIT: ") for line in err.splitlines()) and "ingestion.parse_timeout_seconds" in err
     for forbidden in ("Total current assets", "statement.pdf", str(tmp_path)):
         assert forbidden not in err
+
+
+def test_with_ocr_the_run_hands_the_sandbox_renderer_to_the_engine(tmp_path):
+    from PIL import Image
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+
+    from credit_intel.ingestion.fake_ocr import FakeOcrExtractor
+
+    scan = tmp_path / "scan.pdf"
+    pdf = canvas.Canvas(str(scan), pagesize=(612, 792), invariant=1)
+    pdf.drawImage(ImageReader(Image.new("RGB", (1700, 2200), "white")), 0, 0, 612, 792)
+    pdf.showPage()
+    pdf.save()
+    taken = []
+
+    class Engine(FakeOcrExtractor):
+        def use_renderer(self, renderer):
+            taken.append(renderer)
+
+    config = tmp_path / "settings.toml"
+    config.write_text(SETTINGS + "[ocr]\nenabled = true\nmin_image_area_share = 0.5\nmax_pages = 5\ntimeout_seconds = 60\ncolumn_margin_pt = 3\nsplit_figure_gap_pt = 2.0\n", encoding="utf-8")
+    ticks = iter(START + timedelta(milliseconds=7 * n) for n in range(10_000))
+    cli.main([str(scan), "--ocr", "--pages", "1", "--config", str(config)], provider_factory=lambda s, e: FakeProvider(script=[]), clock=lambda: next(ticks),
+             stdout=io.StringIO(), stderr=io.StringIO(), assignments=tmp_path / "none.jsonl", env=LIMITS_ENV, extractor_factory=REAL_FACTORY,
+             ocr_factory=lambda: Engine({}, page_count=1))  # fmt: skip
+
+    assert len(taken) == 1 and getattr(taken[0], "__name__", "") == "render_page" and isinstance(taken[0].__self__, SandboxedExtractor)

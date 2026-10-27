@@ -158,6 +158,15 @@ def sandboxed_extractor(config: Path, env: Mapping[str, str]) -> SandboxedExtrac
     return SandboxedExtractor(load_parse_limits(config, env))
 
 
+def _ocr_engine(ocr_factory: OcrFactory, extractor: TextExtractor) -> OcrExtractor:
+    """The OCR engine of a run. When the parser can render pages in a worker (SEC-12 step 2), the engine renders there too."""
+    engine = ocr_factory()
+    render, use = getattr(extractor, "render_page", None), getattr(engine, "use_renderer", None)
+    if render is not None and use is not None:
+        use(render)
+    return engine
+
+
 def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[str], assignments: Path, env: Mapping[str, str],
              classifier_factory: ClassifierFactory = build_classifier, ocr_factory: OcrFactory = default_ocr_extractor,
              extractor_factory: ExtractorFactory | None = None) -> int:  # fmt: skip
@@ -183,7 +192,7 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     basis = StatementBasis(args.basis)
     result = run_pipeline(
         args.pdf_path, LazyProvider(lambda: factory(llm, env)), llm, recorder=call.recorder, basis=basis, page_range=args.pages,
-        pricing=pricing, profile_path=args.profile, extractor=extractor, ocr_settings=ocr, ocr_extractor=ocr_factory() if ocr.enabled else None,
+        pricing=pricing, profile_path=args.profile, extractor=extractor, ocr_settings=ocr, ocr_extractor=_ocr_engine(ocr_factory, extractor) if ocr.enabled else None,
         assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, page_filter=page_filter,
     )  # fmt: skip
     path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),

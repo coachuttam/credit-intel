@@ -4,13 +4,18 @@ This is the only module that runs Tesseract. Pages are rendered in memory at the
 as pdfplumber's renderer), passed to ``tesseract`` on its standard input as PNG, and read back as TSV: nothing is written to disk
 (FR-001A.6). English only (FR-001A.9). The time limit covers the whole call, not each page, so a long range cannot multiply it.
 No error carries document text.
+
+The page rendering (pypdfium2, a library that parses the untrusted file) can run in the parse worker, under the run's parse limits
+(PRD SEC-12 step 2, v0.4.50): ``use_renderer`` gives the engine a function that renders one page there. Without one, as in the
+suite's engine tests, the pages are rendered in this process. The PNG goes from the worker to this process in memory, never
+through a file (FR-001A.6).
 """
 
 import io
 import re
 import subprocess
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from credit_intel.config import OCR_LANGUAGE
@@ -30,6 +35,35 @@ _WORD_LEVEL = "5"
 _ENVIRONMENT = {"OMP_THREAD_LIMIT": "1"}
 
 
+# One rendered page: PNG bytes, width and height in points. ``render(path, page, dpi, timeout_seconds=...)``.
+PageRenderer = Callable[..., tuple[bytes, float, float]]
+
+
+def open_document(path: Path):
+    """The pypdfium2 document for ``path``; ``E-INPUT-OCR-FAILED`` if it cannot be opened."""
+    import pypdfium2 as pdfium
+
+    try:
+        return pdfium.PdfDocument(str(path))
+    except Exception:
+        raise IngestionError(ErrorCode.OCR_FAILED) from None
+
+
+def render_page_png(document, number: int, dpi: int) -> tuple[bytes, float, float]:
+    """Render page ``number`` of ``document`` at ``dpi`` in memory: ``(png bytes, width in points, height in points)``."""
+    if isinstance(number, bool) or not isinstance(number, int) or not 1 <= number <= len(document):
+        raise IngestionError(ErrorCode.PAGE_RANGE)
+    try:
+        page = document[number - 1]
+        width, height = page.get_size()
+        image = page.render(scale=dpi / _POINTS_PER_INCH).to_pil().convert("RGB")
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG")
+    except Exception:
+        raise IngestionError(ErrorCode.OCR_FAILED) from None
+    return buffer.getvalue(), float(width), float(height)
+
+
 class TesseractExtractor:
     """Reads pages with the ``tesseract`` command. ``command`` can name another executable (a test stub)."""
 
@@ -38,6 +72,11 @@ class TesseractExtractor:
     def __init__(self, command: str = COMMAND) -> None:
         self._command = command
         self._version: str | None = None
+        self._renderer: PageRenderer | None = None
+
+    def use_renderer(self, renderer: PageRenderer | None) -> None:
+        """Render pages with ``renderer`` (the parse worker) instead of in this process; ``None`` goes back to this process."""
+        self._renderer = renderer
 
     @property
     def version(self) -> str:
@@ -81,7 +120,7 @@ class TesseractExtractor:
             raise IngestionError(ErrorCode.PAGE_RANGE)
         deadline = time.monotonic() + timeout_seconds
         result = []
-        for number, (png, width, height) in zip(sorted(requested), self._render(path, sorted(requested), dpi)):
+        for number, (png, width, height) in zip(sorted(requested), self._pages(path, sorted(requested), dpi, deadline)):
             page_dpi = dpi[number]
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -92,28 +131,26 @@ class TesseractExtractor:
             result.append(_page_from_tsv(number, done.stdout.decode("utf-8", "replace"), width, height, page_dpi))
         return result
 
+    def _pages(self, path: Path, numbers: list[int], dpi: Mapping[int, int], deadline: float):
+        """Yield ``(png, width, height)`` for each page, rendered by the worker if one was given, else in this process."""
+        if self._renderer is None:
+            yield from self._render(path, numbers, dpi)
+            return
+        for number in numbers:  # each page in its own worker, bounded by the OCR call's remaining time as well as the parse limits
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise IngestionError(ErrorCode.OCR_FAILED)
+            yield self._renderer(path, number, dpi[number], timeout_seconds=remaining)
+
     @staticmethod
     def _render(path: Path, numbers: list[int], dpi: Mapping[int, int]):
         """Yield ``(png bytes, width in points, height in points)`` for each page, rendered in memory at its ``dpi``."""
-        import pypdfium2 as pdfium
-
-        try:
-            document = pdfium.PdfDocument(str(path))
-        except Exception:
-            raise IngestionError(ErrorCode.OCR_FAILED) from None
+        document = open_document(path)
         try:
             if any(isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= len(document) for n in numbers):
                 raise IngestionError(ErrorCode.PAGE_RANGE)
             for number in numbers:
-                try:
-                    page = document[number - 1]
-                    width, height = page.get_size()
-                    image = page.render(scale=dpi[number] / _POINTS_PER_INCH).to_pil().convert("RGB")
-                    buffer = io.BytesIO()
-                    image.save(buffer, format="PNG")
-                except Exception:
-                    raise IngestionError(ErrorCode.OCR_FAILED) from None
-                yield buffer.getvalue(), float(width), float(height)
+                yield render_page_png(document, number, dpi[number])
         finally:
             document.close()
 
