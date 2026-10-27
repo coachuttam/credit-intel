@@ -86,10 +86,9 @@ def test_a_settings_file_that_cannot_be_read_is_refused(tmp_path):
     assert fails(tmp_path / "absent.toml") == "settings file"
 
 
-def test_the_repository_settings_file_names_both_limits_and_sets_neither():
-    text = (Path(__file__).resolve().parents[2] / "config" / "settings.toml").read_text(encoding="utf-8")
-    assert "[ingestion]" in text and "parse_timeout_seconds" in text and "parse_memory_mb" in text
-    assert fails(Path(__file__).resolve().parents[2] / "config" / "settings.toml") == "ingestion.parse_timeout_seconds"
+def test_the_repository_settings_file_holds_the_owners_two_limits():
+    repo = Path(__file__).resolve().parents[2] / "config" / "settings.toml"
+    assert load_parse_limits(repo, {}) == ParseLimits(timeout_seconds=300, memory_mb=4096)  # set by the owner on 2026-10-27
 
 
 # --- the catalogued error ----------------------------------------------------------------------------------

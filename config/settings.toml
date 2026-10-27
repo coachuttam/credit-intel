@@ -43,7 +43,8 @@ timeout_seconds = 120        # the time limit for one OCR call (OD-18), whole ca
 # (E-INPUT-PARSE-LIMIT). BOTH ARE REQUIRED and deliberately have no default: set them here, or with
 # CREDIT_INTEL_PARSE_TIMEOUT_SECONDS and CREDIT_INTEL_PARSE_MEMORY_MB. A missing, non-numeric, zero or negative value fails with
 # E-CONFIG-INVALID. The time is one budget for all parsing in a run; the memory is the worker's resident memory, watched by the parent.
-# Values are the owner's to set, from measurement on public reports.
+# Values set by the owner on 2026-10-27, from the synthetic timings in PROGRESS (a dense 600-page file took about 100 to 110 s and
+# about 2.4 GB for one operation); not yet checked against public reports.
 [ingestion]
-# parse_timeout_seconds = <a positive number>
-# parse_memory_mb = <a positive integer>
+parse_timeout_seconds = 300   # one budget for all parsing in a run
+parse_memory_mb = 4096        # the worker's resident memory, polled by the parent
