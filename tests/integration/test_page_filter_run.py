@@ -299,7 +299,8 @@ def test_a_fresh_process_without_use_jev_never_imports_the_sdk(tmp_path, two_pag
         "config.write_text(" + repr(SETTINGS.format(provider="fake")) + ")\n"
         f"code = main([str(pdf), '--config', str(config), '--output-dir', r'{tmp_path / 'fresh'}'],\n"
         "            provider_factory=lambda s, e: FakeProvider(script=[fx.good_response(pdf)]),\n"
-        f"            stdout=io.StringIO(), stderr=io.StringIO(), assignments=Path(r'{tmp_path / 'none.jsonl'}'), env={{}})\n"
+        f"            stdout=io.StringIO(), stderr=io.StringIO(), assignments=Path(r'{tmp_path / 'none.jsonl'}'),\n"
+        "            env={'CREDIT_INTEL_PARSE_TIMEOUT_SECONDS': '60', 'CREDIT_INTEL_PARSE_MEMORY_MB': '2048'})\n"
         "print(code, 'typesafe_sdk' in sys.modules)\n"
     )
     done = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, cwd=tmp_path, env={"PYTHONPATH": str(Path(fx.__file__).parent), "PATH": "/usr/bin:/bin"})

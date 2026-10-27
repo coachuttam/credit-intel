@@ -658,3 +658,42 @@ def load_ocr_settings(path: Path = DEFAULT_SETTINGS_PATH, flag: bool = False) ->
             if name not in values:
                 raise _invalid(f"ocr.{name}")
     return OcrSettings(enabled=enabled, **values)
+
+
+# --- Parse limits (PRD v0.4.50, SEC-12, FR-001 criterion 10) -----------------------------------------------------------------
+
+ENV_PARSE_TIMEOUT = "CREDIT_INTEL_PARSE_TIMEOUT_SECONDS"
+ENV_PARSE_MEMORY = "CREDIT_INTEL_PARSE_MEMORY_MB"
+PARSE_SETTING_NAMES = ("parse_timeout_seconds", "parse_memory_mb")
+
+
+@dataclass(frozen=True)
+class ParseLimits:
+    """The time and memory limits for parsing a PDF (SEC-12). Both are required and have no default.
+
+    ``timeout_seconds`` is one budget for all parsing in a run; ``memory_mb`` bounds the worker's resident memory.
+    """
+
+    timeout_seconds: float
+    memory_mb: int
+
+
+def load_parse_limits(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str] | None = None) -> ParseLimits:
+    """The ``[ingestion]`` parse limits, each overridable by an environment variable (as the token ceiling is).
+
+    Both are required: a missing, non-numeric, zero or negative value is ``E-CONFIG-INVALID`` naming ``ingestion.<name>`` and never its value.
+    """
+    env = os.environ if env is None else env
+    table = _settings_table(path, "ingestion")
+    for name in table:
+        if name not in PARSE_SETTING_NAMES:
+            raise _invalid(f"ingestion.{name}")
+    timeout: object = table.get("parse_timeout_seconds")
+    if ENV_PARSE_TIMEOUT in env:
+        if not re.fullmatch(r"[0-9]+(\.[0-9]+)?", env[ENV_PARSE_TIMEOUT]):
+            raise _invalid("ingestion.parse_timeout_seconds")
+        timeout = float(env[ENV_PARSE_TIMEOUT])
+    return ParseLimits(
+        timeout_seconds=_positive_number(timeout, "ingestion.parse_timeout_seconds"),
+        memory_mb=_positive_int(table.get("parse_memory_mb"), env.get(ENV_PARSE_MEMORY), "ingestion.parse_memory_mb"),
+    )

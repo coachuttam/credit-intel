@@ -121,7 +121,8 @@ ticks = iter(start + timedelta(milliseconds=7 * n) for n in range(10000))
 out, err = io.StringIO(), io.StringIO()
 code = main([pdf, "--config", config, "--output-dir", out_dir],
             provider_factory=lambda s, e: FakeProvider(script=[Path(reply).read_text(encoding="utf-8")]),
-            clock=lambda: next(ticks), stdout=out, stderr=err, env={})
+            clock=lambda: next(ticks), stdout=out, stderr=err,
+            env={"CREDIT_INTEL_PARSE_TIMEOUT_SECONDS": "60", "CREDIT_INTEL_PARSE_MEMORY_MB": "2048"})  # the real worker process, in a fresh process
 sys.stdout.write(out.getvalue())
 sys.exit(code)
 """

@@ -402,7 +402,8 @@ def test_the_console_script_points_at_the_command_and_the_module_runs_it(tmp_pat
 
 def test_an_installed_run_of_the_real_entry_point_with_a_missing_file_exits_3(tmp_path):
     config = settings(tmp_path)
-    done = subprocess.run([sys.executable, "-m", "credit_intel", str(tmp_path / "absent.pdf"), "--config", str(config)], capture_output=True, cwd=tmp_path)
+    done = subprocess.run([sys.executable, "-m", "credit_intel", str(tmp_path / "absent.pdf"), "--config", str(config)], capture_output=True, cwd=tmp_path,
+                          env={**os.environ, "CREDIT_INTEL_PARSE_TIMEOUT_SECONDS": "60", "CREDIT_INTEL_PARSE_MEMORY_MB": "2048"})
 
     assert done.returncode == 3 and done.stdout == b"" and done.stderr.startswith(b"E-INPUT-NOT-FOUND: ")
 

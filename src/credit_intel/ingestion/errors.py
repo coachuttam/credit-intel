@@ -19,6 +19,7 @@ class ErrorCode(StrEnum):
     NO_TEXT_LAYER = "E-INPUT-NO-TEXT-LAYER"
     OCR_UNAVAILABLE = "E-INPUT-OCR-UNAVAILABLE"
     OCR_FAILED = "E-INPUT-OCR-FAILED"
+    PARSE_LIMIT = "E-INPUT-PARSE-LIMIT"
     PAGE_RANGE = "E-INPUT-PAGE-RANGE"
     BASIS_UNAVAILABLE = "E-EXTRACT-BASIS-UNAVAILABLE"
     CONFIG_INVALID = "E-CONFIG-INVALID"
@@ -77,6 +78,8 @@ CATALOGUE: dict[ErrorCode, CatalogueEntry] = {
            "Install the engine, or run without --ocr.", EXIT_INPUT, "No"),
         _E(C.OCR_FAILED, "text_extracted", "The OCR engine failed, or the OCR page cap or time limit was exceeded.",
            "Narrow --pages, or raise the limits deliberately.", EXIT_INPUT, "No"),
+        _E(C.PARSE_LIMIT, "validated / text_extracted", "Parsing the PDF exceeded the time limit or the memory limit.",
+           "Supply a smaller or simpler file, or raise the limit deliberately.", EXIT_INPUT, "No"),
         _E(C.PAGE_RANGE, "statements_located",
            "The page range is invalid: it must be comma-separated 1-based page numbers or ranges within the document and no larger than the candidate-page limit.",
            "Correct --pages (e.g. 110-115,120).", EXIT_INPUT, "No"),

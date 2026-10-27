@@ -26,6 +26,8 @@ token_ceiling = 100000
 max_output_tokens = 4096
 ```
 
+**Parse limits (PRD SEC-12) have no default either.** The PDF libraries run in a separate worker process that is stopped when it passes a time or a memory limit, and the run ends with `E-INPUT-PARSE-LIMIT`. Set `parse_timeout_seconds` (one budget for all parsing in a run) and `parse_memory_mb` (the worker's resident memory) in an `[ingestion]` table, or with `CREDIT_INTEL_PARSE_TIMEOUT_SECONDS` and `CREDIT_INTEL_PARSE_MEMORY_MB`, or every run stops with `E-CONFIG-INVALID`. The memory limit is checked by polling, so it is a bound, not an exact figure. The page rendering for OCR is not covered yet.
+
 The API key is read from the environment variable `OPENAI_API_KEY` only. It is never read from a file, logged or stored. Other settings can be overridden with `CREDIT_INTEL_LLM_PROVIDER`, `CREDIT_INTEL_LLM_MODEL_ID`, `CREDIT_INTEL_MAX_OUTPUT_TOKENS`, `CREDIT_INTEL_PRICE_INPUT_PER_MILLION` and `CREDIT_INTEL_PRICE_OUTPUT_PER_MILLION`.
 
 Run it on a document:

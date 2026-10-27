@@ -38,3 +38,12 @@ column_margin_pt = 3         # period-column margin; the tuning pages did not di
 split_figure_gap_pt = 0      # 0 turns the joining of split figures off: no split figure was seen in the OCR output of the tuning pages
 max_pages = 10               # the page cap (OD-18): more image-only pages than this in a run is E-INPUT-OCR-FAILED
 timeout_seconds = 120        # the time limit for one OCR call (OD-18), whole call; measured 1 to 3.5 s per page on the tuning pages
+
+# Parse limits (PRD v0.4.50, SEC-12). The PDF libraries run in a worker process that is stopped when it passes either limit
+# (E-INPUT-PARSE-LIMIT). BOTH ARE REQUIRED and deliberately have no default: set them here, or with
+# CREDIT_INTEL_PARSE_TIMEOUT_SECONDS and CREDIT_INTEL_PARSE_MEMORY_MB. A missing, non-numeric, zero or negative value fails with
+# E-CONFIG-INVALID. The time is one budget for all parsing in a run; the memory is the worker's resident memory, watched by the parent.
+# Values are the owner's to set, from measurement on public reports.
+[ingestion]
+# parse_timeout_seconds = <a positive number>
+# parse_memory_mb = <a positive integer>

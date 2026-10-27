@@ -80,3 +80,16 @@ def no_network(request, monkeypatch):
 
     monkeypatch.setattr(socket.socket, "connect", blocked)
     monkeypatch.setattr(socket.socket, "connect_ex", blocked)
+
+
+@pytest.fixture(autouse=True)
+def in_process_parsing(monkeypatch):
+    """The command line parses in a worker process under required limits (SEC-12); tests that are not about that parse in process.
+
+    The worker, the limits and the command line's wiring are tested in ``test_parse_limits.py`` and ``test_parse_limits_cli.py``,
+    which pass the real factory explicitly.
+    """
+    import credit_intel.cli as cli
+    from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
+
+    monkeypatch.setattr(cli, "sandboxed_extractor", lambda config, env: PdfplumberExtractor())

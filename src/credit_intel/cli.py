@@ -32,6 +32,7 @@ from credit_intel.config import (
     load_jev_settings,
     load_llm_settings,
     load_ocr_settings,
+    load_parse_limits,
     load_pricing,
     load_step_settings,
 )
@@ -39,8 +40,9 @@ from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, ENV_PRIVATE_APPROVED
 from credit_intel.export.manifest import code_version, package_versions, run_id
 from credit_intel.export.run_export import export_failure, export_run
 from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, ErrorCode, IngestionError, exit_code
-from credit_intel.ingestion.extractor import OcrExtractor
+from credit_intel.ingestion.extractor import OcrExtractor, TextExtractor
 from credit_intel.ingestion.ocr_engine import default_ocr_extractor
+from credit_intel.ingestion.sandbox import SandboxedExtractor
 from credit_intel.llm.factory import build_provider
 from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
 from credit_intel.memo.trace import MemoCheckFailed
@@ -59,6 +61,7 @@ logger = logging.getLogger("credit_intel.cli")
 
 ProviderFactory = Callable[[LLMSettings, Mapping[str, str]], LLMProvider]
 OcrFactory = Callable[[], OcrExtractor]
+ExtractorFactory = Callable[[Path, Mapping[str, str]], TextExtractor]
 
 
 class LazyProvider:
@@ -150,12 +153,19 @@ def _page_filter(args: argparse.Namespace, llm: LLMSettings, env: Mapping[str, s
     return PageFilterSetup(jev, classifier, None if classifier is not None else "no_key")
 
 
+def sandboxed_extractor(config: Path, env: Mapping[str, str]) -> SandboxedExtractor:
+    """The PDF parser of a run: the PDF libraries in a worker process under the required parse limits (SEC-12, v0.4.50)."""
+    return SandboxedExtractor(load_parse_limits(config, env))
+
+
 def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[str], assignments: Path, env: Mapping[str, str],
-             classifier_factory: ClassifierFactory = build_classifier, ocr_factory: OcrFactory = default_ocr_extractor) -> int:  # fmt: skip
+             classifier_factory: ClassifierFactory = build_classifier, ocr_factory: OcrFactory = default_ocr_extractor,
+             extractor_factory: ExtractorFactory | None = None) -> int:  # fmt: skip
     args = call.args
     call.llm = llm = load_llm_settings(args.config, env)
     pricing = load_pricing(args.config, env)
     ocr = load_ocr_settings(args.config, args.ocr)
+    extractor = (extractor_factory or sandboxed_extractor)(args.config, env)  # the required parse limits are read here (E-CONFIG-INVALID)
     page_filter = _page_filter(args, llm, env, classifier_factory)
     try:
         call.sha256 = file_sha256(args.pdf_path)
@@ -173,7 +183,7 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
     basis = StatementBasis(args.basis)
     result = run_pipeline(
         args.pdf_path, LazyProvider(lambda: factory(llm, env)), llm, recorder=call.recorder, basis=basis, page_range=args.pages,
-        pricing=pricing, profile_path=args.profile, ocr_settings=ocr, ocr_extractor=ocr_factory() if ocr.enabled else None,
+        pricing=pricing, profile_path=args.profile, extractor=extractor, ocr_settings=ocr, ocr_extractor=ocr_factory() if ocr.enabled else None,
         assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, page_filter=page_filter,
     )  # fmt: skip
     path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),
@@ -193,6 +203,7 @@ def main(
     env: Mapping[str, str] | None = None,
     classifier_factory: ClassifierFactory = build_classifier,
     ocr_factory: OcrFactory = default_ocr_extractor,
+    extractor_factory: ExtractorFactory | None = None,
 ) -> int:
     """Run the command and return its exit code. The streams, clock, environment and the provider, classifier and OCR engine factories can be replaced for tests."""
     out, err = stdout or sys.stdout, stderr or sys.stderr
@@ -214,7 +225,7 @@ def main(
     package_logger.setLevel(handler.level)
     call = _Invocation(args, Recorder(clock))
     try:
-        return _execute(call, provider_factory, out, err, assignments, environment, classifier_factory, ocr_factory)
+        return _execute(call, provider_factory, out, err, assignments, environment, classifier_factory, ocr_factory, extractor_factory)
     except IngestionError as error:
         print(str(error), file=err)
         _record_failure(call, err, error)
