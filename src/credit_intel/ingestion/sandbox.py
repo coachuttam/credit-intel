@@ -19,6 +19,11 @@ comes back on the worker's standard output, drained by a thread, so it is held i
 limit of its own (the OCR call's remaining time): passing that is ``E-INPUT-OCR-FAILED``, as before; passing the parse budget or the
 memory limit is ``E-INPUT-PARSE-LIMIT``; a render worker that fails or crashes is ``E-INPUT-OCR-FAILED``.
 
+**The OCR engine (step 3).** ``run_supervised`` runs a command (the OCR engine reading one page) under the same watch: its own process
+group, standard input fed from a thread, standard output drained into memory, resident memory polled against the same memory limit,
+the group killed past it (``E-INPUT-PARSE-LIMIT``). Its time is **not** counted in the parse budget: it has the caller's own limit
+(the OCR call's remaining time), and passing that is ``E-INPUT-OCR-FAILED`` as before.
+
 Windows is not tested: the process is started in its own session where the system supports it, and the resident-memory read uses ``ps``.
 """
 
@@ -40,6 +45,7 @@ from credit_intel.ingestion.parse_worker import from_jsonable
 
 POLL_SECONDS = 0.1
 WORKER_COMMAND = (sys.executable, "-I", "-m", "credit_intel.ingestion.parse_worker")  # -I: no user site or environment-chosen paths
+MAX_ENGINE_OUTPUT_BYTES = 64 * 1024 * 1024  # the engine's TSV for one page is tens of KB; far more is runaway output
 MAX_RENDER_BYTES = 512 * 1024 * 1024  # a page image bigger than this is treated as a memory-limit breach
 TIME_DETAIL = "time limit; raise ingestion.parse_timeout_seconds"
 MEMORY_DETAIL = "memory limit; raise ingestion.parse_memory_mb"
@@ -145,6 +151,49 @@ class SandboxedExtractor:
             process.stdout.close()
         return self._render_result(process.returncode, bytes(drain.data), drain.exceeded)
 
+    def run_supervised(
+        self, command: Sequence[str], stdin: bytes, *, env: dict[str, str] | None = None, timeout_seconds: float
+    ) -> subprocess.CompletedProcess[bytes]:
+        """Run ``command`` with ``stdin`` under the memory watch (PRD SEC-12 step 3): the finished process, with its standard output.
+
+        Not counted in the parse budget; ``timeout_seconds`` is the caller's own limit (``E-INPUT-OCR-FAILED`` past it). Past the
+        memory limit, or an output over ``MAX_ENGINE_OUTPUT_BYTES``, it is ``E-INPUT-PARSE-LIMIT``. A command that is not installed or
+        cannot be run is ``E-INPUT-OCR-UNAVAILABLE``, as for the engine's own checks. Standard error is discarded.
+        """
+        own = self._clock() + timeout_seconds
+        try:
+            process = subprocess.Popen(  # noqa: S603 - a fixed command; the page image goes on standard input
+                list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,
+                start_new_session=hasattr(os, "killpg"),
+            )  # fmt: skip
+        except (FileNotFoundError, PermissionError):
+            raise IngestionError(ErrorCode.OCR_UNAVAILABLE) from None
+        except OSError:
+            raise IngestionError(ErrorCode.OCR_FAILED) from None
+        drain = _Drain(process.stdout, MAX_ENGINE_OUTPUT_BYTES)
+        feeder = threading.Thread(target=self._feed, args=(process, stdin), daemon=True)
+        drain.start()
+        feeder.start()
+        try:
+            self._watch(process, own, drain, budget=False)
+        finally:
+            if process.poll() is None:
+                _kill(process)
+            drain.join(timeout=10)
+            feeder.join(timeout=10)
+            process.stdout.close()
+        if drain.exceeded:
+            raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
+        return subprocess.CompletedProcess(list(command), process.returncode, bytes(drain.data), b"")
+
+    @staticmethod
+    def _feed(process: subprocess.Popen, data: bytes) -> None:
+        try:
+            process.stdin.write(data)
+            process.stdin.close()
+        except (OSError, ValueError):  # the engine exited or was stopped before reading it all
+            pass
+
     @staticmethod
     def _render_result(returncode: int | None, data: bytes, exceeded: bool) -> tuple[bytes, float, float]:
         if exceeded:
@@ -195,9 +244,9 @@ class SandboxedExtractor:
                     _kill(process)
             return self._result(operation, process.returncode, output)
 
-    def _watch(self, process: subprocess.Popen, own_deadline: float | None = None, drain: _Drain | None = None) -> None:
+    def _watch(self, process: subprocess.Popen, own_deadline: float | None = None, drain: _Drain | None = None, *, budget: bool = True) -> None:
         while process.poll() is None:
-            if self._deadline is not None and self._clock() >= self._deadline:
+            if budget and self._deadline is not None and self._clock() >= self._deadline:
                 _kill(process)
                 raise IngestionError(ErrorCode.PARSE_LIMIT, detail=TIME_DETAIL)
             if own_deadline is not None and self._clock() >= own_deadline:

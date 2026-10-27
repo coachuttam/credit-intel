@@ -159,11 +159,13 @@ def sandboxed_extractor(config: Path, env: Mapping[str, str]) -> SandboxedExtrac
 
 
 def _ocr_engine(ocr_factory: OcrFactory, extractor: TextExtractor) -> OcrExtractor:
-    """The OCR engine of a run. When the parser can render pages in a worker (SEC-12 step 2), the engine renders there too."""
+    """The OCR engine of a run. When the parser can render pages in a worker (SEC-12 step 2) the engine renders there, and when it can
+    supervise a command (step 3) the engine's own reading is watched for memory."""
     engine = ocr_factory()
-    render, use = getattr(extractor, "render_page", None), getattr(engine, "use_renderer", None)
-    if render is not None and use is not None:
-        use(render)
+    for parser_method, engine_hook in (("render_page", "use_renderer"), ("run_supervised", "use_runner")):
+        method, hook = getattr(extractor, parser_method, None), getattr(engine, engine_hook, None)
+        if method is not None and hook is not None:
+            hook(method)
     return engine
 
 

@@ -9,6 +9,10 @@ The page rendering (pypdfium2, a library that parses the untrusted file) can run
 (PRD SEC-12 step 2, v0.4.50): ``use_renderer`` gives the engine a function that renders one page there. Without one, as in the
 suite's engine tests, the pages are rendered in this process. The PNG goes from the worker to this process in memory, never
 through a file (FR-001A.6).
+
+The engine's own run can be watched too (PRD SEC-12 step 3, v0.4.53): ``use_runner`` gives the page read a function that runs the
+command with its resident memory polled against the parse memory limit (``SandboxedExtractor.run_supervised``). Without one, as in
+the suite's engine tests, the command is run directly. The two availability checks are always run directly: they read no page.
 """
 
 import io
@@ -37,6 +41,8 @@ _ENVIRONMENT = {"OMP_THREAD_LIMIT": "1"}
 
 # One rendered page: PNG bytes, width and height in points. ``render(path, page, dpi, timeout_seconds=...)``.
 PageRenderer = Callable[..., tuple[bytes, float, float]]
+# ``run(command, stdin, env=..., timeout_seconds=...)`` returns the finished process (``returncode``, ``stdout``).
+EngineRunner = Callable[..., subprocess.CompletedProcess[bytes]]
 
 
 def open_document(path: Path):
@@ -73,6 +79,7 @@ class TesseractExtractor:
         self._command = command
         self._version: str | None = None
         self._renderer: PageRenderer | None = None
+        self._runner: EngineRunner | None = None
 
     def use_renderer(self, renderer: PageRenderer | None) -> None:
         """Render pages with ``renderer`` (the parse worker) instead of in this process; ``None`` goes back to this process."""
@@ -85,8 +92,15 @@ class TesseractExtractor:
             self._version = self._check_available()
         return self._version
 
-    def _run(self, arguments: list[str], *, stdin: bytes | None = None, timeout: float) -> subprocess.CompletedProcess[bytes]:
+    def use_runner(self, runner: EngineRunner | None) -> None:
+        """Run the engine on a page with ``runner`` (watched for memory) instead of directly; ``None`` goes back to direct."""
+        self._runner = runner
+
+    def _run(self, arguments: list[str], *, stdin: bytes | None = None, timeout: float, watched: bool = False) -> subprocess.CompletedProcess[bytes]:
         import os
+
+        if watched and self._runner is not None:
+            return self._runner([self._command, *arguments], stdin or b"", env={**os.environ, **_ENVIRONMENT}, timeout_seconds=timeout)
 
         try:
             return subprocess.run(
@@ -125,7 +139,7 @@ class TesseractExtractor:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise IngestionError(ErrorCode.OCR_FAILED)
-            done = self._run(["stdin", "stdout", "-l", OCR_LANGUAGE, "--dpi", str(page_dpi), "--psm", PAGE_SEGMENTATION_MODE, "tsv"], stdin=png, timeout=remaining)
+            done = self._run(["stdin", "stdout", "-l", OCR_LANGUAGE, "--dpi", str(page_dpi), "--psm", PAGE_SEGMENTATION_MODE, "tsv"], stdin=png, timeout=remaining, watched=True)
             if done.returncode != 0:
                 raise IngestionError(ErrorCode.OCR_FAILED)
             result.append(_page_from_tsv(number, done.stdout.decode("utf-8", "replace"), width, height, page_dpi))
