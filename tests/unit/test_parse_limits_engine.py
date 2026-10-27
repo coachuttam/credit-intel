@@ -43,6 +43,13 @@ if mode == "alloc":
     for b in blocks:
         b[::4096] = b"x" * len(b[::4096])
     time.sleep(60)
+elif mode == "flood_exit":
+    sys.stdout.write("x" * 8000)  # more than the cap the test sets, but it fits in the pipe, so the engine exits at once
+    sys.stdout.flush()
+    sys.exit(0)
+elif mode == "env":
+    print(os.environ.get("PROBE", "absent"))
+    sys.exit(0)
 elif mode == "sleep":
     time.sleep(600)
 elif mode == "flood":
@@ -170,6 +177,21 @@ def test_output_far_larger_than_a_page_of_text_is_a_memory_limit(engine_path, sc
     with pytest.raises(IngestionError) as error:
         read(engine, scan)
     assert error.value.code is ErrorCode.PARSE_LIMIT and sandbox.MEMORY_DETAIL in str(error.value)
+
+
+def test_output_over_the_cap_is_caught_even_if_the_engine_exits_before_the_next_poll(engine_path, monkeypatch):
+    monkeypatch.setattr(sandbox, "MAX_ENGINE_OUTPUT_BYTES", 1000)
+    parser = SandboxedExtractor(LIMITS, poll_seconds=0.6)  # the engine is done before the watch looks again
+    with pytest.raises(IngestionError) as error:
+        parser.run_supervised([engine_path, "stdin", "stdout"], b"x", env={**os.environ, "STUB_MODE": "flood_exit"}, timeout_seconds=30)
+    assert error.value.code is ErrorCode.PARSE_LIMIT and sandbox.MEMORY_DETAIL in str(error.value)
+
+
+def test_the_environment_given_to_the_runner_is_the_environment_of_the_engine(engine_path):
+    assert "PROBE" not in os.environ
+    done = SandboxedExtractor(LIMITS, poll_seconds=0.05).run_supervised(
+        [engine_path, "stdin", "stdout"], b"x", env={**os.environ, "STUB_MODE": "env", "PROBE": "yes"}, timeout_seconds=30)
+    assert done.stdout.strip() == b"yes"
 
 
 def test_an_engine_that_crashes_is_an_ocr_failure_and_nothing_it_wrote_escapes(engine_path, scan, monkeypatch, capfd):

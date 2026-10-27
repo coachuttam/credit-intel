@@ -88,7 +88,7 @@ def test_a_settings_file_that_cannot_be_read_is_refused(tmp_path):
 
 def test_the_repository_settings_file_holds_the_owners_two_limits():
     repo = Path(__file__).resolve().parents[2] / "config" / "settings.toml"
-    assert load_parse_limits(repo, {}) == ParseLimits(timeout_seconds=300, memory_mb=4096)  # set by the owner on 2026-10-27
+    assert load_parse_limits(repo, {}) == ParseLimits(timeout_seconds=700, memory_mb=6144)  # set by the owner on 2026-10-27 (first 300 / 4096)
 
 
 # --- the catalogued error ----------------------------------------------------------------------------------
