@@ -23,6 +23,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from credit_intel.api.errors import BUSY, CLOSING, METHOD, NOT_FOUND, REFUSED, error_body, status_of, transport_body
 from credit_intel.api.jobs import RUN_ID, Closing, Job, JobManager, QueueFull, folder_status, job_status, run_id_for
+from credit_intel.api.pages import add_pages
 from credit_intel.api.security import Security, check_exposure
 from credit_intel.api.uploads import Upload, receive_upload
 from credit_intel.config import DEFAULT_SETTINGS_PATH, ApiSettings, IngestionSettings, LocatorSettings, load_api_token, load_llm_settings
@@ -122,8 +123,8 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
     def refuse(error: IngestionError) -> JSONResponse:
         return JSONResponse(error_body(error), status_code=status_of(error))
 
-    @app.post("/runs", status_code=202)
-    async def post_run(request: Request) -> JSONResponse:
+    async def accept(request: Request) -> JSONResponse:
+        """Receive an upload, make the checks of the request and queue the run: the one path for `POST /runs` and the page's form."""
         try:
             upload = await receive_upload(request, max_bytes)
         except IngestionError as error:
@@ -152,6 +153,8 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
             raise
         return JSONResponse({"run_id": run_id, "state": "queued"}, status_code=202)
 
+    app.add_api_route("/runs", accept, methods=["POST"], status_code=202)
+
     def unknown() -> JSONResponse:
         return JSONResponse(transport_body(NOT_FOUND), status_code=404)
 
@@ -161,13 +164,16 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
         folder = settings.output_dir / run_id
         return folder if folder.is_dir() and not folder.is_symlink() else None
 
-    @app.get("/runs/{run_id}")
-    async def get_run(run_id: str) -> JSONResponse:
+    def run_status(run_id: str) -> dict[str, object] | None:
         job = jobs.get(run_id)  # a dictionary lookup: any string is safe here
         if job is not None:
-            return JSONResponse(job_status(job))
+            return job_status(job)
         folder = folder_of(run_id)
-        status = folder_status(run_id, folder) if folder is not None else None
+        return folder_status(run_id, folder) if folder is not None else None
+
+    @app.get("/runs/{run_id}")
+    async def get_run(run_id: str) -> JSONResponse:
+        status = run_status(run_id)
         return JSONResponse(status) if status is not None else unknown()
 
     def file_route(name: str):  # type: ignore[no-untyped-def]
@@ -185,8 +191,7 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
     for file_name in MEDIA:  # /runs/{run_id}/memo, /results, /manifest, /report
         app.add_api_route(f"/runs/{{run_id}}/{file_name}", file_route(file_name), methods=["GET"])
 
-    @app.get("/runs")
-    async def list_runs() -> JSONResponse:
+    def listing() -> list[dict[str, object]]:
         listed: list[dict[str, object]] = []
         seen: set[str] = set()
         for job in reversed(jobs.jobs()):
@@ -202,7 +207,18 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
             status = folder_status(folder.name, folder)
             if status is not None:
                 listed.append({"run_id": folder.name, "state": status["state"]})
-        return JSONResponse({"runs": listed})
+        return listed
+
+    @app.get("/runs")
+    async def list_runs() -> JSONResponse:
+        return JSONResponse({"runs": listing()})
+
+    def read_memo(run_id: str) -> str | None:
+        folder = folder_of(run_id)
+        path = folder / "memo.md" if folder is not None else None
+        return path.read_text(encoding="utf-8") if path is not None and path.is_file() and not path.is_symlink() else None
+
+    add_pages(app, config=config, listing=listing, status_of=run_status, read_memo=read_memo, accept=accept)
 
     @app.get("/health")
     async def health() -> JSONResponse:

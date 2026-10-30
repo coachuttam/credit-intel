@@ -1,0 +1,46 @@
+:root {
+  --bg: #f6f5f1; --surface: #ffffff; --fg: #1d2420; --muted: #5b655f; --line: #d6d9d2; --accent: #1f5d50; --accent-fg: #ffffff;
+  --warn-bg: #fbf1d9; --warn-line: #d9b44a; --bad-bg: #fbe6e3; --bad-line: #cf6a5e; --ok-bg: #e3f1ea; --ok-line: #5fa386;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14191a; --surface: #1c2325; --fg: #e5e9e4; --muted: #9aa59d; --line: #34403f; --accent: #6fc2a8; --accent-fg: #0e1714;
+    --warn-bg: #3a3218; --warn-line: #8f7a2e; --bad-bg: #3d1f1c; --bad-line: #a14a40; --ok-bg: #17302a; --ok-line: #3d7a63; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding-block: 0 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header, main, .banner { max-width: 62rem; margin-inline: auto; }
+header { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; justify-content: space-between; padding-block: 20px 8px; border-bottom: 1px solid var(--line); }
+header a { color: var(--fg); text-decoration: none; font-weight: 650; letter-spacing: .01em; }
+header span { color: var(--muted); font-size: .9rem; }
+h1 { font-size: 1.55rem; line-height: 1.25; margin: 28px 0 8px; text-wrap: balance; }
+h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+p, li { max-width: 70ch; }
+.muted { color: var(--muted); font-size: .92rem; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-block: 12px; }
+form { display: grid; gap: 14px; }
+label, .label { font-weight: 600; display: block; margin-bottom: 4px; }
+input[type=text], select, textarea, input[type=file] { width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--fg); }
+textarea { min-height: 5.5rem; font-family: ui-monospace, Menlo, monospace; font-size: .9rem; }
+.row { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); }
+.check { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; }
+.check input { margin-top: 5px; }
+button { font: inherit; font-weight: 650; padding: 10px 18px; border: 0; border-radius: 6px; background: var(--accent); color: var(--accent-fg); cursor: pointer; justify-self: start; }
+.notice { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 6px; padding: 10px 12px; font-size: .92rem; }
+.error { background: var(--bad-bg); border: 1px solid var(--bad-line); border-radius: 6px; padding: 10px 12px; }
+.done { background: var(--ok-bg); border: 1px solid var(--ok-line); border-radius: 6px; padding: 10px 12px; }
+.pill { display: inline-block; padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); font-size: .85rem; }
+.pill.exported { border-color: var(--ok-line); background: var(--ok-bg); }
+.pill.failed { border-color: var(--bad-line); background: var(--bad-bg); }
+table.runs, .memo table { border-collapse: collapse; width: 100%; }
+table.runs th, table.runs td, .memo th, .memo td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.memo table { display: block; overflow-x: auto; margin-block: 8px 16px; }
+.memo { overflow-wrap: anywhere; }
+.memo blockquote { margin: 12px 0; padding: 4px 14px; border-left: 4px solid var(--warn-line); background: var(--warn-bg); }
+.memo code { font-family: ui-monospace, Menlo, monospace; font-size: .88em; }
+.memo h1 { font-size: 1.4rem; } .memo h2 { font-size: 1.12rem; } .memo h3 { font-size: 1rem; }
+.files { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0; list-style: none; }
+.banner { position: fixed; left: 0; right: 0; bottom: 0; max-width: none; background: var(--warn-bg); border-top: 1px solid var(--warn-line); text-align: center;
+  font-size: .85rem; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
