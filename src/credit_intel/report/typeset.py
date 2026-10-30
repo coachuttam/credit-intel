@@ -182,11 +182,11 @@ class _Typesetter:
             if tokens[j].type != "list_item_open":
                 raise ReportError("render_error")
             inner, j = self.blocks(tokens, j + 1, "list_item_close", ctx)
-            items.append(ListItem(inner, leftIndent=14))
+            items.append(ListItem(inner, leftIndent=20 if ordered else 14))
         start = tokens[i].attrGet("start") if ordered else None
         flow = ListFlowable(
             items, bulletType="1" if ordered else "bullet", start=int(start) if start is not None else ("1" if ordered else "•"),
-            bulletFontName=fonts.SANS, bulletFontSize=9, leftIndent=14, bulletDedent=12, spaceAfter=3, bulletFormat="%s." if ordered else None,
+            bulletFontName=fonts.SANS, bulletFontSize=9, leftIndent=20 if ordered else 14, bulletDedent=18 if ordered else 12, spaceAfter=3, bulletFormat="%s." if ordered else None,
         )  # fmt: skip
         return [flow], j + 1
 
