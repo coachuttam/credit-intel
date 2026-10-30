@@ -50,9 +50,24 @@ G1 = [
 ]  # fmt: skip
 
 
-def test_the_catalogue_has_exactly_the_twenty_one_codes_of_g1():  # nineteen implemented, two specified by PRD v0.4.44
-    assert {c.value for c in CATALOGUE} == {row[0] for row in G1} and len(G1) == 21
+# PRD G.1, v0.4.59: the two codes only the API raises. They have no exit code (the command line never raises them).
+API_ONLY = [
+    ("E-RUN-TIMEOUT", "any, after received", "Narrow the pages, or raise the limit deliberately."),
+    ("E-API-REQUEST", "before received", "Correct the request to the documented fields."),
+]
+
+
+def test_the_catalogue_has_exactly_the_twenty_one_codes_of_g1_and_the_two_api_only_codes():  # nineteen implemented, two specified by PRD v0.4.44
+    assert {c.value for c in CATALOGUE} == {row[0] for row in G1} | {row[0] for row in API_ONLY} and len(G1) == 21 and len(CATALOGUE) == 23
     assert set(CATALOGUE) == set(ErrorCode) == set(MESSAGES)
+
+
+@pytest.mark.parametrize("code, stage, action", API_ONLY, ids=[row[0] for row in API_ONLY])
+def test_an_api_only_code_has_its_stage_and_action_no_exit_code_and_is_not_retried(code, stage, action):
+    entry = CATALOGUE[ErrorCode(code)]
+
+    assert (entry.stage, entry.action, entry.exit_code, entry.retried) == (stage, action, None, "No")
+    assert MESSAGES[ErrorCode(code)].endswith(action) and exit_code(IngestionError(ErrorCode(code))) == EXIT_INTERNAL  # if it reached the command line it is a bug
 
 
 @pytest.mark.parametrize("code, stage, action, exit_, retried", G1, ids=[row[0] for row in G1])
@@ -85,7 +100,7 @@ def test_exit_codes_group_by_kind_and_none_collides_with_success_usage_or_intern
     assert sum(len(c) for c in groups.values()) == 21  # every code in exactly one group
 
 
-@pytest.mark.parametrize("code", list(ErrorCode))
+@pytest.mark.parametrize("code", [c for c in ErrorCode if CATALOGUE[c].exit_code is not None])
 def test_an_error_exits_with_its_catalogue_code(code):
     assert exit_code(IngestionError(code)) == CATALOGUE[code].exit_code
     assert exit_code(IngestionError(code, detail="report.pdf")) == CATALOGUE[code].exit_code
@@ -142,4 +157,5 @@ def test_every_stage_is_one_of_the_fr_011_states():
     states = {"received", "validated", "text_extracted", "statements_located", "fields_extracted", "validated_fields",
               "calculated", "rules_evaluated", "memo_generated", "exported"}  # fmt: skip
     for entry in CATALOGUE.values():
-        assert {part.strip() for part in entry.stage.split("/")} <= states, entry.code
+        if entry.code.value not in {row[0] for row in API_ONLY}:  # the API-only stages are "any, after received" and "before received"
+            assert {part.strip() for part in entry.stage.split("/")} <= states, entry.code

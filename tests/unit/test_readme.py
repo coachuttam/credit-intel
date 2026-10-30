@@ -84,7 +84,7 @@ def test_the_exit_code_table_matches_the_catalogue():
     rows = dict(re.findall(r"^\| (\d+) \| (.+) \|$", section("Command line"), re.M))
 
     assert set(rows) == {"0", "1", "2", "3", "4", "5", "6", "7", "130"}
-    assert {entry.exit_code for entry in CATALOGUE.values()} == {EXIT_INPUT, EXIT_EXTRACT, EXIT_LLM, EXIT_CONFIG, EXIT_EXPORT} == {3, 4, 5, 6, 7}
+    assert {entry.exit_code for entry in CATALOGUE.values() if entry.exit_code is not None} == {EXIT_INPUT, EXIT_EXTRACT, EXIT_LLM, EXIT_CONFIG, EXIT_EXPORT} == {3, 4, 5, 6, 7}
 
 
 def test_the_settings_example_loads_and_the_defaults_it_shows_are_the_shipped_ones(tmp_path):

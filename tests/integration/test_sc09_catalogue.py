@@ -230,7 +230,8 @@ SCENARIOS = {
 
 
 def test_every_code_in_the_catalogue_has_a_scenario_and_no_scenario_is_for_an_unknown_code():
-    assert set(SCENARIOS) == set(CATALOGUE) == set(ErrorCode) and len(SCENARIOS) == 21
+    api_only = {ErrorCode.RUN_TIMEOUT, ErrorCode.API_REQUEST}  # raised only by the API: their scenarios are in test_api_*.py
+    assert set(SCENARIOS) == set(CATALOGUE) - api_only == set(ErrorCode) - api_only and len(SCENARIOS) == 21
 
 
 @pytest.mark.parametrize("code", list(SCENARIOS), ids=[c.value for c in SCENARIOS])

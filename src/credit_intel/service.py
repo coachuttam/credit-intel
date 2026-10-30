@@ -129,6 +129,21 @@ def page_filter(request: RunRequest, llm: LLMSettings, env: Mapping[str, str], f
     return PageFilterSetup(jev, classifier, None if classifier is not None else "no_key")
 
 
+def check_send_rule(request: RunRequest, sha256: str, llm: LLMSettings, classifier_setup: PageFilterSetup | None, assignments: Path,
+                    env: Mapping[str, str], notify: Callable[[str], None]) -> None:
+    """The send rule (SEC-10) for a run: raises ``E-INPUT-SEND-REFUSED`` with a fixed reason word, else notes through ``notify`` that pages may be sent."""
+    # The send rule applies to every provider that would receive page text: the extraction model and the classifier (v0.4.31).
+    classifier = classifier_setup.classifier if classifier_setup is not None else None
+    external = llm.provider != "fake" or (classifier is not None and classifier.sends_off_machine)
+    try:
+        check_send(sha256, external=external, confirmed=request.confirm_public_document, assignments=assignments,
+                   path=request.pdf_path, private_approved=env.get(ENV_PRIVATE_APPROVED) == "1")  # fmt: skip
+    except SendRefusal as refusal:  # a catalogued failure before `received`: exit 3, a fixed reason word, no failure record (G.1, v0.4.27)
+        raise IngestionError(ErrorCode.SEND_REFUSED, detail=refusal.reason) from None
+    if external:
+        notify(NOTICE)
+
+
 def execute_run(request: RunRequest, progress: RunProgress, services: RunServices, env: Mapping[str, str], notify: Callable[[str], None]) -> Path:
     """Run the pipeline for one document and return the run folder. Raises ``IngestionError`` (a catalogued failure) or another exception."""
     progress.llm = llm = load_llm_settings(request.config, env)
@@ -140,16 +155,7 @@ def execute_run(request: RunRequest, progress: RunProgress, services: RunService
         progress.sha256 = file_sha256(request.pdf_path)
     except OSError:
         raise IngestionError(ErrorCode.NOT_FOUND) from None
-    # The send rule applies to every provider that would receive page text: the extraction model and the classifier (v0.4.31).
-    classifier = classifier_setup.classifier if classifier_setup is not None else None
-    external = llm.provider != "fake" or (classifier is not None and classifier.sends_off_machine)
-    try:
-        check_send(progress.sha256, external=external, confirmed=request.confirm_public_document, assignments=services.assignments,
-                   path=request.pdf_path, private_approved=env.get(ENV_PRIVATE_APPROVED) == "1")  # fmt: skip
-    except SendRefusal as refusal:  # a catalogued failure before `received`: exit 3, a fixed reason word, no failure record (G.1, v0.4.27)
-        raise IngestionError(ErrorCode.SEND_REFUSED, detail=refusal.reason) from None
-    if external:
-        notify(NOTICE)
+    check_send_rule(request, progress.sha256, llm, classifier_setup, services.assignments, env, notify)
     result = run_pipeline(
         request.pdf_path, LazyProvider(lambda: services.provider_factory(llm, env)), llm, recorder=progress.recorder, basis=request.basis,
         page_range=request.pages, pricing=pricing, profile_path=request.profile, extractor=extractor, ocr_settings=ocr,

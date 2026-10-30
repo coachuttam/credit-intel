@@ -49,3 +49,17 @@ timeout_seconds = 120        # the time limit for one OCR call (OD-18), whole ca
 [ingestion]
 parse_timeout_seconds = 700   # one budget for all parsing in a run
 parse_memory_mb = 6144        # the worker's resident memory, polled by the parent
+
+# The HTTP API (PRD v0.4.59, FR-016). The three limits are REQUIRED and have no default; so are the two folders, which must be ABSOLUTE
+# paths (a server does not depend on where it was started). Set the folders here or with CREDIT_INTEL_API_OUTPUT_DIR and
+# CREDIT_INTEL_API_CACHE_DIR; until they are set the service does not start (E-CONFIG-INVALID). Every setting can also be set with
+# CREDIT_INTEL_API_<NAME>. The limits were set by the owner on 2026-10-30 for the 8 GB host from docs/OD-25_run_timing_2026-10-30.md:
+# one run holds up to ingestion.parse_memory_mb (6144 MB) and one fits in 8 GB, two do not. host and port may default.
+[api]
+# output_dir = "<an absolute path>"
+# cache_dir = "<an absolute path>"
+max_concurrent_runs = 1       # runs at once
+max_queued_runs = 4           # runs waiting; one more is refused with 429
+run_timeout_seconds = 1200    # one run, checked at each state change and before each model call (cooperative, FR-016 criterion 10a)
+# host = "127.0.0.1"          # the default; any other address needs a token (SEC-15, step 3)
+# port = 8000                 # the default

@@ -31,6 +31,8 @@ class ErrorCode(StrEnum):
     PROFILE_INVALID = "E-INPUT-PROFILE-INVALID"
     SEND_REFUSED = "E-INPUT-SEND-REFUSED"
     EXPORT_FAILED = "E-EXPORT-FAILED"
+    RUN_TIMEOUT = "E-RUN-TIMEOUT"  # API only (PRD v0.4.59, FR-016 criterion 10)
+    API_REQUEST = "E-API-REQUEST"  # API only (PRD v0.4.59, FR-016 criterion 5)
 
 
 @dataclass(frozen=True)
@@ -41,7 +43,7 @@ class CatalogueEntry:
     stage: str  # the FR-011 state(s) in which it can occur
     body: str  # what went wrong, as fixed user-safe text
     action: str  # what the user should do
-    exit_code: int
+    exit_code: int | None  # None for the two API-only codes: the command line never raises them (PRD v0.4.59)
     retried: str  # "No", "Once, with the validation error", or "Yes, with backoff"
 
     @property
@@ -105,6 +107,10 @@ CATALOGUE: dict[ErrorCode, CatalogueEntry] = {
            "Fix the named setting.", EXIT_CONFIG, "No"),
         _E(C.EXPORT_FAILED, "exported", "The output could not be written, or the run directory already exists.",
            "Check the output directory and re-run.", EXIT_EXPORT, "No"),
+        _E(C.RUN_TIMEOUT, "any, after received", "The run passed the time limit for one run.",
+           "Narrow the pages, or raise the limit deliberately.", None, "No"),
+        _E(C.API_REQUEST, "before received", "The request is malformed: a file is missing, a field is unknown or a value is of the wrong form.",
+           "Correct the request to the documented fields.", None, "No"),
     )
 }  # fmt: skip
 
@@ -138,5 +144,5 @@ class InvalidOutputError(IngestionError):
 def exit_code(error: BaseException) -> int:
     """The process exit code for a failure: the catalogue's for a catalogued error, else 1 (FR-011.2)."""
     if isinstance(error, IngestionError):
-        return CATALOGUE[error.code].exit_code
+        return CATALOGUE[error.code].exit_code or EXIT_INTERNAL  # an API-only code has none: if one reached the command line it is a bug
     return EXIT_INTERNAL

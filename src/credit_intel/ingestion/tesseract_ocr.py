@@ -116,6 +116,10 @@ class TesseractExtractor:
         except OSError:
             raise IngestionError(ErrorCode.OCR_FAILED) from None
 
+    def check_available(self) -> str:
+        """The engine's version, or ``E-INPUT-OCR-UNAVAILABLE`` when it or its English data is missing (the API asks before it accepts a run)."""
+        return self._check_available()
+
     def _check_available(self) -> str:
         done = self._run(["--version"], timeout=30)
         text = (done.stdout + done.stderr).decode("utf-8", "replace")

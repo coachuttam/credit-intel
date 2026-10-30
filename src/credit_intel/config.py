@@ -697,3 +697,78 @@ def load_parse_limits(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str]
         timeout_seconds=_positive_number(timeout, "ingestion.parse_timeout_seconds"),
         memory_mb=_positive_int(table.get("parse_memory_mb"), env.get(ENV_PARSE_MEMORY), "ingestion.parse_memory_mb"),
     )
+
+
+# --- The API (PRD v0.4.59, FR-016 criterion 9) ---------------------------------------------------------------------------------
+
+ENV_API_PREFIX = "CREDIT_INTEL_API_"
+API_REQUIRED = ("max_concurrent_runs", "max_queued_runs", "run_timeout_seconds", "output_dir", "cache_dir")
+API_OPTIONAL = ("host", "port")
+DEFAULT_API_HOST = "127.0.0.1"
+DEFAULT_API_PORT = 8000
+
+
+@dataclass(frozen=True)
+class ApiSettings:
+    """The ``[api]`` table. The three limits and the two folders are required and have no default (like the parse limits).
+
+    The folders are absolute paths: a server does not depend on the directory it was started from.
+    """
+
+    max_concurrent_runs: int
+    max_queued_runs: int
+    run_timeout_seconds: int
+    output_dir: Path
+    cache_dir: Path
+    host: str = DEFAULT_API_HOST
+    port: int = DEFAULT_API_PORT
+
+
+def _absolute_path(value: object, setting: str) -> Path:
+    if not isinstance(value, str) or not value.strip() or "\x00" in value:
+        raise _invalid(setting)
+    path = Path(value.strip())
+    if not path.is_absolute():
+        raise _invalid(setting)
+    return path
+
+
+def load_api_settings(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str] | None = None) -> ApiSettings:
+    """The ``[api]`` settings, each overridable by ``CREDIT_INTEL_API_<NAME>``.
+
+    A missing or invalid limit, a missing or relative folder, an unknown key or a bad port is ``E-CONFIG-INVALID`` naming ``api.<name>`` and never its value.
+    """
+    env = os.environ if env is None else env
+    table = _settings_table(path, "api")
+    for name in table:
+        if name not in (*API_REQUIRED, *API_OPTIONAL):
+            raise _invalid(f"api.{name}")
+
+    def value(name: str) -> tuple[object, str | None]:
+        return table.get(name), env.get(ENV_API_PREFIX + name.upper())
+
+    def integer(name: str, upper: int | None = None) -> int:
+        file_value, env_value = value(name)
+        result = _positive_int(file_value, env_value, f"api.{name}")
+        if upper is not None and result > upper:
+            raise _invalid(f"api.{name}")
+        return result
+
+    def folder(name: str) -> Path:
+        file_value, env_value = value(name)
+        return _absolute_path(env_value if env_value is not None else file_value, f"api.{name}")
+
+    host_file, host_env = value("host")
+    host = host_env if host_env is not None else host_file if host_file is not None else DEFAULT_API_HOST
+    if not isinstance(host, str) or not re.fullmatch(r"[A-Za-z0-9.:\-]{1,253}", host):
+        raise _invalid("api.host")
+    port = integer("port", 65_535) if "port" in table or ENV_API_PREFIX + "PORT" in env else DEFAULT_API_PORT
+    return ApiSettings(
+        max_concurrent_runs=integer("max_concurrent_runs", 64),
+        max_queued_runs=integer("max_queued_runs", 10_000),
+        run_timeout_seconds=integer("run_timeout_seconds", 86_400),
+        output_dir=folder("output_dir"),
+        cache_dir=folder("cache_dir"),
+        host=host,
+        port=port,
+    )
