@@ -2,7 +2,7 @@
 
 | Item | Value |
 |---|---|
-| Status | **For the owner's review. Phase 6 is not yet approved.** Built and tested offline. On 2026-10-30 the owner confirmed the three build decisions (section 3), asked for the criterion-5 gap to be closed (done), accepted the no-load-measurement and no-browser-test items as documented limitations, and will run the live submission; approval waits for the gap closure and the live run. |
+| Status | **Approved by the project owner on 2026-10-30** (PRD v0.4.61). Built and tested offline; the owner confirmed the three build decisions (section 3), had the criterion-5 gap closed, accepted the no-load-measurement and no-browser-test items as documented limitations, and ran one live submission through the service (section 5). |
 | Written | 2026-10-30 |
 | PRD | v0.4.60 (specification v0.4.59, status v0.4.60) |
 | Commits | `671071c` service layer, `0ddc84d` API core, `d411bb7` access control and headers, `93164d6` web page, `e6dd3a4` README and end-to-end tests, `3ca77f4` PRD status |
@@ -60,7 +60,7 @@ Mutation checks were run on the guards of each step (about 100 mutants of the up
 
 ## 5. What has not been done
 
-- **No run through the service with the real model.** Every API test uses the fake provider. The real provider path is the same `build_provider` the command line uses, but nothing has exercised it through the service. A live run costs money, so it is yours to run (the cap of $0.15 stands; about $0.035 is spent).
+- **One live submission, run by the owner on 2026-10-30, succeeded.** Run `20261030T153537.172558Z-a2b9acdf`: the real model (`gpt-4o-mini`), one call of 3,805 input and 992 output tokens, no retry, 66 seconds end to end, all four files exported (`report.pdf` 83,501 bytes), no problem with the deadline or the pool under real latency. These are the owner's figures; the manifest was not pasted into this repository. At the list prices used earlier the call cost about USD 0.0012 (calculated here, not read from the manifest), so spend is about USD 0.037 of the USD 0.15 cap. One run is a single observation, not a load or accuracy measurement.
 - **No measurement of the service under load.** The 1 / 4 / 1,200 values come from pipeline measurements (OD-25). Memory of the whole service process with a queue was not measured.
 - **No browser test.** The page was checked by reading its HTML, by parsing it, and by running its script under Node. It has not been opened in a browser.
 - **Phase 7** (Docker, deployment, persistence, accounts, TLS, the full security review) is untouched and deferred.
@@ -69,5 +69,5 @@ Mutation checks were run on the guards of each step (about 100 mutants of the up
 
 1. ~~The decision on the pages with a token set, and the two other additions~~ — decided (section 3).
 2. ~~Whether to close the gap in criterion 5~~ — closed (above).
-3. The live submission through the service with the real model (the owner has said they will run it; the commands are in the PROGRESS entry of 2026-10-30), or accept Phase 6 on the offline evidence with that stated.
-4. Your approval of Phase 6, or what you want changed first.
+3. ~~The live submission~~ — done (section 5).
+4. ~~Your approval of Phase 6~~ — given on 2026-10-30.
