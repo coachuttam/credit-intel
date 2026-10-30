@@ -67,7 +67,18 @@ docker compose logs credit-intel                 # request lines and stage lines
 docker compose down                              # waits for running runs, up to the stop grace period (1300 s by default, longer than api.run_timeout_seconds)
 ```
 
-Settings come from `config/settings.toml` mounted read-only at `/config/settings.toml` (point `CREDIT_INTEL_SETTINGS` at another file to use your own). The run folders and the response cache are named volumes (`runs`, `cache`). **They are plain files** (SEC-18): keep the volumes on an encrypted disk (FileVault on a Mac, LUKS or the provider's disk encryption on Linux). The service cannot check this. Nothing removes old runs yet (`prune` is step 3): remove a volume by hand with `docker volume rm` when you are done.
+Settings come from `config/settings.toml` mounted read-only at `/config/settings.toml` (point `CREDIT_INTEL_SETTINGS` at another file to use your own). The run folders and the response cache are named volumes (`runs`, `cache`). **They are plain files** (SEC-18): keep the volumes on an encrypted disk (FileVault on a Mac, LUKS or the provider's disk encryption on Linux). The service cannot check this.
+
+**Clearing old runs (SEC-18).** The service never removes a run by itself and there is no delete endpoint. `prune` removes **whole** run folders, the hidden staging folders that a crash while a run folder was being written leaves (`.<run ID>.<random>.partial`), response-cache entries and upload directories at least DAYS days old, and nothing else. DAYS is required and has no default; list first, then remove:
+
+```
+docker compose run --rm credit-intel prune --config /config/settings.toml --older-than 30 --dry-run
+docker compose run --rm credit-intel prune --config /config/settings.toml --older-than 30
+```
+
+(A one-off container with the same volumes and limits; `--config` must be repeated because the command replaces the default one.) A run folder's and a staging folder's age is the time in the run ID in its name. A removed run folder can no longer be checked against its stored files (the SHA-256 in a kept manifest still names the input), and without its cache entries a run cannot be reproduced without calling the model again. The upload directories live in the container's `tmpfs` and disappear when it stops, so inside a container `prune` finds none. Schedule it yourself if you want it regular.
+
+**A restart.** Each accepted run leaves a marker file in `.pending` on the `runs` volume before the `202` is sent and removes it when the run ends. After `docker compose down` or a crash, the next start records the runs that were waiting or going as failed with `E-RUN-INTERRUPTED` (a status request then says so; it does not say `404`). Their `manifest.json` has `started_at` as the time they were accepted and `finished_at` equal to it (the service does not know when it stopped), and `failed_stage` `validated` (the first stage after `received`: the stage reached is not recorded). Runs are not resumed: submit the document again. `docker compose down` waits up to the stop grace period for runs that are going to finish.
 
 ## 6. Checks inside the image (criterion 10)
 

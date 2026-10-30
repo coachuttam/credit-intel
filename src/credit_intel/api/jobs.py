@@ -21,6 +21,7 @@ from datetime import datetime
 from pathlib import Path
 
 from credit_intel.api.errors import INTERNAL, message_of
+from credit_intel.api.pending import remove_marker
 from credit_intel.config import ApiSettings, LLMSettings
 from credit_intel.export.manifest import run_id as make_run_id
 from credit_intel.ingestion.errors import MESSAGES, ErrorCode, IngestionError
@@ -190,6 +191,7 @@ class JobManager:
             job.folder = record_failure(job.request, job.progress, error)
         finally:
             _remove(job.upload_dir)
+            remove_marker(self.settings.output_dir, job.run_id)  # the run folder (complete, or a failure record) is on disk, or the run never reached `received`
             with self._lock:
                 self._running -= 1
                 job.state = "done"

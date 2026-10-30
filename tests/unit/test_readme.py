@@ -68,7 +68,7 @@ def test_every_option_it_names_exists_in_the_command_and_every_option_of_the_com
     real = {flag for action in parser._actions for flag in action.option_strings if flag.startswith("--")} - {"--help"}
     named = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", README))
 
-    assert real <= named and named <= real | {"--help", "--output"}  # --output is the option of `python -m credit_intel.report`, not of the command
+    assert real <= named and named <= real | {"--help", "--output", "--older-than", "--dry-run"}  # --output: `python -m credit_intel.report`; the other two: `credit-intel-api prune`
 
 
 def test_the_example_command_line_parses_with_the_real_parser():
@@ -171,7 +171,7 @@ def test_the_api_section_names_the_two_api_only_codes_and_the_start_commands_exi
     from credit_intel.ingestion.errors import ErrorCode
 
     text = section("HTTP API and web page")
-    assert f"`{ErrorCode.RUN_TIMEOUT.value}`" in text and f"`{ErrorCode.API_REQUEST.value}`" in text
+    assert all(f"`{code.value}`" in text for code in (ErrorCode.RUN_TIMEOUT, ErrorCode.API_REQUEST, ErrorCode.RUN_INTERRUPTED))
     scripts = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
     assert scripts["credit-intel-api"] == "credit_intel.api.__main__:run" and "uv run credit-intel-api" in text and "python -m credit_intel.api" in text
     assert callable(launcher.main) and "--config" in text
@@ -179,6 +179,6 @@ def test_the_api_section_names_the_two_api_only_codes_and_the_start_commands_exi
 
 def test_the_api_section_keeps_the_limits_it_promises_visible():
     text = section("HTTP API and web page")
-    for needed in ("public and synthetic documents only", "refuses to start on any other address unless a bearer token", "cooperative", "A restart loses runs",
+    for needed in ("public and synthetic documents only", "refuses to start on any other address unless a bearer token", "cooperative", "A restart ends the runs that were going or waiting, and says so",
                    "needs it like every other endpoint", "does not provide TLS"):  # fmt: skip
         assert needed in text, needed

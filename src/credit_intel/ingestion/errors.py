@@ -33,6 +33,7 @@ class ErrorCode(StrEnum):
     EXPORT_FAILED = "E-EXPORT-FAILED"
     RUN_TIMEOUT = "E-RUN-TIMEOUT"  # API only (PRD v0.4.59, FR-016 criterion 10)
     API_REQUEST = "E-API-REQUEST"  # API only (PRD v0.4.59, FR-016 criterion 5)
+    RUN_INTERRUPTED = "E-RUN-INTERRUPTED"  # API only (PRD v0.4.62, FR-016 criterion 10, OD-32)
 
 
 @dataclass(frozen=True)
@@ -109,6 +110,8 @@ CATALOGUE: dict[ErrorCode, CatalogueEntry] = {
            "Check the output directory and re-run.", EXIT_EXPORT, "No"),
         _E(C.RUN_TIMEOUT, "any, after received", "The run passed the time limit for one run.",
            "Narrow the pages, or raise the limit deliberately.", None, "No"),
+        _E(C.RUN_INTERRUPTED, "any, after received", "The service stopped while the run was queued or running.",
+           "Submit the document again.", None, "No"),
         _E(C.API_REQUEST, "before received", "The request is malformed: a file is missing, a field is unknown or a value is of the wrong form.",
            "Correct the request to the documented fields.", None, "No"),
     )

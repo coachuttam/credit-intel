@@ -135,7 +135,8 @@ def test_a_run_that_fails_after_acceptance_and_a_refused_upload_over_a_real_sock
         accepted = client.post("/runs", files={"file": ("bad.pdf", bad.read_bytes())})
         status = wait_for(client, accepted.json()["run_id"])
         assert status["state"] == "failed" and status["error"]["code"] == "E-INPUT-CORRUPT" and status["files"] == ["manifest.json"]
-    assert sorted(p.name for p in settings.output_dir.iterdir()) == [accepted.json()["run_id"]]
+    assert sorted(p.name for p in settings.output_dir.iterdir() if p.name != ".pending") == [accepted.json()["run_id"]]  # `.pending` holds the markers (empty once every run has ended)
+    assert list((settings.output_dir / ".pending").iterdir()) == []
 
 
 def test_the_token_over_a_real_socket(pdf, tmp_path):

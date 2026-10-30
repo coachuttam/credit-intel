@@ -18,6 +18,7 @@ from pathlib import Path
 from python_multipart.multipart import MultipartParser, parse_options_header
 from starlette.requests import ClientDisconnect, Request
 
+from credit_intel.api.retention import upload_prefix
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 
 SIGNATURE = b"%PDF-"
@@ -149,7 +150,7 @@ async def receive_upload(request: Request, max_file_bytes: int, idle_seconds: fl
             raise _bad()
         if int(declared) > max_file_bytes + FIELD_ALLOWANCE:
             raise IngestionError(ErrorCode.TOO_LARGE)  # refused from the header, before a byte of the body is read
-    directory = Path(tempfile.mkdtemp(prefix="credit-intel-upload-"))
+    directory = Path(tempfile.mkdtemp(prefix=upload_prefix()))
     reader = _Reader(directory, max_file_bytes)
     parser = MultipartParser(boundary, {name: getattr(reader, name) for name in (
         "on_header_field", "on_header_value", "on_header_end", "on_headers_finished", "on_part_data", "on_part_end")},

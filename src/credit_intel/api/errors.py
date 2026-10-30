@@ -32,6 +32,7 @@ HTTP_AT_SUBMISSION: dict[ErrorCode, int | None] = {
     C.LLM_AUTH: None,
     C.EXPORT_FAILED: None,
     C.RUN_TIMEOUT: None,
+    C.RUN_INTERRUPTED: None,  # found at the next start from a marker file; reported in the status
 }
 
 BUSY = "Too many runs are waiting. Try again later."

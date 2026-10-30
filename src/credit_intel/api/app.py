@@ -24,9 +24,11 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from credit_intel.api.errors import BUSY, CLOSING, METHOD, NOT_FOUND, REFUSED, STALLED, error_body, status_of, transport_body
 from credit_intel.api.jobs import RUN_ID, Closing, Job, JobManager, QueueFull, folder_status, job_status, run_id_for
 from credit_intel.api.pages import add_pages
+from credit_intel.api.pending import recover_interrupted, remove_marker, write_marker
+from credit_intel.api.retention import sweep_stale_uploads
 from credit_intel.api.security import Security, check_exposure
 from credit_intel.api.uploads import UPLOAD_IDLE_SECONDS, Upload, UploadStalled, receive_upload
-from credit_intel.config import DEFAULT_SETTINGS_PATH, ApiSettings, IngestionSettings, LocatorSettings, load_api_token, load_llm_settings
+from credit_intel.config import DEFAULT_SETTINGS_PATH, ApiSettings, IngestionSettings, LLMSettings, LocatorSettings, load_api_token, load_llm_settings
 from credit_intel.evaluation.guard import ENV_PRIVATE_APPROVED
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.locator import parse_page_range
@@ -60,7 +62,7 @@ def _choice(fields: Mapping[str, str], name: str) -> StatementBasis | None:
     return StatementBasis(value)
 
 
-def _check_request(upload: Upload, config: Path, services: RunServices, env: Mapping[str, str], settings: ApiSettings) -> RunRequest:
+def _check_request(upload: Upload, config: Path, services: RunServices, env: Mapping[str, str], settings: ApiSettings) -> tuple[RunRequest, LLMSettings]:
     """Every check of the request that needs no parsing of the document. Raises ``IngestionError``."""
     fields = upload.fields
     if not set(fields) <= set(FIELDS):
@@ -89,7 +91,7 @@ def _check_request(upload: Upload, config: Path, services: RunServices, env: Map
     llm = load_llm_settings(config, env)  # E-CONFIG-INVALID
     setup = page_filter(request, llm, env, services.classifier_factory)
     check_send_rule(request, upload.sha256, llm, setup, services.assignments, env, lambda line: None)  # E-INPUT-SEND-REFUSED
-    return request
+    return request, llm
 
 
 def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, services: RunServices | None = None,
@@ -105,8 +107,17 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
     services = services or RunServices()
     jobs = manager or JobManager(settings, config, services, base, clock)
 
+    def startup() -> None:
+        """Before the first request: record the runs a stop left unfinished (marker files), then remove the uploads a crash left behind. Neither may stop the service."""
+        for step in (lambda: recover_interrupted(settings.output_dir), sweep_stale_uploads):
+            try:
+                step()
+            except Exception:
+                logger.warning("a start-up clean-up step failed", exc_info=logger.isEnabledFor(logging.DEBUG))
+
     @asynccontextmanager
     async def lifespan(_: FastAPI):  # type: ignore[no-untyped-def]
+        await run_in_threadpool(startup)
         yield
         jobs.close()
 
@@ -149,21 +160,30 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
             try:
                 started = clock().astimezone(UTC)
                 try:
-                    run_request = await run_in_threadpool(_check_request, upload, config, services, base, settings)
+                    run_request, llm = await run_in_threadpool(_check_request, upload, config, services, base, settings)
                 except IngestionError as error:
                     upload.remove()
                     return refuse(error)
                 run_id = run_id_for(started, upload.sha256)
+                if jobs.get(run_id) is not None:  # the same document at the same instant: refused before anything is written (a marker of the same name belongs to that run)
+                    upload.remove()
+                    return refuse(IngestionError(ErrorCode.API_REQUEST))
+                # The marker is written before the 202 is sent (and before the run can start): if the service stops from here on, the next start records the run as interrupted.
+                await run_in_threadpool(write_marker, settings.output_dir, run_id=run_id, started=started, input_file_name=upload.file.name, input_sha256=upload.sha256,
+                                        requested_basis=run_request.basis, asserted_basis=run_request.assert_basis,
+                                        profile_file_name=run_request.profile.name if run_request.profile else None, llm=llm)  # fmt: skip
                 spent = True
                 try:
                     jobs.submit(Job(run_id, run_request, upload.directory, started), reserved=True)
                 except QueueFull:
                     upload.remove()
+                    remove_marker(settings.output_dir, run_id)
                     return busy()
                 except Closing:
                     upload.remove()
+                    remove_marker(settings.output_dir, run_id)
                     return JSONResponse(transport_body(CLOSING), status_code=503)
-                except IngestionError as error:
+                except IngestionError as error:  # a duplicate that slipped past the check above; the marker is the other run's and stays
                     upload.remove()
                     return refuse(error)
             except BaseException:

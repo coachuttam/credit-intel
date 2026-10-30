@@ -271,7 +271,37 @@ def export_failed(t):
     return result
 
 
-IN_RUN = {C.NOT_FOUND: not_found, C.CORRUPT: corrupt, C.ENCRYPTED: encrypted, C.TOO_MANY_PAGES: too_many_pages, C.NO_TEXT_LAYER: no_text_layer, C.PAGE_RANGE: page_range_in_status,
+def run_interrupted(t):
+    """The service stops with a run waiting, and is started again: the new service records the run as interrupted. (The request was answered `202` by the first service.)"""
+    pdf = fx.balance_sheet_pdf(t / "statement.pdf")
+    gate = threading.Event()
+    entered = threading.Semaphore(0)
+
+    def factory(s, e):
+        class Provider:
+            def complete(self, request):
+                entered.release()
+                assert gate.wait(30)
+                return FakeProvider(script=[fx.good_response(pdf)]).complete(request)
+
+        return Provider()
+
+    first = Setup(t, pdf=pdf, services=RunServices(provider_factory=factory, assignments=t / "none.jsonl"), clock=base.ticker())
+    with TestClient(first.app) as client:
+        client.post("/runs", files={"file": ("a.pdf", pdf.read_bytes())}, data={"no_report": "true"})
+        assert entered.acquire(timeout=30)
+        waiting = client.post("/runs", files={"file": ("b.pdf", pdf.read_bytes() + b"\n%2")}, data={"no_report": "true"})
+        assert waiting.status_code == 202
+    gate.set()  # the first service has shut down; its running run may finish, the waiting one never started
+    end = time.monotonic() + 30
+    while first.app.state.jobs.counts["running"] and time.monotonic() < end:
+        time.sleep(0.02)
+    second = Setup(t, pdf=pdf, clock=base.ticker())
+    with TestClient(second.app) as client:  # the restart: the marker found at start is recorded
+        return waiting, client.get(f"/runs/{waiting.json()['run_id']}").json()
+
+
+IN_RUN = {C.RUN_INTERRUPTED: run_interrupted, C.NOT_FOUND: not_found, C.CORRUPT: corrupt, C.ENCRYPTED: encrypted, C.TOO_MANY_PAGES: too_many_pages, C.NO_TEXT_LAYER: no_text_layer, C.PAGE_RANGE: page_range_in_status,
           C.NO_STATEMENT_PAGES: no_statement_pages, C.BASIS_UNAVAILABLE: basis_unavailable, C.LLM_INVALID_OUTPUT: llm_invalid_output, C.LLM_UNAVAILABLE: llm_unavailable,
           C.LLM_AUTH: llm_auth, C.LLM_BUDGET_EXCEEDED: llm_budget, C.OCR_FAILED: ocr_failed, C.PARSE_LIMIT: parse_limit, C.RUN_TIMEOUT: run_timeout, C.EXPORT_FAILED: export_failed}  # fmt: skip
 
@@ -310,16 +340,19 @@ def test_a_code_raised_inside_a_run_is_in_the_status_with_its_code_and_message_a
     assert status["error"]["code"] == code.value and status["error"]["message"].startswith(entry.message.split(" (")[0].rstrip("."))
     assert entry.action.rstrip(".") in status["error"]["message"]
     assert "Traceback" not in str(status) and str(tmp_path) not in str(status)
-    folders = sorted((tmp_path / "out").glob("*")) if (tmp_path / "out").exists() else []
+    folders = sorted(p for p in (tmp_path / "out").glob("*") if p.name != ".pending") if (tmp_path / "out").exists() else []
     if code is C.NOT_FOUND:
         assert answer.json()["run_id"] not in [f.name for f in folders] and status["files"] == []  # it failed before `received`: nothing was recorded (the first run is whole)
     else:
-        assert [f.name for f in folders] == [answer.json()["run_id"]] and status["files"] == ["manifest.json"]
+        names = [f.name for f in folders]
+        run_id = answer.json()["run_id"]
+        assert run_id in names and (code is C.RUN_INTERRUPTED or names == [run_id])  # the interrupted scenario also has the first run, which finished
+        assert status["files"] == ["manifest.json"] and [p.name for p in (tmp_path / "out" / run_id).iterdir()] == ["manifest.json"]
         import json
 
-        record = json.loads((folders[0] / "manifest.json").read_text(encoding="utf-8"))
+        record = json.loads((tmp_path / "out" / run_id / "manifest.json").read_text(encoding="utf-8"))
         assert record["final_state"] == "failed" and record["error_code"] == code.value
-        assert record["failed_stage"] in [s.strip() for s in entry.stage.split("/")] or code is C.RUN_TIMEOUT, (record["failed_stage"], entry.stage)
+        assert record["failed_stage"] in [s.strip() for s in entry.stage.split("/")] or code in (C.RUN_TIMEOUT, C.RUN_INTERRUPTED), (record["failed_stage"], entry.stage)
         assert status["stage"] == record["failed_stage"]
     assert base.upload_leftovers(private_temp) == []
 

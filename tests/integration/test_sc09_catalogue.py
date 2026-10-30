@@ -230,7 +230,7 @@ SCENARIOS = {
 
 
 def test_every_code_in_the_catalogue_has_a_scenario_and_no_scenario_is_for_an_unknown_code():
-    api_only = {ErrorCode.RUN_TIMEOUT, ErrorCode.API_REQUEST}  # raised only by the API: their scenarios are in test_api_*.py
+    api_only = {ErrorCode.RUN_TIMEOUT, ErrorCode.API_REQUEST, ErrorCode.RUN_INTERRUPTED}  # raised only by the API: their scenarios are in test_api_*.py
     assert set(SCENARIOS) == set(CATALOGUE) - api_only == set(ErrorCode) - api_only and len(SCENARIOS) == 21
 
 

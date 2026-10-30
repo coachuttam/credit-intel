@@ -54,11 +54,12 @@ G1 = [
 API_ONLY = [
     ("E-RUN-TIMEOUT", "any, after received", "Narrow the pages, or raise the limit deliberately."),
     ("E-API-REQUEST", "before received", "Correct the request to the documented fields."),
+    ("E-RUN-INTERRUPTED", "any, after received", "Submit the document again."),
 ]
 
 
-def test_the_catalogue_has_exactly_the_twenty_one_codes_of_g1_and_the_two_api_only_codes():  # nineteen implemented, two specified by PRD v0.4.44
-    assert {c.value for c in CATALOGUE} == {row[0] for row in G1} | {row[0] for row in API_ONLY} and len(G1) == 21 and len(CATALOGUE) == 23
+def test_the_catalogue_has_exactly_the_twenty_one_codes_of_g1_and_the_three_api_only_codes():  # nineteen implemented, two specified by PRD v0.4.44
+    assert {c.value for c in CATALOGUE} == {row[0] for row in G1} | {row[0] for row in API_ONLY} and len(G1) == 21 and len(CATALOGUE) == 24
     assert set(CATALOGUE) == set(ErrorCode) == set(MESSAGES)
 
 
