@@ -36,18 +36,18 @@ def _fsync_directory(path: Path) -> None:
         os.close(descriptor)
 
 
-def _write_file(directory: Path, name: str, text: str) -> None:
-    """Write ``text`` as UTF-8 bytes (no byte-order mark, newlines as given) through a temporary name, then rename."""
+def _write_file(directory: Path, name: str, content: str | bytes) -> None:
+    """Write ``content`` through a temporary name, then rename: text as UTF-8 bytes (no byte-order mark, newlines as given), bytes as they are."""
     temporary = directory / f"{name}.tmp"
     with open(temporary, "xb") as handle:
-        handle.write(text.encode("utf-8"))
+        handle.write(content if isinstance(content, bytes) else content.encode("utf-8"))
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(temporary, directory / name)
 
 
-def write_run(output_dir: Path, run_id: str, files: Mapping[str, str]) -> Path:
-    """Write ``files`` (name to text) as the run folder ``<output_dir>/<run_id>``, or raise ``E-EXPORT-FAILED``."""
+def write_run(output_dir: Path, run_id: str, files: Mapping[str, str | bytes]) -> Path:
+    """Write ``files`` (name to text, or to bytes for ``report.pdf``) as the run folder ``<output_dir>/<run_id>``, or raise ``E-EXPORT-FAILED``."""
     if not RUN_ID.fullmatch(run_id) or not files or not all(FILE_NAME.fullmatch(name) for name in files):
         raise ValueError("a run needs a run ID of the FR-010.1 form and plain file names")
     final = output_dir / run_id
@@ -57,8 +57,8 @@ def write_run(output_dir: Path, run_id: str, files: Mapping[str, str]) -> Path:
         if final.exists() or final.is_symlink():
             raise FileExistsError("the run directory already exists")
         staging = Path(tempfile.mkdtemp(prefix=f".{run_id}.", suffix=STAGING_SUFFIX, dir=output_dir))
-        for name, text in files.items():
-            _write_file(staging, name, text)
+        for name, content in files.items():
+            _write_file(staging, name, content)
         _fsync_directory(staging)
         os.rename(staging, final)
         staging = None

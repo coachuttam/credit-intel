@@ -93,3 +93,26 @@ def in_process_parsing(monkeypatch):
     from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
 
     monkeypatch.setattr(cli, "sandboxed_extractor", lambda config, env: PdfplumberExtractor())
+
+
+@pytest.fixture(autouse=True)
+def no_pdf_report_by_default(monkeypatch):
+    """A run builds its PDF report in a worker process (about a second); tests that are not about the report do not wait for it.
+
+    The report, its check, its failure paths and the command line's behaviour are tested in the ``test_report_*`` files, which put the
+    real ``make_report`` back (``real_report``).
+    """
+    import credit_intel.export.run_export as run_export
+    from credit_intel.report import ReportOutcome
+
+    monkeypatch.setattr(run_export, "make_report", lambda memo, results=None, **kwargs: ReportOutcome.skipped())
+
+
+@pytest.fixture
+def real_report(monkeypatch):
+    """Put the real report maker back for a test about the report."""
+    import credit_intel.export.run_export as run_export
+    from credit_intel.report import build
+
+    monkeypatch.setattr(run_export, "make_report", build.make_report)
+    return build.make_report

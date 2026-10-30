@@ -98,6 +98,7 @@ def build_parser(stream: IO[str]) -> argparse.ArgumentParser:
                    help="state the basis (consolidated or standalone) of the pages of --pages whose titles name none; requires --pages")  # fmt: skip
     p.add_argument("--profile", type=Path, metavar="PROFILE_JSON", help="analyst-provided borrower profile (JSON)")
     p.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, metavar="DIR", help="where run folders are written (default: runs)")
+    p.add_argument("--no-report", action="store_true", help="skip the PDF report (report.pdf is built by default; a failure to build it never fails the run)")
     p.add_argument("--config", type=Path, default=DEFAULT_SETTINGS_PATH, metavar="SETTINGS_TOML", help="settings file (default: config/settings.toml)")
     p.add_argument("--ocr", action="store_true",
                    help="read image-only pages of --pages by OCR (PRD v0.4.44; needs the [ocr] settings and an OCR engine; a scanned document needs --pages)")  # fmt: skip
@@ -198,7 +199,7 @@ def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[
         assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, page_filter=page_filter,
     )  # fmt: skip
     path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),
-                      profile_file_name=args.profile.name if args.profile else None)  # fmt: skip
+                      profile_file_name=args.profile.name if args.profile else None, report=not args.no_report)  # fmt: skip
     print(path, file=out)
     return EXIT_OK
 

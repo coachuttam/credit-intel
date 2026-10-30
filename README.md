@@ -68,7 +68,7 @@ Off by default. With `USE_JEV=true` in the environment, a hosted classifier (Jev
 
 ```
 credit-intel <pdf_path> [--pages RANGE] [--basis consolidated|standalone] [--assert-basis consolidated|standalone]
-             [--profile PROFILE_JSON] [--output-dir DIR] [--config SETTINGS_TOML] [--ocr] [--confirm-public-document]
+             [--profile PROFILE_JSON] [--output-dir DIR] [--config SETTINGS_TOML] [--ocr] [--confirm-public-document] [--no-report]
 ```
 
 | Option | Meaning |
@@ -81,6 +81,7 @@ credit-intel <pdf_path> [--pages RANGE] [--basis consolidated|standalone] [--ass
 | `--config SETTINGS_TOML` | The settings file. Default `config/settings.toml`. |
 | `--ocr` | Reads the image-only pages of `--pages` by OCR (PRD v0.4.44). Needs the `[ocr]` settings and an OCR engine, and a scanned document needs `--pages`. **No engine is installed yet** (the Tesseract adapter is the next step of the build), so a scanned page currently ends with `E-INPUT-OCR-UNAVAILABLE`. Text read by OCR is never accepted as extracted. |
 | `--confirm-public-document` | Confirms that a document that is not on the assignment record is public, so its pages may be sent. |
+| `--no-report` | Skips the PDF report (`report.pdf`), which is built by default. The manifest then records the report as `skipped`. |
 
 On success the command prints the run folder path and exits 0. On a failure it prints one line with an error code (`E-...`), the reason and what to do, and exits with the code in this table. A run that failed after its input was read also leaves a folder with only `manifest.json`, which records the failed state and the error code.
 
@@ -103,6 +104,7 @@ Each run writes `<output_dir>/<run_id>/`, where the run ID is the UTC start time
 - `memo.md`: the draft memo, in nine sections: borrower overview, documents reviewed, financial performance, financial ratios, potential risk indicators, evidence and source references, missing information and conflicts, questions for the credit analyst, and limitations. Every statement carries an origin label: `[SOURCE: p.N]`, `[CALCULATED: ...]`, `[RULE: RI-xxx]`, `[ANALYST-PROVIDED]` or `[UNVERIFIED]`. Before anything is written, the memo is checked against the run's own results (every label, ID and value); a memo that fails the check is an internal error (exit 1) that reports only the number of problems, and the run leaves a manifest-only record, no memo.
 - `results.json`: every field with its page, quote and status, the derived values, the five ratios, the seven risk indicators and the profile. It holds no timestamp or run ID, so the same input, configuration, code and cached model replies give a byte-identical file (and an identical memo apart from the run ID and the times in its header).
 - `manifest.json`: the run ID, timestamps, every processing state, input hash and page counts, code version, package versions, model and prompt versions, rules-file hash, cache hits, tokens and estimated cost, the final state and any error code.
+- `report.pdf`: the same memo typeset for reading, with two charts (revenue and net profit, and the current ratio and interest coverage, each period against the other). It keeps every origin label, the draft statement on every page and the limitations word for word, plots only values that are `extracted` and not read by OCR, and prints no number that the memo does not print. It is built from `memo.md` and `results.json` only, and is checked against them before it is written. **It never fails a run:** if it cannot be built or does not pass its check, the run completes with the other three files, a warning says why, and `manifest.json` records the reason (`render_error`, `check_failed`, `glyph_missing` or `timeout`; the build is limited to 120 seconds). To build it later from a finished folder: `python -m credit_intel.report <run-folder> --output FILE` (offline, to a new file outside any run folder).
 
 ## How it works
 

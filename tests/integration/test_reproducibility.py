@@ -55,7 +55,8 @@ def run(pdf, config, out_dir, *extra, replies=None, start=START):
 
 
 def read(folder):
-    return {name: (folder / name).read_bytes() for name in FILES}
+    """Every file of the run folder, as bytes: with the PDF report in a fresh process there are four (the in-process runs here skip it)."""
+    return {path.name: path.read_bytes() for path in sorted(folder.iterdir())}
 
 
 def test_a_cold_run_and_a_cached_run_give_the_same_results_and_memo_and_a_manifest_that_differs_only_in_cache_and_tokens(pdf, config, tmp_path):
@@ -145,7 +146,8 @@ def test_whole_run_folders_from_fresh_processes_are_byte_identical_whatever_the_
     three = fresh_process(tmp_path, "three", pdf, config, "random", TZ="America/Los_Angeles", LANG="en_US.UTF-8")
 
     assert one.name == two.name == three.name
-    assert read(one) == read(two) == read(three)
+    assert sorted(read(one)) == ["manifest.json", "memo.md", "report.pdf", "results.json"]  # the PDF report is built in these fresh processes
+    assert read(one) == read(two) == read(three)  # and it is byte-identical too
 
 
 def test_two_runs_in_one_process_leave_independent_folders_with_the_same_results(pdf, config, tmp_path):

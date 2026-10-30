@@ -13,7 +13,8 @@ from credit_intel.export.writer import RUN_ID, STAGING_SUFFIX, write_run
 from credit_intel.ingestion.errors import ErrorCode, IngestionError, exit_code
 
 RUN = "20261024T101530.123456Z-0dd49919"
-FILES = {"memo.md": "# Memo — draft\n\nline two\n", "results.json": '{"a": "é"}\n', "manifest.json": "{}\n"}
+PDF = b"%PDF-1.4\n\xff\xfe\x00 bytes that are not UTF-8 \x80\n%%EOF\n"  # report.pdf (FR-015) is bytes: written exactly as given
+FILES = {"memo.md": "# Memo — draft\n\nline two\n", "results.json": '{"a": "é"}\n', "manifest.json": "{}\n", "report.pdf": PDF}
 
 
 def listing(path: Path) -> list[str]:
@@ -30,10 +31,20 @@ def run_folders(output: Path) -> list[str]:
 def test_the_files_are_written_as_given_in_the_run_folder_and_nothing_else_is_left(tmp_path):
     path = write_run(tmp_path / "runs", RUN, FILES)
 
-    assert path == tmp_path / "runs" / RUN and listing(path) == ["manifest.json", "memo.md", "results.json"]
+    assert path == tmp_path / "runs" / RUN and listing(path) == ["manifest.json", "memo.md", "report.pdf", "results.json"]
     assert listing(tmp_path / "runs") == [RUN]
-    for name, text in FILES.items():
-        assert (path / name).read_bytes() == text.encode("utf-8")
+    for name, content in FILES.items():
+        assert (path / name).read_bytes() == (content if isinstance(content, bytes) else content.encode("utf-8"))
+
+
+def test_bytes_are_written_exactly_and_text_is_still_encoded_as_utf_8(tmp_path):
+    path = write_run(tmp_path, RUN, {"report.pdf": PDF, "memo.md": "é"})
+    assert (path / "report.pdf").read_bytes() == PDF and (path / "memo.md").read_bytes() == "é".encode("utf-8")
+
+
+def test_a_run_may_have_no_report_and_is_complete_without_it(tmp_path):
+    path = write_run(tmp_path, RUN, {k: v for k, v in FILES.items() if k != "report.pdf"})
+    assert listing(path) == ["manifest.json", "memo.md", "results.json"]
 
 
 def test_text_is_utf_8_without_a_byte_order_mark_and_newlines_are_not_changed(tmp_path):

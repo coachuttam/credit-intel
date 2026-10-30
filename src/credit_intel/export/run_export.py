@@ -20,6 +20,7 @@ from credit_intel.export.results import build_results, render_data
 from credit_intel.export.writer import write_run
 from credit_intel.memo.render import render_memo
 from credit_intel.memo.trace import MemoCheckFailed, problems
+from credit_intel.report import ReportOutcome, make_report
 from credit_intel.models import StatementBasis
 from credit_intel.run import RunResult
 from credit_intel.states import EXPORTED, MEMO_GENERATED, Recorder
@@ -37,8 +38,14 @@ def export_run(
     version: CodeVersion,
     packages: dict[str, str | None],
     profile_file_name: str | None = None,
+    report: bool = True,
 ) -> Path:
-    """Write ``memo.md``, ``results.json`` and ``manifest.json`` to ``<output_dir>/<run_id>/`` and return that path."""
+    """Write ``memo.md``, ``results.json``, ``manifest.json`` and, if it can be built, ``report.pdf`` to ``<output_dir>/<run_id>/``.
+
+    The PDF report (PRD FR-015, v0.4.56) is a presentation layer: it is built after the memo has passed its check, from the memo text and the
+    results data, and **a failure to build it never fails the run**: the folder is then written without it, the manifest says why and a warning
+    is logged (``report=False`` skips it, and the manifest says so). It is published in the same atomic step as the other files.
+    """
     sha = result.extraction.source_document.sha256
     identifier = run_id(recorder.events[0].at, sha)
     try:
@@ -49,15 +56,29 @@ def export_run(
         if found:
             raise MemoCheckFailed(len(found))  # an internal error: a defect in the template or the data, recorded as failed in memo_generated
         recorder.enter(MEMO_GENERATED, {"memo_lines": memo.count("\n")})
-        recorder.enter(EXPORTED, {"files": 3})
+        outcome = _report_of(memo, data) if report else ReportOutcome.skipped()
+        files: dict[str, str | bytes] = {"memo.md": memo, "results.json": render_data(data)}
+        recorder.enter(EXPORTED, {"files": 4 if outcome.pdf is not None else 3})
         manifest = build_manifest(recorder=recorder, llm=llm, requested_basis=requested_basis, version=version, packages=packages,
-                                  result=result, profile_file_name=profile_file_name)  # fmt: skip
-        path = write_run(output_dir, identifier, {"memo.md": memo, "results.json": render_data(data), "manifest.json": render_manifest(manifest)})
+                                  result=result, profile_file_name=profile_file_name, report=outcome.manifest_entry())  # fmt: skip
+        files["manifest.json"] = render_manifest(manifest)
+        if outcome.pdf is not None:
+            files["report.pdf"] = outcome.pdf
+        path = write_run(output_dir, identifier, files)
     except Exception as error:
         recorder.fail(getattr(getattr(error, "code", None), "value", None))
         raise
-    logger.info("stage=%s run=%s files=3", EXPORTED, identifier)
+    logger.info("stage=%s run=%s files=%d", EXPORTED, identifier, len(files))
     return path
+
+
+def _report_of(memo: str, data: dict) -> ReportOutcome:
+    """The report outcome for a run; whatever happens, the run goes on (``make_report`` never raises, and this guards the call as well)."""
+    try:
+        return make_report(memo, data)
+    except Exception:  # a defect in the report code is not a defect of the run
+        logger.warning("report not written (render_error); memo.md is complete")
+        return ReportOutcome("failed", reason="render_error")
 
 
 def export_failure(

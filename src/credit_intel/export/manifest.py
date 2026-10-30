@@ -89,6 +89,7 @@ def build_manifest(
     profile_file_name: str | None = None,
     rules_sha256: str | None = None,
     asserted_basis: StatementBasis | None = None,
+    report: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The contents of ``manifest.json``. ``result`` is ``None`` for a run that failed before it finished.
 
@@ -141,6 +142,8 @@ def build_manifest(
                    "llm_calls": stats.llm_calls, "retries": stats.llm_retries} if stats else None,  # fmt: skip
         "estimated_cost_usd": to_jsonable(stats.estimated_cost) if stats else None,
     }
+    if report is not None:  # PRD v0.4.56 (FR-015 criterion 8): what became of the PDF report; a failure record has none, no report was tried
+        manifest["report"] = report
     derivations = extraction.attributes.derivations if extraction is not None else ()
     if derivations:  # PRD v0.4.37: a currency or scale the code read from the pages because the model gave none that was usable
         manifest["attribute_derivations"] = [{"attribute": d.attribute, "page": d.page, "why": d.why} for d in derivations]

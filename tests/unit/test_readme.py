@@ -68,7 +68,7 @@ def test_every_option_it_names_exists_in_the_command_and_every_option_of_the_com
     real = {flag for action in parser._actions for flag in action.option_strings if flag.startswith("--")} - {"--help"}
     named = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", README))
 
-    assert real <= named and named <= real | {"--help"}
+    assert real <= named and named <= real | {"--help", "--output"}  # --output is the option of `python -m credit_intel.report`, not of the command
 
 
 def test_the_example_command_line_parses_with_the_real_parser():
