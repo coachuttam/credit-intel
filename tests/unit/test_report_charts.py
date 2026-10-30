@@ -102,6 +102,24 @@ def test_the_label_of_a_slot_names_the_page_the_field_was_read_on():
     assert charts.traceability(charts.build_charts(data), memo_of(data), data, parser().parse) == []
 
 
+def test_a_run_that_found_no_period_dates_still_gets_its_charts_with_the_role_as_the_caption():
+    data = rich()
+    for record in [*data["fields"], *data["derived_fields"]]:
+        record["period_end"] = None
+    for metric in data["metrics"]:
+        metric["period_ends"] = []
+    bars, dots = charts.build_charts(data)
+    assert [s.caption for p in bars.panels for s in p.slots] == ["comparative", "current", "comparative", "current"]
+    assert all(s.caption in ("comparative", "current") for p in dots.panels for s in p.slots)
+    memo = memo_of(data)
+    cs = charts.build_charts(data)
+    assert check.problems(build_pdf(memo, cs), memo, cs, data) == []
+
+
+def test_the_caption_is_the_period_end_and_the_role_or_the_role_alone():
+    assert charts._slot_caption("2025-03-31", "current") == "2025-03-31 current" and charts._slot_caption(None, "current") == "current" and charts._slot_caption("", "comparative") == "comparative"
+
+
 def test_a_missing_record_is_not_plotted():
     data = rich()
     data["fields"] = [r for r in data["fields"] if r["field_name"] != "revenue"]

@@ -82,6 +82,11 @@ class Chart:
 # --- building the data from the results ---------------------------------------------------------------------------------------------
 
 
+def _slot_caption(period_end: str | None, role: str) -> str:
+    """The period end and the role as printed under a slot; just the role when the run found no period end."""
+    return f"{period_end} {role}" if period_end else role
+
+
 def _records(results: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {r["field_id"]: r for r in [*results["fields"], *results["derived_fields"]]}
 
@@ -98,7 +103,7 @@ def _field_slot(results: dict[str, Any], records: dict[str, dict[str, Any]], nam
     record = next((r for r in records.values() if r["field_name"] == name and r["period_role"] == role), None)
     if record is None:
         return Slot(role, role, f"{name}.{role}", note="not plotted: not found")
-    caption = f"{record['period_end']} {role}"
+    caption = _slot_caption(record.get("period_end"), role)
     if not _usable(record):
         return Slot(role, caption, record["field_id"], note=f"not plotted: {sections.words(record['status'])}")
     return Slot(
@@ -111,7 +116,7 @@ def _metric_slot(results: dict[str, Any], records: dict[str, dict[str, Any]], me
     metric = next((m for m in results["metrics"] if m["metric_id"] == metric_id and m["period_role"] == role), None)
     if metric is None:
         return Slot(role, role, f"{metric_id}.{role}", note="not plotted: not defined")
-    caption = f"{metric['period_ends'][0]} {role}"
+    caption = _slot_caption((metric.get("period_ends") or [None])[0], role)
     if metric["value"] is None:
         return Slot(role, caption, metric["id"], note=f"not plotted: {plain(sections._metric_value(metric))}")
     if any(i not in records or not _usable(records[i]) for i in metric["input_field_ids"]):  # rests on an excluded value
