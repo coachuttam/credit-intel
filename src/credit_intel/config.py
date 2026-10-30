@@ -772,3 +772,22 @@ def load_api_settings(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str]
         host=host,
         port=port,
     )
+
+
+ENV_API_TOKEN = "CREDIT_INTEL_API_TOKEN"
+MIN_TOKEN_LENGTH = 32
+
+
+def load_api_token(env: Mapping[str, str] | None = None) -> str | None:
+    """The bearer token of the API (SEC-15), from the environment only: never a file, so it is never committed or listed.
+
+    ``None`` when it is not set. A token that is set must be at least 32 printable ASCII characters without spaces; otherwise ``E-CONFIG-INVALID``
+    naming ``api.token`` and never the value.
+    """
+    env = os.environ if env is None else env
+    token = env.get(ENV_API_TOKEN)
+    if token is None:
+        return None
+    if len(token) < MIN_TOKEN_LENGTH or not re.fullmatch(r"[\x21-\x7e]+", token):
+        raise _invalid("api.token")
+    return token

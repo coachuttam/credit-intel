@@ -18,6 +18,7 @@ dependencies = [
 
 [project.scripts]
 credit-intel = "credit_intel.cli:run"
+credit-intel-api = "credit_intel.api.__main__:run"
 
 [dependency-groups]
 dev = [

@@ -9,6 +9,7 @@ later failure is reported in the run's status. The files of a run folder are ser
 import logging
 import os
 import re
+import tempfile
 from contextlib import asynccontextmanager
 from collections.abc import Mapping
 from datetime import UTC
@@ -22,8 +23,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from credit_intel.api.errors import BUSY, CLOSING, METHOD, NOT_FOUND, REFUSED, error_body, status_of, transport_body
 from credit_intel.api.jobs import RUN_ID, Closing, Job, JobManager, QueueFull, folder_status, job_status, run_id_for
+from credit_intel.api.security import Security, check_exposure
 from credit_intel.api.uploads import Upload, receive_upload
-from credit_intel.config import DEFAULT_SETTINGS_PATH, ApiSettings, IngestionSettings, LocatorSettings, load_llm_settings
+from credit_intel.config import DEFAULT_SETTINGS_PATH, ApiSettings, IngestionSettings, LocatorSettings, load_api_token, load_llm_settings
 from credit_intel.evaluation.guard import ENV_PRIVATE_APPROVED
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.locator import parse_page_range
@@ -95,6 +97,10 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
     """The application. ``env`` is the process environment without the owner's ``private/`` approval, which the API never honours (FR-016 criterion 8)."""
     base = dict(os.environ if env is None else env)
     base.pop(ENV_PRIVATE_APPROVED, None)
+    token = load_api_token(base)  # E-CONFIG-INVALID for a short or odd token
+    check_exposure(settings.host, token)  # and for a host that is not a loopback address with no token (SEC-15)
+    if Path(tempfile.gettempdir()).resolve().is_relative_to(settings.output_dir.resolve()):
+        raise IngestionError(ErrorCode.CONFIG_INVALID, "api.output_dir")  # uploads are kept outside the output folder (SEC-14)
     services = services or RunServices()
     jobs = manager or JobManager(settings, config, services, base, clock)
 
@@ -105,6 +111,7 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
 
     app = FastAPI(title="AI Credit Intelligence", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)  # nothing is served beside the endpoints
     app.state.jobs, app.state.settings = jobs, settings
+    app.add_middleware(Security, token=token)
     max_bytes = max_file_bytes if max_file_bytes is not None else IngestionSettings().max_file_bytes  # FR-001.2; a parameter so a test can use a small one
 
     @app.exception_handler(StarletteHTTPException)
