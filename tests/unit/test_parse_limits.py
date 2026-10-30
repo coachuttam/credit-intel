@@ -334,9 +334,18 @@ def test_the_worker_is_given_the_path_and_memory_as_arguments_not_through_a_shel
     assert args[0] == "inspect" and args[1] == str(odd) and args[3] == "777"
 
 
-def test_a_memory_reader_that_cannot_read_does_not_stop_the_worker(tmp_path):
-    ok = stub(tmp_path, "time.sleep(0.3)\njson.dump({'ok': True, 'result': {'page_count': 1, 'is_encrypted': False}}, open(out, 'w'))\n")
-    assert sandboxed(ok, memory_reader=lambda pid: None).inspect(tmp_path / "x.pdf") == PdfInspection(1, False)
+def test_a_worker_whose_memory_cannot_be_read_is_stopped_with_the_parse_limit_code_and_not_left_unwatched(tmp_path):
+    """Fail closed (Phase 7 step 1, F-4): before, a reader that returned nothing meant the memory limit silently never applied."""
+    slow = stub(tmp_path, "time.sleep(30)\n")
+    with pytest.raises(IngestionError) as error:
+        sandboxed(slow, memory_reader=lambda pid: None).inspect(tmp_path / "x.pdf")
+    assert error.value.code is ErrorCode.PARSE_LIMIT and "memory could not be measured" in str(error.value)
+
+
+def test_only_consecutive_unreadable_checks_stop_a_worker_a_good_reading_resets_the_count(tmp_path):
+    ok = stub(tmp_path, "time.sleep(0.6)\njson.dump({'ok': True, 'result': {'page_count': 1, 'is_encrypted': False}}, open(out, 'w'))\n")
+    pattern = iter([None, None, 1.0] * 100)  # never three in a row
+    assert sandboxed(ok, memory_reader=lambda pid: next(pattern)).inspect(tmp_path / "x.pdf") == PdfInspection(1, False)
 
 
 def test_the_resident_memory_of_this_process_is_readable_and_a_missing_one_is_none():

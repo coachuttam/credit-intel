@@ -116,3 +116,17 @@ def real_report(monkeypatch):
 
     monkeypatch.setattr(run_export, "make_report", build.make_report)
     return build.make_report
+
+
+STUB_VARIABLES = ("STUB_LANGS", "STUB_LOG", "STUB_META", "STUB_MODE", "STUB_PIDS", "STUB_SLEEP", "STUB_TSV", "STUB_VERSION_ON_STDERR")
+
+
+@pytest.fixture
+def engine_stub_variables(monkeypatch):
+    """The OCR-engine stubs of some tests are configured through ``STUB_*`` variables, which the real child environment drops (Phase 7 step 1, F-1).
+
+    Only these tests add those names to the list of variables a child process may inherit; the list in the code is unchanged.
+    """
+    from credit_intel.ingestion import child_env
+
+    monkeypatch.setattr(child_env, "ALLOWED", (*child_env.ALLOWED, *STUB_VARIABLES))

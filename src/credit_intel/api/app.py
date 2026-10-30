@@ -21,11 +21,11 @@ from fastapi.responses import JSONResponse, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from credit_intel.api.errors import BUSY, CLOSING, METHOD, NOT_FOUND, REFUSED, error_body, status_of, transport_body
+from credit_intel.api.errors import BUSY, CLOSING, METHOD, NOT_FOUND, REFUSED, STALLED, error_body, status_of, transport_body
 from credit_intel.api.jobs import RUN_ID, Closing, Job, JobManager, QueueFull, folder_status, job_status, run_id_for
 from credit_intel.api.pages import add_pages
 from credit_intel.api.security import Security, check_exposure
-from credit_intel.api.uploads import Upload, receive_upload
+from credit_intel.api.uploads import UPLOAD_IDLE_SECONDS, Upload, UploadStalled, receive_upload
 from credit_intel.config import DEFAULT_SETTINGS_PATH, ApiSettings, IngestionSettings, LocatorSettings, load_api_token, load_llm_settings
 from credit_intel.evaluation.guard import ENV_PRIVATE_APPROVED
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -94,7 +94,7 @@ def _check_request(upload: Upload, config: Path, services: RunServices, env: Map
 
 def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, services: RunServices | None = None,
                env: Mapping[str, str] | None = None, clock: Clock = utc_now, manager: JobManager | None = None,
-               max_file_bytes: int | None = None) -> FastAPI:  # fmt: skip
+               max_file_bytes: int | None = None, upload_idle_seconds: float = UPLOAD_IDLE_SECONDS) -> FastAPI:  # fmt: skip
     """The application. ``env`` is the process environment without the owner's ``private/`` approval, which the API never honours (FR-016 criterion 8)."""
     base = dict(os.environ if env is None else env)
     base.pop(ENV_PRIVATE_APPROVED, None)
@@ -123,35 +123,56 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
     def refuse(error: IngestionError) -> JSONResponse:
         return JSONResponse(error_body(error), status_code=status_of(error))
 
+    def busy() -> JSONResponse:
+        return JSONResponse(transport_body(BUSY), status_code=429, headers={"Retry-After": "60"})
+
     async def accept(request: Request) -> JSONResponse:
-        """Receive an upload, make the checks of the request and queue the run: the one path for `POST /runs` and the page's form."""
+        """Hold a place, receive the upload, make the checks of the request and queue the run: the one path for `POST /runs` and the page's form.
+
+        The place is taken **before the first byte of the body is read** (OD-37), so a service that is full answers `429` without receiving anything, and the
+        uploads in progress count against the same two limits as the runs.
+        """
         try:
-            upload = await receive_upload(request, max_bytes)
-        except IngestionError as error:
-            return refuse(error)
+            jobs.reserve()
+        except QueueFull:
+            return busy()
+        except Closing:
+            return JSONResponse(transport_body(CLOSING), status_code=503)
+        spent = False  # `submit` uses the place up, whether it queues the run or refuses it
         try:
-            started = clock().astimezone(UTC)
             try:
-                run_request = await run_in_threadpool(_check_request, upload, config, services, base, settings)
+                upload = await receive_upload(request, max_bytes, upload_idle_seconds)
             except IngestionError as error:
-                upload.remove()
                 return refuse(error)
-            run_id = run_id_for(started, upload.sha256)
+            except UploadStalled:
+                return JSONResponse(transport_body(STALLED), status_code=408)
             try:
-                jobs.submit(Job(run_id, run_request, upload.directory, started))
-            except QueueFull:
-                upload.remove()
-                return JSONResponse(transport_body(BUSY), status_code=429, headers={"Retry-After": "60"})
-            except Closing:
-                upload.remove()
-                return JSONResponse(transport_body(CLOSING), status_code=503)
-            except IngestionError as error:
-                upload.remove()
-                return refuse(error)
-        except BaseException:
-            upload.remove()  # anything unexpected: nothing of the upload stays behind
-            raise
-        return JSONResponse({"run_id": run_id, "state": "queued"}, status_code=202)
+                started = clock().astimezone(UTC)
+                try:
+                    run_request = await run_in_threadpool(_check_request, upload, config, services, base, settings)
+                except IngestionError as error:
+                    upload.remove()
+                    return refuse(error)
+                run_id = run_id_for(started, upload.sha256)
+                spent = True
+                try:
+                    jobs.submit(Job(run_id, run_request, upload.directory, started), reserved=True)
+                except QueueFull:
+                    upload.remove()
+                    return busy()
+                except Closing:
+                    upload.remove()
+                    return JSONResponse(transport_body(CLOSING), status_code=503)
+                except IngestionError as error:
+                    upload.remove()
+                    return refuse(error)
+            except BaseException:
+                upload.remove()  # anything unexpected: nothing of the upload stays behind
+                raise
+            return JSONResponse({"run_id": run_id, "state": "queued"}, status_code=202)
+        finally:
+            if not spent:
+                jobs.release()
 
     app.add_api_route("/runs", accept, methods=["POST"], status_code=202)
 

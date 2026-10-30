@@ -25,6 +25,8 @@ from credit_intel.ingestion.sandbox import SandboxedExtractor
 from credit_intel.ingestion.tesseract_ocr import TesseractExtractor
 from test_tesseract_ocr import real_engine_available
 
+pytestmark = pytest.mark.usefixtures("engine_stub_variables")  # the stubs are configured through STUB_* variables (see tests/conftest.py)
+
 TSV_HEADER = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"
 TSV = TSV_HEADER + "\n5\t1\t1\t1\t1\t1\t100\t100\t200\t50\t90.0\tTotal\n5\t1\t1\t1\t1\t2\t320\t100\t140\t50\t88.5\tassets"
 ENGINE = '''#!{python}
@@ -48,7 +50,7 @@ elif mode == "flood_exit":
     sys.stdout.flush()
     sys.exit(0)
 elif mode == "env":
-    print(os.environ.get("PROBE", "absent"))
+    print(os.environ.get("PROBE", "absent"), os.environ.get("TESSDATA_PREFIX", "absent"))
     sys.exit(0)
 elif mode == "sleep":
     time.sleep(600)
@@ -187,11 +189,12 @@ def test_output_over_the_cap_is_caught_even_if_the_engine_exits_before_the_next_
     assert error.value.code is ErrorCode.PARSE_LIMIT and sandbox.MEMORY_DETAIL in str(error.value)
 
 
-def test_the_environment_given_to_the_runner_is_the_environment_of_the_engine(engine_path):
+def test_the_environment_given_to_the_runner_reaches_the_engine_only_as_far_as_the_child_list_allows(engine_path):
+    """Phase 7 step 1 (F-1): before, whatever the caller passed reached the engine. Now a variable not on the list of ``child_env`` is dropped, one on it passes."""
     assert "PROBE" not in os.environ
     done = SandboxedExtractor(LIMITS, poll_seconds=0.05).run_supervised(
-        [engine_path, "stdin", "stdout"], b"x", env={**os.environ, "STUB_MODE": "env", "PROBE": "yes"}, timeout_seconds=30)
-    assert done.stdout.strip() == b"yes"
+        [engine_path, "stdin", "stdout"], b"x", env={**os.environ, "STUB_MODE": "env", "PROBE": "yes", "TESSDATA_PREFIX": "/data"}, timeout_seconds=30)
+    assert done.stdout.strip() == b"absent /data"
 
 
 def test_an_engine_that_crashes_is_an_ocr_failure_and_nothing_it_wrote_escapes(engine_path, scan, monkeypatch, capfd):

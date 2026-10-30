@@ -23,6 +23,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 from credit_intel.config import OCR_LANGUAGE
+from credit_intel.ingestion.child_env import child_environment
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.models import OcrPage, OcrWord
 
@@ -97,15 +98,13 @@ class TesseractExtractor:
         self._runner = runner
 
     def _run(self, arguments: list[str], *, stdin: bytes | None = None, timeout: float, watched: bool = False) -> subprocess.CompletedProcess[bytes]:
-        import os
-
         if watched and self._runner is not None:
-            return self._runner([self._command, *arguments], stdin or b"", env={**os.environ, **_ENVIRONMENT}, timeout_seconds=timeout)
+            return self._runner([self._command, *arguments], stdin or b"", env=child_environment(overrides=_ENVIRONMENT), timeout_seconds=timeout)
 
         try:
             return subprocess.run(
                 [self._command, *arguments], input=stdin, capture_output=True, timeout=timeout, check=False,
-                env={**os.environ, **_ENVIRONMENT},
+                env=child_environment(overrides=_ENVIRONMENT),
             )  # fmt: skip
         except FileNotFoundError:
             raise IngestionError(ErrorCode.OCR_UNAVAILABLE) from None

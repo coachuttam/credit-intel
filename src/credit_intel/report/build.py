@@ -17,6 +17,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from importlib import metadata
 
+from credit_intel.ingestion.child_env import child_environment
 from credit_intel.report.errors import REASONS
 
 logger = logging.getLogger("credit_intel.report")
@@ -72,7 +73,7 @@ def _run_worker(memo: bytes, command: Sequence[str], time_limit: float) -> Repor
     try:
         process = subprocess.Popen(  # noqa: S603 - a fixed command; the memo goes on standard input
             list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-            start_new_session=hasattr(os, "killpg"),
+            start_new_session=hasattr(os, "killpg"), env=child_environment(),
         )  # fmt: skip
     except OSError:
         return _failed("render_error")

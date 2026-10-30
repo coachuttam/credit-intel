@@ -21,6 +21,8 @@ from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.ocr_engine import default_ocr_extractor
 from credit_intel.ingestion.tesseract_ocr import TesseractExtractor, _page_from_tsv
 
+pytestmark = pytest.mark.usefixtures("engine_stub_variables")  # the stubs are configured through STUB_* variables (see tests/conftest.py)
+
 HEADER = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext"
 SAMPLE = "\n".join(
     [

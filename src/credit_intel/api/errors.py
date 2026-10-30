@@ -35,6 +35,7 @@ HTTP_AT_SUBMISSION: dict[ErrorCode, int | None] = {
 }
 
 BUSY = "Too many runs are waiting. Try again later."
+STALLED = "The upload stopped arriving and was cancelled."
 CLOSING = "The service is shutting down. Try again later."
 NOT_FOUND = "There is no such run or file."
 METHOD = "That method is not allowed here."

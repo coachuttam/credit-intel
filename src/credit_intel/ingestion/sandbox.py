@@ -39,6 +39,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from credit_intel.config import ParseLimits
+from credit_intel.ingestion.child_env import child_environment
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 from credit_intel.ingestion.models import PageImageCoverage, PageText, PageWords, PdfInspection
 from credit_intel.ingestion.parse_worker import from_jsonable
@@ -51,13 +52,41 @@ TIME_DETAIL = "time limit; raise ingestion.parse_timeout_seconds"
 MEMORY_DETAIL = "memory limit; raise ingestion.parse_memory_mb"
 
 
-def resident_mb(pid: int) -> float | None:
-    """The resident memory of ``pid`` in MB, or ``None`` if it cannot be read (the process has gone)."""
+UNREADABLE_LIMIT = 3  # consecutive failed readings of a worker that is still running before the run is stopped (fail closed)
+MEMORY_UNMEASURED_DETAIL = "memory could not be measured; the run was stopped"
+
+
+def _proc_rss(pid: int, proc: Path) -> float | None:
+    """``VmRSS`` of ``pid`` from the Linux ``/proc`` file system, in MB; ``None`` when the process has gone or the line is absent."""
     try:
-        done = subprocess.run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, timeout=5, check=False)
+        for line in (proc / str(pid) / "status").read_text(encoding="ascii", errors="replace").splitlines():
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) / 1024  # kB
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def _ps_rss(pid: int, run: Callable[..., subprocess.CompletedProcess]) -> float | None:
+    try:
+        done = run(["ps", "-o", "rss=", "-p", str(pid)], capture_output=True, text=True, timeout=5, check=False)
         return int(done.stdout.strip()) / 1024 if done.stdout.strip() else None
     except (OSError, ValueError, subprocess.SubprocessError):
         return None
+
+
+def resident_mb(pid: int, *, platform: str = sys.platform, proc: Path = Path("/proc"), run: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> float | None:
+    """The resident memory of ``pid`` in MB, or ``None`` if it cannot be read (the process has gone, or the host gives no way to read it).
+
+    On Linux it is read from ``/proc`` (no program needed, so a slim container image works); elsewhere from ``ps``.
+    """
+    return _proc_rss(pid, proc) if platform.startswith("linux") else _ps_rss(pid, run)
+
+
+def check_memory_measurement(reader: Callable[[int], float | None] = resident_mb) -> None:
+    """Refuse a host on which the resident memory of a process cannot be read: the parse limits would have nothing to measure with (SEC-12)."""
+    if reader(os.getpid()) is None:
+        raise IngestionError(ErrorCode.CONFIG_INVALID, detail="resident memory cannot be measured on this host")
 
 
 class _Drain(threading.Thread):
@@ -136,7 +165,7 @@ class SandboxedExtractor:
         try:
             process = subprocess.Popen(  # noqa: S603 - a fixed command; the path is an argument, never a shell string
                 command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                start_new_session=hasattr(os, "killpg"),
+                start_new_session=hasattr(os, "killpg"), env=child_environment(),
             )  # fmt: skip
         except OSError as exc:
             raise IngestionError(ErrorCode.OCR_FAILED) from exc
@@ -163,7 +192,7 @@ class SandboxedExtractor:
         own = self._clock() + timeout_seconds
         try:
             process = subprocess.Popen(  # noqa: S603 - a fixed command; the page image goes on standard input
-                list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=env,
+                list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=child_environment(env),
                 start_new_session=hasattr(os, "killpg"),
             )  # fmt: skip
         except (FileNotFoundError, PermissionError):
@@ -233,7 +262,7 @@ class SandboxedExtractor:
             try:
                 process = subprocess.Popen(  # noqa: S603 - a fixed command; the path is an argument, never a shell string
                     command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                    start_new_session=hasattr(os, "killpg"),
+                    start_new_session=hasattr(os, "killpg"), env=child_environment(),
                 )  # fmt: skip
             except OSError as exc:
                 raise IngestionError(ErrorCode.CORRUPT) from exc
@@ -245,6 +274,7 @@ class SandboxedExtractor:
             return self._result(operation, process.returncode, output)
 
     def _watch(self, process: subprocess.Popen, own_deadline: float | None = None, drain: _Drain | None = None, *, budget: bool = True) -> None:
+        unreadable = 0
         while process.poll() is None:
             if budget and self._deadline is not None and self._clock() >= self._deadline:
                 _kill(process)
@@ -256,9 +286,16 @@ class SandboxedExtractor:
                 _kill(process)
                 raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
             used = self._memory(process.pid)
-            if used is not None and used > self._limits.memory_mb:
-                _kill(process)
-                raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
+            if used is None:  # a worker that is still running but cannot be measured: the limit would silently not apply, so stop it (fail closed)
+                unreadable += 1
+                if unreadable >= UNREADABLE_LIMIT and process.poll() is None:
+                    _kill(process)
+                    raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_UNMEASURED_DETAIL)
+            else:
+                unreadable = 0
+                if used > self._limits.memory_mb:
+                    _kill(process)
+                    raise IngestionError(ErrorCode.PARSE_LIMIT, detail=MEMORY_DETAIL)
             self._sleep(self._poll)
 
     @staticmethod

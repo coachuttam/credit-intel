@@ -10,8 +10,11 @@ analyst profile's values are not written, only the file name.
 """
 
 import json
+import os
+import re
 import subprocess
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib import metadata
@@ -35,7 +38,7 @@ class CodeVersion:
     dirty: bool | None
 
 
-def code_version(repository: Path = REPOSITORY) -> CodeVersion:
+def code_version(repository: Path = REPOSITORY, env: Mapping[str, str] | None = None) -> CodeVersion:
     """The commit the code was run from and whether the working tree differs from it (FR-012.1)."""
 
     def git(*args: str) -> str | None:
@@ -48,8 +51,17 @@ def code_version(repository: Path = REPOSITORY) -> CodeVersion:
     commit = git("rev-parse", "HEAD")
     status = git("status", "--porcelain")
     if commit is None or status is None:
-        return CodeVersion(None, None)
+        return CodeVersion(_built_commit(os.environ if env is None else env), None)  # not a checkout: an image, which is told its commit when it is built
     return CodeVersion(commit.strip(), bool(status.strip()))
+
+
+ENV_BUILD_COMMIT = "CREDIT_INTEL_BUILD_COMMIT"
+
+
+def _built_commit(env: Mapping[str, str]) -> str | None:
+    """The commit an image was built from (a build argument set as this variable), or ``None`` if it is absent or not a full lower-case SHA-1."""
+    value = env.get(ENV_BUILD_COMMIT, "")
+    return value if re.fullmatch(r"[0-9a-f]{40}", value) else None
 
 
 def package_versions(names: tuple[str, ...] = PACKAGES) -> dict[str, str | None]:

@@ -105,6 +105,7 @@ class JobManager:
         self._jobs: OrderedDict[str, Job] = OrderedDict()
         self._queued = 0
         self._running = 0
+        self._uploading = 0
         self._closing = False
 
     # -- counts
@@ -113,15 +114,40 @@ class JobManager:
         with self._lock:
             return {"queued": self._queued, "running": self._running}
 
-    # -- submitting
-    def submit(self, job: Job) -> None:
-        job.limit = float(self.settings.run_timeout_seconds)
-        job.now = self.monotonic
+    @property
+    def uploading(self) -> int:
+        with self._lock:
+            return self._uploading
+
+    # -- reserving a place before the upload is read (PRD OD-37, Phase 7 step 1)
+    def reserve(self) -> None:
+        """Hold a place for an upload that is about to be read: runs going, runs waiting and uploads arriving together stay within the two limits.
+
+        Raises ``QueueFull`` or ``Closing`` **before a byte of the body is read**. The place is given up by ``release`` or turned into a queued run by ``submit(reserved=True)``.
+        """
         with self._lock:
             if self._closing:
                 raise Closing
-            if self._queued + self._running >= self.settings.max_concurrent_runs + self.settings.max_queued_runs:
-                raise QueueFull  # the runs going plus the runs waiting are at the limits together
+            if self._queued + self._running + self._uploading >= self.settings.max_concurrent_runs + self.settings.max_queued_runs:
+                raise QueueFull
+            self._uploading += 1
+
+    def release(self) -> None:
+        with self._lock:
+            self._uploading = max(0, self._uploading - 1)
+
+    # -- submitting
+    def submit(self, job: Job, *, reserved: bool = False) -> None:
+        """Queue a run. With ``reserved`` the caller holds a place from ``reserve``; it is used up by this call, whether it queues the run or refuses it."""
+        job.limit = float(self.settings.run_timeout_seconds)
+        job.now = self.monotonic
+        with self._lock:
+            if reserved:
+                self._uploading = max(0, self._uploading - 1)
+            if self._closing:
+                raise Closing
+            if self._queued + self._running + self._uploading >= self.settings.max_concurrent_runs + self.settings.max_queued_runs:
+                raise QueueFull  # the runs going, waiting and arriving are at the limits together (a reserved place was given up above, so it cannot trip this)
             if job.run_id in self._jobs:
                 raise IngestionError(ErrorCode.API_REQUEST)  # the same document in the same microsecond: not a run to accept twice
             self._jobs[job.run_id] = job

@@ -7,6 +7,7 @@ random directory, so that it is the name the manifest records (as the command li
 joined to a path outside the directory. The directory is removed on any failure here and, by the job, when the run ends.
 """
 
+import asyncio
 import hashlib
 import re
 import shutil
@@ -20,6 +21,7 @@ from starlette.requests import ClientDisconnect, Request
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 
 SIGNATURE = b"%PDF-"
+UPLOAD_IDLE_SECONDS = 30.0  # an upload that sends nothing for this long is cancelled (fixed, like the report's 120 s; PRD OD-37)
 FIELD_ALLOWANCE = 1024 * 1024  # headers and fields around the file in the body
 MAX_FIELD_BYTES = 16 * 1024
 MAX_FIELDS = 16
@@ -44,6 +46,10 @@ def safe_name(client_name: str | None) -> str:
     name = (client_name or "").replace("\\", "/").rsplit("/", 1)[-1]
     name = _SAFE.sub("_", name).lstrip(". ")[:MAX_NAME].rstrip(". ")
     return name or "upload.pdf"
+
+
+class UploadStalled(Exception):
+    """The client stopped sending: the upload was cancelled and its temporary directory removed."""
 
 
 def _bad() -> IngestionError:
@@ -128,7 +134,7 @@ class _Reader:
             self._handle.close()
 
 
-async def receive_upload(request: Request, max_file_bytes: int) -> Upload:
+async def receive_upload(request: Request, max_file_bytes: int, idle_seconds: float = UPLOAD_IDLE_SECONDS) -> Upload:
     """Read ``multipart/form-data`` with one ``file`` and small text fields. Raises ``IngestionError``: ``E-INPUT-TOO-LARGE``, ``E-INPUT-NOT-PDF`` or ``E-API-REQUEST``.
 
     On any failure the temporary directory is removed before the error leaves.
@@ -149,7 +155,12 @@ async def receive_upload(request: Request, max_file_bytes: int) -> Upload:
         "on_header_field", "on_header_value", "on_header_end", "on_headers_finished", "on_part_data", "on_part_end")},
         max_size=max_file_bytes + FIELD_ALLOWANCE)  # fmt: skip
     try:
-        async for chunk in request.stream():
+        chunks = request.stream().__aiter__()
+        while True:
+            try:
+                chunk = await asyncio.wait_for(chunks.__anext__(), idle_seconds)
+            except StopAsyncIteration:
+                break
             parser.write(chunk)
         parser.finalize()
         reader.close()
@@ -166,6 +177,10 @@ async def receive_upload(request: Request, max_file_bytes: int) -> Upload:
         reader.close()
         shutil.rmtree(directory, ignore_errors=True)
         raise _bad() from None
+    except TimeoutError:
+        reader.close()
+        shutil.rmtree(directory, ignore_errors=True)
+        raise UploadStalled from None
     except OSError:  # the disk, not the request: an internal error, reported as one
         reader.close()
         shutil.rmtree(directory, ignore_errors=True)
