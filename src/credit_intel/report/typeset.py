@@ -14,6 +14,7 @@ nothing is loaded. A character that the embedded font lacks stops the build (``g
 The same memo gives byte-identical bytes (reportlab's fixed-date mode).
 """
 
+import html
 import io
 import re
 from collections.abc import Callable
@@ -272,20 +273,23 @@ class _Typesetter:
         proportion and a word that is still too wide breaks (the caller then uses a landscape page).
         """
         count = len(cells[0])
-        texts = [[re.sub(r"<[^>]+>", "", row[c]) for row in cells] for c in range(count)]
-        longest = [max((len(w) for t in col for w in t.split(" ")), default=1) for col in texts]  # a label's spaces are non-breaking
-        widest = [max(len(t) for t in col) for col in texts]
+        texts = [[html.unescape(re.sub(r"<[^>]+>", "", row[c])) for row in cells] for c in range(count)]  # a label's spaces are non-breaking
+        words = [{w for t in col for w in t.split(" ") if w} or {""} for col in texts]
         padding, floor = 6.5, 10 * mm
+
+        def wide(text: str, size: float) -> float:
+            """The width of ``text`` in the widest face it can be printed in (the monospaced code face, the body face or the bold header face)."""
+            return max(pdfmetrics.stringWidth(text, face, size) for face in (fonts.SANS, fonts.BOLD, fonts.MONO))
+
         for size in (7.8, 7.2, 6.6, 6.0, 5.6):
-            per_char = size * 0.62  # the widest face used (the monospaced one), in points
-            needed = [max(floor, n * per_char + padding) for n in longest]
+            needed = [max(floor, max(wide(w, size) for w in col) + padding) for col in words]
             if sum(needed) <= available or size == 5.6:
                 break
         if sum(needed) >= available:
             return size, [available * n / sum(needed) for n in needed], sum(needed) <= available
         # What is left goes first to the columns whose longest cell would otherwise wrap, up to what it takes to print that cell on one line.
         spare = available - sum(needed)
-        deficit = [max(0.0, min(w * per_char + padding, available * 0.5) - n) for w, n in zip(widest, needed)]
+        deficit = [max(0.0, min(max(wide(t, size) for t in col) + padding, available * 0.5) - n) for col, n in zip(texts, needed)]
         if sum(deficit) <= spare:
             widths = [n + d for n, d in zip(needed, deficit)]
             rest = spare - sum(deficit)

@@ -398,3 +398,42 @@ def test_a_table_too_wide_even_for_landscape_is_narrowed_and_the_check_refuses_t
     memo = small("| A | B |\n|---|---|\n| `" + "y" * 200 + "` | `" + "z" * 200 + "` |")
     pdf = build_pdf(memo)  # it builds: the words break
     assert report_check.problems(pdf, memo)  # and the check does not let it through
+
+
+# --- a bold header word is never split (found on a real run: "Value" became "Valu" and "e") ----------------------------------------------------------------
+
+
+def test_every_column_is_at_least_as_wide_as_its_widest_word_in_the_face_it_is_printed_in():
+    """Scan table shapes up to the point where the columns just fit: the old estimate (a fixed factor of the monospaced face) let a bold
+    header word such as "Value" through one point too narrow exactly there."""
+    from reportlab.pdfbase import pdfmetrics
+
+    padding = 6.5
+    for length in range(1, 70):
+        word = "x" * length
+        cells = [["Field ID", "Value", "Status", "Origin", "Notes"], [f"`{'i' * 43}`", "—", "not found", "[UNVERIFIED]", word]]
+        size, widths, fits = typeset._Typesetter._fit_to(cells, typeset.CONTENT_WIDTH)
+        if fits:
+            assert widths[1] >= pdfmetrics.stringWidth("Value", fonts.BOLD, size) + padding - 1e-6, (length, size)
+            assert widths[4] >= pdfmetrics.stringWidth(word, fonts.MONO, size) + padding - 1e-6, (length, size)
+
+
+@pytest.mark.parametrize("header", ["Value", "Status", "Origin", "WWWWW", "Metric ID", "Relative change"])
+def test_a_bold_header_word_is_printed_whole_in_a_narrow_column(header):
+    row = f"| `{'i' * 40}` | — | not found | [UNVERIFIED] | — |"
+    memo = small(f"| Field ID | {header} | Status | Origin | Notes |\n|---|---|---|---|---|\n" + "\n".join([row] * 17) + "\n\n## 9. Limitations and human-review requirements\n\n- A limit.")
+    from credit_intel.report import check as report_check
+
+    pdf = build_pdf(memo)
+    assert report_check.problems(pdf, memo) == []  # the check finds a split word as one word missing and two added
+    lines = [l for page in pages_of(pdf) for l in page.splitlines()]
+    for word in header.split():
+        assert any(word in line.split() for line in lines), word
+
+
+def test_the_width_of_a_word_in_the_widest_face_decides_the_column():
+    from reportlab.pdfbase import pdfmetrics
+
+    wide = max(pdfmetrics.stringWidth("mmmmmm", face, 7.8) for face in (fonts.SANS, fonts.BOLD, fonts.MONO))
+    size, widths, fits = typeset._Typesetter._fit_to([["mmmmmm", "b"], ["a", "b"]], typeset.CONTENT_WIDTH)
+    assert fits and size == 7.8 and widths[0] >= wide + 6.5 - 1e-6
