@@ -1,6 +1,6 @@
 # AI Credit Intelligence Platform
 
-A command-line tool that reads the financial statements in a text-based annual-report PDF and writes a **draft credit memo for a human analyst to review**. It is not a credit decision, and it does not rate, score, approve or reject anyone.
+A command-line tool (and, optionally, a small HTTP service with one web page) that reads the financial statements in a text-based annual-report PDF and writes a **draft credit memo for a human analyst to review**. It is not a credit decision, and it does not rate, score, approve or reject anyone.
 
 An AI model proposes the figures. Everything after that is checked or calculated by fixed, tested programs: each figure must be found, word for word, on the page it cites, in the right row and period column, with the right sign, scale and currency. Ratios and risk indicators are computed in plain Python with exact decimals. The memo is produced by a template, not written by a model.
 
@@ -106,6 +106,44 @@ Each run writes `<output_dir>/<run_id>/`, where the run ID is the UTC start time
 - `manifest.json`: the run ID, timestamps, every processing state, input hash and page counts, code version, package versions, model and prompt versions, rules-file hash, cache hits, tokens and estimated cost, the final state and any error code.
 - `report.pdf`: the same memo typeset for reading, with two charts (revenue and net profit, and the current ratio and interest coverage, each period against the other). It keeps every origin label, the draft statement on every page and the limitations word for word, plots only values that are `extracted` and not read by OCR, and prints no number that the memo does not print. It is built from `memo.md` and `results.json` only, and is checked against them before it is written. **It never fails a run:** if it cannot be built or does not pass its check, the run completes with the other three files, a warning says why, and `manifest.json` records the reason (`render_error`, `check_failed`, `glyph_missing` or `timeout`; the build is limited to 120 seconds). To build it later from a finished folder: `python -m credit_intel.report <run-folder> --output FILE` (offline, to a new file outside any run folder).
 
+## HTTP API and web page
+
+The same pipeline can be served over HTTP (PRD FR-016 and FR-017, Phase 6). The service and the page add no extraction, calculation, rule or label: they run the same code as the command line and serve the files it wrote. **Like the command line it is for public and synthetic documents only** (SEC-01); the page and the send rule say so, and the server cannot know that a document is public.
+
+**Settings.** An `[api]` table in `config/settings.toml`. Three limits are required and have no default: `max_concurrent_runs`, `max_queued_runs` and `run_timeout_seconds` (shipped as 1, 4 and 1,200, chosen for an 8 GB machine, because one run can hold up to `parse_memory_mb`). Two folders are required and must be absolute paths, because a server does not depend on the directory it was started from: `output_dir` (the run folders) and `cache_dir` (the model-reply cache). The shipped file leaves the folders unset, so the service does not start until you set them in the file or with `CREDIT_INTEL_API_OUTPUT_DIR` and `CREDIT_INTEL_API_CACHE_DIR`. `host` (default `127.0.0.1`) and `port` (default `8000`) may be left alone. Every `[api]` setting can also be set with `CREDIT_INTEL_API_<NAME>`.
+
+**Start it.**
+
+```
+CREDIT_INTEL_API_OUTPUT_DIR=/var/lib/credit-intel/runs CREDIT_INTEL_API_CACHE_DIR=/var/lib/credit-intel/cache uv run credit-intel-api
+```
+
+`python -m credit_intel.api` is the same command, and `--config` names another settings file. The service listens on the loopback address by default. **It refuses to start on any other address unless a bearer token is set** in `CREDIT_INTEL_API_TOKEN` (at least 32 printable characters, from the environment only), and with a token every endpoint except `GET /health` needs `Authorization: Bearer <token>`. It does not provide TLS: off the machine, put a reverse proxy in front. A start that fails a setting stops with `E-CONFIG-INVALID` and exit code 6 before it listens.
+
+**Endpoints** (and nothing else):
+
+| Endpoint | What it does |
+|---|---|
+| `POST /runs` | One multipart upload (`file`) with the options of the command line as fields: `basis`, `pages`, `assert_basis`, `profile` (the JSON of the profile file), `ocr`, `no_report` and `confirm_public_document` (`true` or `false`). Answers `202` with the run ID, or a catalogued error and no run. |
+| `GET /runs/{run_id}` | The state (`queued`, the processing states as they are reached, `exported` or `failed` with its code and message) and the files that exist. |
+| `GET /runs/{run_id}/memo`, `/results`, `/manifest`, `/report` | The file of the run folder, byte for byte. |
+| `GET /runs` | The newest 100 runs and their state, including runs from before a restart. |
+| `GET /health` | `{"status": "ok", "queued": n, "running": n}`. |
+
+```
+curl -F file=@report.pdf -F confirm_public_document=true http://127.0.0.1:8000/runs
+```
+
+Checks that need no parsing (size while the upload streams, the `%PDF-` signature, the option values, the profile, the page-range syntax, the OCR engine, the send rule) are made in the request, with the command line's own functions, and a failure there is a catalogued error with its HTTP status (`413` too large, `403` send refused, `422` for the rest, `429` when too many runs are waiting) and creates no run. Every later failure appears in the run's status. The two codes only the service raises are `E-RUN-TIMEOUT` (the run passed `run_timeout_seconds`) and `E-API-REQUEST` (a malformed request); neither has an exit code. The uploaded copy is deleted when the run ends or fails, and only the run folder remains.
+
+**Limits you should know about.**
+
+- *The time limit is cooperative.* It is checked whenever a run enters a processing state and before each model call, so a stage that is already running is not interrupted. A run can end later than `run_timeout_seconds`, bounded by that stage's own limits, and it keeps its place in the pool until it does.
+- *A restart loses runs that were going or waiting.* A run folder is only ever complete or absent, so nothing half-written is served.
+- *A request from another website is refused:* a `POST` whose `Origin` header names a different host is `403`.
+
+**The web page.** `GET /` is the upload form and the list of runs; a run has a page that shows its state and, when it has finished, the memo with every origin label in place and links to the files. The memo is shown as text: raw HTML, links and images are switched off, and the page carries a strict content security policy with no inline script or style. Because a browser cannot send a bearer header, **with a token set the page needs it like every other endpoint**, so the page is meant for the loopback default or for use behind a reverse proxy that adds the header.
+
 ## How it works
 
 1. **Ingest:** the PDF is validated and its text is read page by page.
@@ -167,7 +205,7 @@ The suite needs no network and no API key; a test that tries to open a network c
 
 ## Repository map
 
-- `src/credit_intel/` is the package: `ingestion/`, `extraction/`, `calculations/`, `risk/`, `memo/`, `export/`, `llm/`, `evaluation/`, plus `run.py` (one run), `cli.py` (the command) and `send_rule.py`.
+- `src/credit_intel/` is the package: `ingestion/`, `extraction/`, `calculations/`, `risk/`, `memo/`, `export/`, `llm/`, `report/`, `api/` (the HTTP service and the page), `evaluation/`, plus `run.py` (one run), `service.py` (the function the command line and the service both call), `cli.py` (the command) and `send_rule.py`.
 - `config/` holds `settings.toml` and `risk_rules.toml`; `prompts/` holds the versioned extraction prompts.
 - `tests/` holds the tests, `tests/BEHAVIOURS.md` lists the expected behaviours and their status, and `tests/fixtures/` holds recorded replies and golden files.
 - `docs/PRD.md` is the product specification; `PROGRESS.md` records what has been done, every decision and what is next; `CLAUDE.md` holds the project rules.

@@ -101,6 +101,7 @@ def test_the_settings_example_loads_and_the_defaults_it_shows_are_the_shipped_on
 
 def test_every_environment_variable_it_names_exists_in_the_code():
     known = {value for name, value in vars(config_module).items() if name.startswith("ENV_") and isinstance(value, str)} | {ENV_LOG_LEVEL}
+    known |= {config_module.ENV_API_PREFIX + name.upper() for name in (*config_module.API_REQUIRED, *config_module.API_OPTIONAL)}  # CREDIT_INTEL_API_<NAME>
     named = set(re.findall(r"\b(?:CREDIT_INTEL_[A-Z_]+|OPENAI_API_KEY)\b", README))
 
     assert named and named <= known
@@ -133,3 +134,51 @@ def test_the_nine_memo_sections_it_lists_are_the_memos():
     positions = [text.lower().index(title) for title in titles]
 
     assert positions == sorted(positions)
+
+
+# --- the HTTP API and web page (PRD FR-016, FR-017, v0.4.59) ---------------------------------------------------------------------------------------
+
+
+def test_the_api_section_names_the_endpoints_the_application_has_and_no_other(tmp_path):
+    from credit_intel.api.app import create_app
+    from credit_intel.config import ApiSettings
+
+    text = section("HTTP API and web page")
+    settings = ApiSettings(1, 1, 5, tmp_path / "o", tmp_path / "c")
+    app = create_app(settings, config=tmp_path / "s.toml", env={})
+    real = {(path, method) for path, item in app.openapi()["paths"].items() for method in item}
+    named = {(path, method.upper()) for method, path in re.findall(r"`(GET|POST) (/[^`\s]*)`", text)}
+    named |= {(f"/runs/{{run_id}}/{name}", "GET") for name in re.findall(r"`/(memo|results|manifest|report)`", text)}
+
+    assert ("/", "GET") in named  # the page is described in the same section; it is not in the API document
+    named.discard(("/", "GET"))
+    assert {(path, method.upper()) for path, method in real} == named
+
+
+def test_the_api_section_states_the_shipped_limits_and_defaults():
+    from credit_intel.config import DEFAULT_API_HOST, DEFAULT_API_PORT, load_api_settings
+
+    text = section("HTTP API and web page")
+    shipped = load_api_settings(ROOT / "config" / "settings.toml", {"CREDIT_INTEL_API_OUTPUT_DIR": "/a", "CREDIT_INTEL_API_CACHE_DIR": "/b"})
+
+    assert f"shipped as {shipped.max_concurrent_runs}, {shipped.max_queued_runs} and {shipped.run_timeout_seconds:,}" in text
+    assert f"(default `{DEFAULT_API_HOST}`)" in text and f"(default `{DEFAULT_API_PORT}`)" in text
+    assert "[api]" in text and "output_dir" in (ROOT / "config" / "settings.toml").read_text(encoding="utf-8")
+
+
+def test_the_api_section_names_the_two_api_only_codes_and_the_start_commands_exist():
+    from credit_intel.api import __main__ as launcher
+    from credit_intel.ingestion.errors import ErrorCode
+
+    text = section("HTTP API and web page")
+    assert f"`{ErrorCode.RUN_TIMEOUT.value}`" in text and f"`{ErrorCode.API_REQUEST.value}`" in text
+    scripts = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]["scripts"]
+    assert scripts["credit-intel-api"] == "credit_intel.api.__main__:run" and "uv run credit-intel-api" in text and "python -m credit_intel.api" in text
+    assert callable(launcher.main) and "--config" in text
+
+
+def test_the_api_section_keeps_the_limits_it_promises_visible():
+    text = section("HTTP API and web page")
+    for needed in ("public and synthetic documents only", "refuses to start on any other address unless a bearer token", "cooperative", "A restart loses runs",
+                   "needs it like every other endpoint", "does not provide TLS"):  # fmt: skip
+        assert needed in text, needed
