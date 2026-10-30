@@ -1,0 +1,50 @@
+# Runs the credit-intel service in a container (PRD FR-018, v0.4.62; Phase 7 step 2).
+#
+#   deploy/build.sh                      builds the image (needs PYTHON_IMAGE pinned by digest)
+#   docker compose up                    needs the variables below; see docs/RUNBOOK_container.md
+#
+# Nothing here has a default for a limit or a secret: a missing value stops compose with a message.
+# The service is published on the loopback address of the host only. An internet-facing deployment (a reverse proxy with TLS) is a later step; none is provided here.
+name: credit-intel
+
+services:
+  credit-intel:
+    image: credit-intel:${CREDIT_INTEL_BUILD_COMMIT:?set CREDIT_INTEL_BUILD_COMMIT to the commit the image was built from (deploy/build.sh prints it)}
+    build:
+      context: .
+      target: runtime
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:?set PYTHON_IMAGE to a base image pinned by digest, see docs/RUNBOOK_container.md}
+        BUILD_COMMIT: ${CREDIT_INTEL_BUILD_COMMIT:?set CREDIT_INTEL_BUILD_COMMIT}
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: ${CREDIT_INTEL_CONTAINER_MEMORY:?set CREDIT_INTEL_CONTAINER_MEMORY (for example 8g), at least max_concurrent_runs x parse_memory_mb + the uploads + 1.5 GB (8180 MB with the shipped limits), see docs/RUNBOOK_container.md}
+    memswap_limit: ${CREDIT_INTEL_CONTAINER_MEMORY:?set CREDIT_INTEL_CONTAINER_MEMORY}
+    pids_limit: 256
+    stop_grace_period: ${CREDIT_INTEL_STOP_GRACE:-1300s}
+    env_file:
+      - ${CREDIT_INTEL_ENV_FILE:?set CREDIT_INTEL_ENV_FILE to a root-only env file OUTSIDE the repository holding OPENAI_API_KEY and CREDIT_INTEL_API_TOKEN}
+    environment:
+      CREDIT_INTEL_TOKEN_CEILING: ${CREDIT_INTEL_TOKEN_CEILING:?set CREDIT_INTEL_TOKEN_CEILING (the per-run token ceiling has no default)}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ${CREDIT_INTEL_SETTINGS:-./config/settings.toml}:/config/settings.toml:ro
+      - runs:/data/runs
+      - cache:/data/cache
+    tmpfs:
+      - /tmp:size=${CREDIT_INTEL_UPLOAD_TMPFS:-512m},uid=10001,gid=10001,mode=0700,noexec,nosuid,nodev
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  runs:
+  cache:

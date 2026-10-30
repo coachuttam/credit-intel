@@ -304,7 +304,7 @@ def test_a_client_that_disconnects_during_an_upload_leaves_nothing_and_starts_no
 
 def settings_file(tmp_path, extra=""):
     path = tmp_path / "settings.toml"
-    path.write_text(base.LLM.format(provider="fake") + "[api]\nmax_concurrent_runs = 1\nmax_queued_runs = 4\nrun_timeout_seconds = 1200\n" + extra, encoding="utf-8")
+    path.write_text(base.LLM.format(provider="fake") + "[ingestion]\nparse_timeout_seconds = 700\nparse_memory_mb = 1024\n" + "[api]\nmax_concurrent_runs = 1\nmax_queued_runs = 4\nrun_timeout_seconds = 1200\n" + extra, encoding="utf-8")
     return path
 
 

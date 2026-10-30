@@ -164,7 +164,7 @@ def test_a_cross_origin_post_over_a_real_socket_is_refused(pdf, tmp_path):
 
 def settings_file(tmp_path):
     path = tmp_path / "settings.toml"
-    path.write_text(base.LLM.format(provider="fake") + "[api]\nmax_concurrent_runs = 1\nmax_queued_runs = 2\nrun_timeout_seconds = 60\n", encoding="utf-8")
+    path.write_text(base.LLM.format(provider="fake") + "[ingestion]\nparse_timeout_seconds = 700\nparse_memory_mb = 1024\n" + "[api]\nmax_concurrent_runs = 1\nmax_queued_runs = 2\nrun_timeout_seconds = 60\n", encoding="utf-8")
     return path
 
 

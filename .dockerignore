@@ -1,0 +1,27 @@
+# What may enter the build context of the image (PRD FR-018 criteria 1 and 2, SEC-03). Everything is excluded first; the lines after it name what is allowed;
+# the last lines exclude again anything sensitive that an allowed folder could hold. The last matching line wins.
+*
+
+!pyproject.toml
+!uv.lock
+!src/
+!prompts/
+!config/
+!tests/
+
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/secrets/
+**/*.pdf
+**/*.xlsx
+**/*.xls
+**/*.csv
+**/__pycache__/
+**/*.pyc
+private/
+runs/
+.cache/
+.git/
+.venv/
