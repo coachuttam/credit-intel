@@ -7,6 +7,7 @@ and nothing from the document goes to the log, and the outcome says why, for the
 """
 
 import hashlib
+import json
 import logging
 import os
 import signal
@@ -94,11 +95,12 @@ def _run_worker(memo: bytes, command: Sequence[str], time_limit: float) -> Repor
     return _failed(reason if reason in REASONS else "render_error")
 
 
-def make_report(memo: str, *, time_limit: float = RENDER_TIME_LIMIT, command: Sequence[str] = WORKER_COMMAND) -> ReportOutcome:
-    """The report for ``memo``: built and checked in a worker under ``time_limit``. Never raises."""
+def make_report(memo: str, results: dict | None = None, *, time_limit: float = RENDER_TIME_LIMIT, command: Sequence[str] = WORKER_COMMAND) -> ReportOutcome:
+    """The report for ``memo``, with the charts of ``results`` if given: built and checked in a worker under ``time_limit``. Never raises."""
     try:
-        data = memo.encode("utf-8")
-    except UnicodeEncodeError:
+        memo.encode("utf-8")  # text that cannot be encoded (a lone surrogate) cannot be sent, and is not a report
+        data = json.dumps({"memo": memo, "results": results}).encode("utf-8")
+    except (UnicodeEncodeError, TypeError, ValueError):
         return _failed("render_error")
     try:
         return _run_worker(data, command, time_limit)

@@ -331,3 +331,70 @@ def test_a_table_with_uneven_rows_is_a_render_error():
     tokens = typeset.parser().parse("| a | b |\n|---|---|\n| 1 |\n")
     story = typeset._Typesetter().blocks(tokens)[0]  # markdown-it pads the short row, so this is a table of equal rows
     assert story
+
+
+# --- a table too wide for a portrait page goes on landscape pages --------------------------------------------------------------------------------------------
+
+
+WIDE_ID = "current_maturities_long_term_borrowings.2025-03-31.consolidated"
+
+
+def wide_memo(rows=3):
+    label = f"[CALCULATED: {WIDE_ID}]"
+    body = "\n".join(f"| `{WIDE_ID}` | 14,823,000,000 INR | extracted | {label} | profit_before_tax + interest_expense |" for _ in range(rows))
+    tail = "\n\nAfter the table.\n\n## 9. Limitations and human-review requirements\n\n- A limit."
+    return small("| Field ID | Value | Status | Origin | Notes |\n|---|---|---|---|---|\n" + body + tail)
+
+
+def page_sizes(pdf_bytes):
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as doc:
+        return [(round(p.width), round(p.height)) for p in doc.pages]
+
+
+def test_a_table_that_cannot_keep_its_words_whole_on_a_portrait_page_is_set_on_a_landscape_page():
+    pdf = build_pdf(wide_memo())
+    sizes = page_sizes(pdf)
+    assert (842, 595) in sizes and sizes[0] == (595, 842) and sizes[-1] == (595, 842)  # the text before and after the table is still portrait
+    assert all(WIDE_ID in "\n".join(pages_of(pdf)) for _ in [0])
+    assert f"[CALCULATED: {WIDE_ID}]" in flat(" ".join(pages_of(pdf)))  # the label is whole on one line
+
+
+def test_the_footer_follows_the_width_of_a_landscape_page():
+    from credit_intel.report import check as report_check
+
+    pdf = build_pdf(wide_memo())
+    _, footers = report_check.read_pages(pdf)
+    assert all(DRAFT_STATEMENT in flat(f) for f in footers) and len(footers) == len(page_sizes(pdf))
+    with pdfplumber.open(io.BytesIO(pdf)) as doc:
+        landscape = next(p for p in doc.pages if round(p.width) == 842)
+        right = max(w["x1"] for w in landscape.extract_words() if w["text"] == "Page" or w["text"] in {"of"})
+        assert right > 595  # "Page n of N" sits at the right edge of the wider page, not of a portrait one
+
+
+def test_a_memo_with_a_wide_table_passes_the_report_check():
+    from credit_intel.report import check as report_check
+
+    memo = wide_memo()
+    assert report_check.problems(build_pdf(memo), memo) == []
+
+
+def test_a_narrow_table_stays_on_a_portrait_page():
+    memo = small("| Field | Value |\n|---|---|\n| a | b |")
+    assert set(page_sizes(build_pdf(memo))) == {(595, 842)}
+
+
+def test_the_fit_says_whether_the_longest_words_fit():
+    cells = [["ID", "Note"], ["`" + "x" * 30 + "`", "short"]]
+    size, widths, fits = typeset._Typesetter._fit_to(cells, typeset.CONTENT_WIDTH)
+    assert fits and abs(sum(widths) - typeset.CONTENT_WIDTH) < 0.01
+    wide = [["h"] * 3, ["z" * 60] * 3]
+    assert typeset._Typesetter._fit_to(wide, typeset.CONTENT_WIDTH)[2] is False
+    assert typeset._Typesetter._fit_to(wide, typeset.LANDSCAPE_WIDTH)[2] is True
+
+
+def test_a_table_too_wide_even_for_landscape_is_narrowed_and_the_check_refuses_the_report():
+    from credit_intel.report import check as report_check
+
+    memo = small("| A | B |\n|---|---|\n| `" + "y" * 200 + "` | `" + "z" * 200 + "` |")
+    pdf = build_pdf(memo)  # it builds: the words break
+    assert report_check.problems(pdf, memo)  # and the check does not let it through

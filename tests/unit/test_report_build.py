@@ -87,7 +87,7 @@ def test_a_memo_that_cannot_be_encoded_is_a_render_error_and_does_not_raise():
 
 
 def test_a_failed_check_in_the_real_worker_is_check_failed_and_returns_no_bytes(memo):
-    code = "import credit_intel.report.check as c\nc.problems = lambda pdf, memo: ['forced']\nfrom credit_intel.report import worker\nraise SystemExit(worker.main())"
+    code = "import credit_intel.report.check as c\nc.problems = lambda *args: ['forced']\nfrom credit_intel.report import worker\nraise SystemExit(worker.main())"
     outcome = make_report(memo, command=(sys.executable, "-c", code))
     assert (outcome.status, outcome.reason, outcome.pdf) == ("failed", "check_failed", None)
 

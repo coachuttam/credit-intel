@@ -19,7 +19,6 @@ import re
 from collections.abc import Callable
 from xml.sax.saxutils import escape
 
-from markdown_it import MarkdownIt
 from markdown_it.token import Token
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
@@ -27,16 +26,21 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfgen.canvas import Canvas
-from reportlab.platypus import BaseDocTemplate, Flowable, Frame, HRFlowable, ListFlowable, ListItem, PageTemplate, Paragraph, Preformatted, Spacer, Table, TableStyle
+from reportlab.platypus import BaseDocTemplate, Flowable, Frame, HRFlowable, ListFlowable, ListItem, NextPageTemplate, PageBreak, PageTemplate, Paragraph, Preformatted, Spacer, Table, TableStyle
+from reportlab.platypus.doctemplate import PageBreakIfNotEmpty
 
 from credit_intel.memo.sections import DRAFT_STATEMENT
 from credit_intel.memo.trace import FORMS
+from credit_intel.report import charts as chart_module
 from credit_intel.report import fonts
+from credit_intel.report.mdparse import parser
 from credit_intel.report.errors import ReportError
 
 PAGE = A4
+LANDSCAPE = (A4[1], A4[0])
 MARGIN = 18 * mm
 CONTENT_WIDTH = PAGE[0] - 2 * MARGIN
+LANDSCAPE_WIDTH = LANDSCAPE[0] - 2 * MARGIN
 INK, MUTED, RULE = colors.HexColor("#14202e"), colors.HexColor("#5a6877"), colors.HexColor("#c8d0d9")
 LABEL_COLOURS = {"ocr": ("#8a5a00", "#fbefd2"), "label": ("#1d3557", "#dbe7f3")}
 _LABEL = re.compile(r"\[([^\]]*)\]")
@@ -62,8 +66,10 @@ def _styles() -> dict[str, ParagraphStyle]:
 
 
 class _Typesetter:
-    def __init__(self) -> None:
+    def __init__(self, charts: list | None = None) -> None:
         fonts.register()
+        self.charts = charts or []
+        self.charts_placed = False
         self.styles = _styles()
         self.used: list[tuple[str, str]] = []  # (face, text) printed, for the glyph check
         self.banner: str | None = None
@@ -88,6 +94,9 @@ class _Typesetter:
             last = match.end()
         out.append(self._text(face, text[last:]))
         return "".join(out)
+
+    def _label_styled_for_source(self, face: str, text: str) -> str:
+        return self._label_styled(face, text)
 
     def inline(self, children: list[Token] | None) -> str:
         """Paragraph markup for inline tokens. Only tags built here appear in it."""
@@ -148,7 +157,13 @@ class _Typesetter:
 
     def _heading_open(self, tokens, i, ctx):
         level = int(tokens[i].tag[1])
-        flows: list[Flowable] = [Paragraph(self.inline(tokens[i + 1].children), self.styles["h1" if level == 1 else "h2" if level == 2 else "h3"])]
+        flows: list[Flowable] = []
+        if self.charts and not self.charts_placed and level == 2 and self.plain(tokens[i + 1].children).startswith("5. "):
+            placed, printed = chart_module.flowables(self.charts, self.styles, self._label_styled_for_source)
+            flows.extend(placed)  # the charts come after section 4 and before section 5
+            self.used.extend(printed)
+            self.charts_placed = True
+        flows += [Paragraph(self.inline(tokens[i + 1].children), self.styles["h1" if level == 1 else "h2" if level == 2 else "h3"])]
         if level == 2:
             rule = HRFlowable(width="100%", thickness=0.6, color=RULE, spaceBefore=0, spaceAfter=5)
             rule.keepWithNext = 1  # the heading, its rule and what follows stay together
@@ -223,7 +238,10 @@ class _Typesetter:
             j += 1
         if not cells or len({len(r) for r in cells}) != 1:
             raise ReportError("render_error")
-        size, widths = self._fit(cells)
+        size, widths, fits = self._fit_to(cells, CONTENT_WIDTH)
+        landscape = not fits and ctx == "body"
+        if landscape:  # no word is broken: a table too wide for the page at the smallest size goes on landscape pages
+            size, widths, _ = self._fit_to(cells, LANDSCAPE_WIDTH)
         body = ParagraphStyle("cell-fit", parent=self.styles["cell"], fontSize=size, leading=size * 1.28)
         head_style = ParagraphStyle("head-fit", parent=self.styles["head"], fontSize=size, leading=size * 1.28)
         rows = [[Paragraph(markup, head_style if r < header_rows else body) for markup in row] for r, row in enumerate(cells)]
@@ -234,15 +252,24 @@ class _Typesetter:
             ("TOPPADDING", (0, 0), (-1, -1), 2.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 2.5),
             ("LEFTPADDING", (0, 0), (-1, -1), 3), ("RIGHTPADDING", (0, 0), (-1, -1), 3),
         ]))  # fmt: skip
+        if landscape:
+            return [NextPageTemplate("landscape"), PageBreakIfNotEmpty(), table, NextPageTemplate("portrait"), PageBreak()], j + 1
         return [table, Spacer(1, 6)], j + 1
 
     @staticmethod
     def _fit(cells: list[list[str]]) -> tuple[float, list[float]]:
+        """``_fit_to`` for a portrait page: the font size and the column widths."""
+        size, widths, _ = _Typesetter._fit_to(cells, CONTENT_WIDTH)
+        return size, widths
+
+    @staticmethod
+    def _fit_to(cells: list[list[str]], available: float) -> tuple[float, list[float], bool]:
         """The font size and column widths for a table.
 
         Each column needs the width of its longest word, so an ID or a label is not broken in the middle. The largest size from
         7.8 pt down to 5.6 pt at which every column gets that is used; the rest of the width is shared in proportion to how much text
-        a column holds. If even 5.6 pt is not enough, the columns are narrowed in proportion and a word that is still too wide breaks.
+        a column holds. The last value says whether the longest words all fit at the smallest size; if not, the columns are narrowed in
+        proportion and a word that is still too wide breaks (the caller then uses a landscape page).
         """
         count = len(cells[0])
         texts = [[re.sub(r"<[^>]+>", "", row[c]) for row in cells] for c in range(count)]
@@ -252,23 +279,18 @@ class _Typesetter:
         for size in (7.8, 7.2, 6.6, 6.0, 5.6):
             per_char = size * 0.62  # the widest face used (the monospaced one), in points
             needed = [max(floor, n * per_char + padding) for n in longest]
-            if sum(needed) <= CONTENT_WIDTH or size == 5.6:
+            if sum(needed) <= available or size == 5.6:
                 break
-        if sum(needed) >= CONTENT_WIDTH:
-            return size, [CONTENT_WIDTH * n / sum(needed) for n in needed]
+        if sum(needed) >= available:
+            return size, [available * n / sum(needed) for n in needed], sum(needed) <= available
         # What is left goes first to the columns whose longest cell would otherwise wrap, up to what it takes to print that cell on one line.
-        spare = CONTENT_WIDTH - sum(needed)
-        deficit = [max(0.0, min(w * per_char + padding, CONTENT_WIDTH * 0.5) - n) for w, n in zip(widest, needed)]
+        spare = available - sum(needed)
+        deficit = [max(0.0, min(w * per_char + padding, available * 0.5) - n) for w, n in zip(widest, needed)]
         if sum(deficit) <= spare:
             widths = [n + d for n, d in zip(needed, deficit)]
             rest = spare - sum(deficit)
-            return size, [w + rest * n / sum(needed) for w, n in zip(widths, needed)]
-        return size, [n + spare * d / sum(deficit) for n, d in zip(needed, deficit)]
-
-
-def parser() -> MarkdownIt:
-    """The memo's CommonMark parser: tables on, and ``text_join`` off so that an escaped bracket stays distinct from a genuine one."""
-    return MarkdownIt("commonmark").enable("table").disable("text_join")
+            return size, [w + rest * n / sum(needed) for w, n in zip(widths, needed)], True
+        return size, [n + spare * d / sum(deficit) for n, d in zip(needed, deficit)], True
 
 
 def _canvas_class(banner: str, run_id: str) -> type[Canvas]:
@@ -292,19 +314,20 @@ def _canvas_class(banner: str, run_id: str) -> type[Canvas]:
             super().save()
 
         def _footer(self, total: int) -> None:
+            width = self._pagesize[0]  # the footer follows the page it is on (a table may be on a landscape page)
             self.setStrokeColor(RULE)
             self.setLineWidth(0.5)
-            self.line(MARGIN, 17 * mm, PAGE[0] - MARGIN, 17 * mm)
+            self.line(MARGIN, 17 * mm, width - MARGIN, 17 * mm)
             self.setFillColor(colors.HexColor("#7a3b00"))
             self.setFont(fonts.BOLD, 7)
             y = 13.2 * mm
-            for line in _wrap(banner, fonts.BOLD, 7, CONTENT_WIDTH):
+            for line in _wrap(banner, fonts.BOLD, 7, width - 2 * MARGIN):
                 self.drawString(MARGIN, y, line)
                 y -= 8.4
             self.setFillColor(MUTED)
             self.setFont(fonts.SANS, 7)
             self.drawString(MARGIN, 7.5 * mm, f"Run ID {run_id}")
-            self.drawRightString(PAGE[0] - MARGIN, 7.5 * mm, f"Page {self._pageNumber} of {total}")
+            self.drawRightString(width - MARGIN, 7.5 * mm, f"Page {self._pageNumber} of {total}")
 
     return Numbered
 
@@ -321,12 +344,17 @@ def _wrap(text: str, face: str, size: float, width: float) -> list[str]:
     return [*lines, current] if current else lines
 
 
-def build_pdf(memo: str) -> bytes:
-    """The PDF of ``memo``, or ``ReportError`` (``glyph_missing`` or ``render_error``). Document text is never in the error."""
+def build_pdf(memo: str, charts: list | None = None) -> bytes:
+    """The PDF of ``memo`` (with ``charts`` between sections 4 and 5), or ``ReportError`` (``glyph_missing`` or ``render_error``).
+
+    Document text is never in the error. Charts are the data lists of ``charts.build_charts``; with none, the PDF is the memo alone.
+    """
     try:
         tokens = parser().parse(memo)
-        typesetter = _Typesetter()
+        typesetter = _Typesetter(charts)
         story, _ = typesetter.blocks(tokens)
+        if charts and not typesetter.charts_placed:
+            raise ReportError("render_error")  # there is no section 5 to put them before
         run = _RUN_ID.search(memo)
         if typesetter.banner != DRAFT_STATEMENT or run is None or not story:  # the footer repeats the memo's own draft statement, in its words
             raise ReportError("render_error")
@@ -339,7 +367,13 @@ def build_pdf(memo: str) -> bytes:
             out, pagesize=PAGE, leftMargin=MARGIN, rightMargin=MARGIN, topMargin=MARGIN, bottomMargin=29 * mm,
             title="Draft credit memo", author="", subject=f"Run {run.group(1)}", creator="credit-intel", invariant=1,
         )  # fmt: skip
-        doc.addPageTemplates([PageTemplate(id="memo", frames=[Frame(MARGIN, 29 * mm, CONTENT_WIDTH, PAGE[1] - MARGIN - 29 * mm, id="body", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)])])  # fmt: skip
+        def frame(size):
+            return Frame(MARGIN, 29 * mm, size[0] - 2 * MARGIN, size[1] - MARGIN - 29 * mm, id="body", leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+
+        doc.addPageTemplates([
+            PageTemplate(id="portrait", frames=[frame(PAGE)], pagesize=PAGE),
+            PageTemplate(id="landscape", frames=[frame(LANDSCAPE)], pagesize=LANDSCAPE),
+        ])  # fmt: skip
         doc.build(story, canvasmaker=_canvas_class(typesetter.banner, run.group(1)))
         return out.getvalue()
     except ReportError:

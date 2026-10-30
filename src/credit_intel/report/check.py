@@ -17,7 +17,9 @@ What it checks, on the text of each page (the body above the footer, and the foo
 * **OCR.** For a memo that has OCR labels, every OCR label and the OCR legend line are in the PDF.
 * **Nothing is loaded or linked.** The PDF holds no image, link, annotation, script, launch action or embedded file.
 
-Charts add their own check in a later step (FR-015 criterion 4).
+* **Charts** (when the report has them): each plotted slot has a row in the memo's tables with the same ID, displayed string and label, and
+  its height is the stored value (``charts.traceability``); the words and labels the charts print are expected in the PDF, so a chart
+  cannot carry a number or a label that is not in the data list that was checked against the memo.
 """
 
 import io
@@ -29,7 +31,8 @@ from reportlab.lib.units import mm
 
 from credit_intel.memo.sections import DRAFT_STATEMENT
 from credit_intel.memo.trace import FORMS
-from credit_intel.report.typeset import parser
+from credit_intel.report import charts as chart_module
+from credit_intel.report.mdparse import parser
 
 FOOTER_HEIGHT = 29 * mm  # the page's bottom margin: the footer sits in it (see typeset.py)
 LABEL = re.compile(r"\[([^\]]*)\]")
@@ -94,8 +97,14 @@ def read_pages(pdf: bytes) -> tuple[list[str], list[str]]:
     return bodies, footers
 
 
-def problems(pdf: bytes, memo: str) -> list[str]:
+def problems(pdf: bytes, memo: str, charts: list | None = None, results: dict | None = None) -> list[str]:
     found: list[str] = []
+    chart_text = ""
+    if charts:
+        if results is None:
+            return ["the charts cannot be checked without the results"]
+        found += chart_module.traceability(charts, memo, results, parser().parse)
+        chart_text = chart_module.charts_text(charts)
     for name in FORBIDDEN:
         if name in pdf:
             found.append("the PDF contains a feature that loads or links something")
@@ -111,7 +120,7 @@ def problems(pdf: bytes, memo: str) -> list[str]:
     run = re.search(r"\*\*Run ID:\*\* `([^`]+)`", memo)
 
     # labels
-    expected_labels, found_labels = _labels(memo), _labels(body)
+    expected_labels, found_labels = _labels(memo) + _labels(chart_text), _labels(body)
     if expected_labels != found_labels:
         missing, added = sum((expected_labels - found_labels).values()), sum((found_labels - expected_labels).values())
         found.append(f"origin labels differ: {missing} missing, {added} added")
@@ -129,7 +138,7 @@ def problems(pdf: bytes, memo: str) -> list[str]:
 
     # the text
     repeats = Counter({word: n * (total - 1) for word, n in _header_bag(memo).items()})  # a table header may repeat on each later page
-    missing, added = _difference(_bag(_memo_text(memo)), _bag(body), repeats)
+    missing, added = _difference(_bag(_memo_text(memo) + "\n" + chart_text), _bag(body), repeats)
     if missing or added:
         found.append(f"the text differs from the memo: {missing} words missing, {added} added")
 
