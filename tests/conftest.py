@@ -89,10 +89,10 @@ def in_process_parsing(monkeypatch):
     The worker, the limits and the command line's wiring are tested in ``test_parse_limits.py`` and ``test_parse_limits_cli.py``,
     which pass the real factory explicitly.
     """
-    import credit_intel.cli as cli
+    import credit_intel.service as service
     from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
 
-    monkeypatch.setattr(cli, "sandboxed_extractor", lambda config, env: PdfplumberExtractor())
+    monkeypatch.setattr(service, "sandboxed_extractor", lambda config, env: PdfplumberExtractor())
 
 
 @pytest.fixture(autouse=True)

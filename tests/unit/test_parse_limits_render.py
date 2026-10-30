@@ -15,7 +15,7 @@ from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-from credit_intel import cli
+from credit_intel import service
 from credit_intel.config import ParseLimits
 from credit_intel.ingestion import sandbox
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -237,14 +237,14 @@ def test_a_renderer_can_be_taken_away(scan, engine_path):
 def test_the_command_line_gives_the_sandbox_renderer_to_an_engine_that_takes_one(engine_path):
     parser = SandboxedExtractor(LIMITS)
     engine = TesseractExtractor(command=engine_path)
-    assert cli._ocr_engine(lambda: engine, parser) is engine and engine._renderer == parser.render_page
+    assert service.ocr_engine(lambda: engine, parser) is engine and engine._renderer == parser.render_page
 
 
 def test_the_command_line_leaves_an_engine_alone_when_it_or_the_parser_cannot_use_a_renderer(engine_path):
     engine = TesseractExtractor(command=engine_path)
-    assert cli._ocr_engine(lambda: engine, PdfplumberExtractor()) is engine and engine._renderer is None  # an in-process parser
+    assert service.ocr_engine(lambda: engine, PdfplumberExtractor()) is engine and engine._renderer is None  # an in-process parser
     fake = FakeOcrExtractor({}, page_count=1)
-    assert cli._ocr_engine(lambda: fake, SandboxedExtractor(LIMITS)) is fake  # an engine with no such hook
+    assert service.ocr_engine(lambda: fake, SandboxedExtractor(LIMITS)) is fake  # an engine with no such hook
 
 
 def test_a_render_that_passes_the_parse_budget_stops_the_engine_call_with_the_new_code(scan, engine_path, tmp_path):

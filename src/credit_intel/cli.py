@@ -21,60 +21,36 @@ import argparse
 import logging
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import IO, Any
 
-from credit_intel.config import (
-    DEFAULT_SETTINGS_PATH,
-    LLMSettings,
-    load_jev_settings,
-    load_llm_settings,
-    load_ocr_settings,
-    load_parse_limits,
-    load_pricing,
-    load_step_settings,
-)
-from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, ENV_PRIVATE_APPROVED, file_sha256
-from credit_intel.export.manifest import code_version, package_versions, run_id
-from credit_intel.export.run_export import export_failure, export_run
-from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, ErrorCode, IngestionError, exit_code
-from credit_intel.ingestion.extractor import OcrExtractor, TextExtractor
+from credit_intel.config import DEFAULT_SETTINGS_PATH
+from credit_intel.evaluation.guard import ASSIGNMENTS_PATH
+from credit_intel.export.manifest import run_id
+from credit_intel.ingestion.errors import EXIT_INTERNAL, EXIT_OK, EXIT_USAGE, IngestionError, exit_code
 from credit_intel.ingestion.ocr_engine import default_ocr_extractor
-from credit_intel.ingestion.sandbox import SandboxedExtractor
 from credit_intel.llm.factory import build_provider
-from credit_intel.llm.provider import LLMProvider, LLMRequest, LLMResponse
 from credit_intel.memo.trace import MemoCheckFailed
 from credit_intel.models import StatementBasis
 from credit_intel.pagefilter.factory import ClassifierFactory, build_classifier
-from credit_intel.pagefilter.filter import PageFilterSetup
-from credit_intel.run import run_pipeline
-from credit_intel.send_rule import NOTICE, SendRefusal, check_send
+from credit_intel.service import (
+    DEFAULT_OUTPUT_DIR,
+    ExtractorFactory,
+    OcrFactory,
+    ProviderFactory,
+    RunProgress,
+    RunRequest,
+    RunServices,
+    execute_run,
+    record_failure,
+)
 from credit_intel.states import Clock, Recorder, utc_now
 
-DEFAULT_OUTPUT_DIR = Path("runs")
 BASES = [StatementBasis.CONSOLIDATED.value, StatementBasis.STANDALONE.value]  # "unknown" is a finding, never a request
 ENV_LOG_LEVEL = "CREDIT_INTEL_LOG_LEVEL"
 EXIT_INTERRUPTED = 130
 logger = logging.getLogger("credit_intel.cli")
-
-ProviderFactory = Callable[[LLMSettings, Mapping[str, str]], LLMProvider]
-OcrFactory = Callable[[], OcrExtractor]
-ExtractorFactory = Callable[[Path, Mapping[str, str]], TextExtractor]
-
-
-class LazyProvider:
-    """Builds the real provider on the first call, so a cache hit needs no key and a bad key fails in the right stage."""
-
-    def __init__(self, factory: Callable[[], LLMProvider]) -> None:
-        self._factory = factory
-        self._provider: LLMProvider | None = None
-
-    def complete(self, request: LLMRequest) -> LLMResponse:
-        if self._provider is None:
-            self._provider = self._factory()
-        return self._provider.complete(request)
 
 
 class _Parser(argparse.ArgumentParser):
@@ -107,101 +83,23 @@ def build_parser(stream: IO[str]) -> argparse.ArgumentParser:
     return p
 
 
-@dataclass
-class _Invocation:
-    args: argparse.Namespace
-    recorder: Recorder
-    llm: LLMSettings | None = None
-    sha256: str | None = None
-
-
 def _level(name: str) -> int:
     level = logging.getLevelName(name.strip().upper())
     return level if isinstance(level, int) else logging.INFO
 
 
-def _record_failure(call: _Invocation, err: IO[str], error: BaseException) -> None:
-    """Make sure the recorder shows the failure and, if the run was recorded, leave a manifest-only folder (best effort)."""
-    recorder = call.recorder
-    if not recorder.events or call.sha256 is None or call.llm is None:
-        return
-    if not recorder.failed:
-        recorder.fail(error.code.value if isinstance(error, IngestionError) else None)
-    if isinstance(error, IngestionError) and error.code is ErrorCode.EXPORT_FAILED:
-        return  # the output location is what failed
-    try:
-        path = export_failure(call.args.output_dir, recorder, call.llm, requested_basis=StatementBasis(call.args.basis), version=code_version(),
-                              packages=package_versions(), input_file_name=call.args.pdf_path.name, input_sha256=call.sha256,
-                              profile_file_name=call.args.profile.name if call.args.profile else None,
-                              asserted_basis=StatementBasis(call.args.assert_basis) if call.args.assert_basis else None)  # fmt: skip
-    except Exception:
-        logger.debug("the failure record could not be written", exc_info=True)
-        return
-    print(f"Run record: {path}", file=err)
-
-
-def _page_filter(args: argparse.Namespace, llm: LLMSettings, env: Mapping[str, str], factory: ClassifierFactory) -> PageFilterSetup | None:
-    """The optional page classifier of a run (PRD v0.4.31), or ``None`` when ``USE_JEV`` is not "true". Never raises for the classifier."""
-    jev = load_jev_settings(args.config, env)
-    if not jev.enabled:
-        return None
-    load_step_settings(args.config, llm.provider)  # a bad [steps] table is a configuration error, as any other setting is
-    try:
-        classifier = factory(jev, env)
-    except Exception:
-        logger.debug("the page classifier could not be built", exc_info=True)
-        return PageFilterSetup(jev, None, "error")
-    return PageFilterSetup(jev, classifier, None if classifier is not None else "no_key")
-
-
-def sandboxed_extractor(config: Path, env: Mapping[str, str]) -> SandboxedExtractor:
-    """The PDF parser of a run: the PDF libraries in a worker process under the required parse limits (SEC-12, v0.4.50)."""
-    return SandboxedExtractor(load_parse_limits(config, env))
-
-
-def _ocr_engine(ocr_factory: OcrFactory, extractor: TextExtractor) -> OcrExtractor:
-    """The OCR engine of a run. When the parser can render pages in a worker (SEC-12 step 2) the engine renders there, and when it can
-    supervise a command (step 3) the engine's own reading is watched for memory."""
-    engine = ocr_factory()
-    for parser_method, engine_hook in (("render_page", "use_renderer"), ("run_supervised", "use_runner")):
-        method, hook = getattr(extractor, parser_method, None), getattr(engine, engine_hook, None)
-        if method is not None and hook is not None:
-            hook(method)
-    return engine
-
-
-def _execute(call: _Invocation, factory: ProviderFactory, out: IO[str], err: IO[str], assignments: Path, env: Mapping[str, str],
-             classifier_factory: ClassifierFactory = build_classifier, ocr_factory: OcrFactory = default_ocr_extractor,
-             extractor_factory: ExtractorFactory | None = None) -> int:  # fmt: skip
-    args = call.args
-    call.llm = llm = load_llm_settings(args.config, env)
-    pricing = load_pricing(args.config, env)
-    ocr = load_ocr_settings(args.config, args.ocr)
-    extractor = (extractor_factory or sandboxed_extractor)(args.config, env)  # the required parse limits are read here (E-CONFIG-INVALID)
-    page_filter = _page_filter(args, llm, env, classifier_factory)
-    try:
-        call.sha256 = file_sha256(args.pdf_path)
-    except OSError:
-        raise IngestionError(ErrorCode.NOT_FOUND) from None
-    # The send rule applies to every provider that would receive page text: the extraction model and the classifier (v0.4.31).
-    external = llm.provider != "fake" or (page_filter is not None and page_filter.classifier is not None and page_filter.classifier.sends_off_machine)
-    try:
-        check_send(call.sha256, external=external, confirmed=args.confirm_public_document, assignments=assignments,
-                   path=args.pdf_path, private_approved=env.get(ENV_PRIVATE_APPROVED) == "1")  # fmt: skip
-    except SendRefusal as refusal:  # a catalogued failure before `received`: exit 3, a fixed reason word, no failure record (G.1, v0.4.27)
-        raise IngestionError(ErrorCode.SEND_REFUSED, detail=refusal.reason) from None
-    if external:
-        print(NOTICE, file=err)
-    basis = StatementBasis(args.basis)
-    result = run_pipeline(
-        args.pdf_path, LazyProvider(lambda: factory(llm, env)), llm, recorder=call.recorder, basis=basis, page_range=args.pages,
-        pricing=pricing, profile_path=args.profile, extractor=extractor, ocr_settings=ocr, ocr_extractor=_ocr_engine(ocr_factory, extractor) if ocr.enabled else None,
-        assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, page_filter=page_filter,
+def _request(args: argparse.Namespace) -> RunRequest:
+    return RunRequest(
+        pdf_path=args.pdf_path, basis=StatementBasis(args.basis), pages=args.pages,
+        assert_basis=StatementBasis(args.assert_basis) if args.assert_basis else None, profile=args.profile,
+        output_dir=args.output_dir, config=args.config, ocr=args.ocr, confirm_public_document=args.confirm_public_document,
+        no_report=args.no_report,
     )  # fmt: skip
-    path = export_run(args.output_dir, result, call.recorder, llm, requested_basis=basis, version=code_version(), packages=package_versions(),
-                      profile_file_name=args.profile.name if args.profile else None, report=not args.no_report)  # fmt: skip
-    print(path, file=out)
-    return EXIT_OK
+
+
+def _report_record(path: Path | None, err: IO[str]) -> None:
+    if path is not None:
+        print(f"Run record: {path}", file=err)
 
 
 def main(
@@ -235,20 +133,24 @@ def main(
     handler.setLevel(_level(environment.get(ENV_LOG_LEVEL, "INFO")))
     package_logger.addHandler(handler)
     package_logger.setLevel(handler.level)
-    call = _Invocation(args, Recorder(clock))
+    request = _request(args)
+    progress = RunProgress(Recorder(clock))
+    services = RunServices(provider_factory, classifier_factory, ocr_factory, extractor_factory, assignments)
     try:
-        return _execute(call, provider_factory, out, err, assignments, environment, classifier_factory, ocr_factory, extractor_factory)
+        path = execute_run(request, progress, services, environment, lambda line: print(line, file=err))
+        print(path, file=out)
+        return EXIT_OK
     except IngestionError as error:
         print(str(error), file=err)
-        _record_failure(call, err, error)
+        _report_record(record_failure(request, progress, error), err)
         return exit_code(error)
     except KeyboardInterrupt:
         print("Interrupted.", file=err)
         return EXIT_INTERRUPTED
     except Exception as error:
         logger.debug("internal error", exc_info=True)  # the trace is for DEBUG only (FR-011.4)
-        _record_failure(call, err, error)
-        identifier = run_id(call.recorder.events[0].at, call.sha256) if call.recorder.events and call.sha256 else "unknown"
+        _report_record(record_failure(request, progress, error), err)
+        identifier = run_id(progress.recorder.events[0].at, progress.sha256) if progress.recorder.events and progress.sha256 else "unknown"
         # A memo that failed its check before export (FR-010 criterion 5) is reported with the number of problems and never their text.
         detail = f" The memo failed its traceability check ({error.count} {'problem' if error.count == 1 else 'problems'})." if isinstance(error, MemoCheckFailed) else ""
         print(f"Internal error. Run ID: {identifier}.{detail} Re-run, and report it if it persists.", file=err)

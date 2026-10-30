@@ -12,15 +12,15 @@ from pathlib import Path
 import pytest
 
 import pipeline_fixture as fx
-from credit_intel import cli
-from credit_intel.config import ENV_PARSE_MEMORY, ENV_PARSE_TIMEOUT
+from credit_intel import cli, service
+from credit_intel.config import ENV_PARSE_MEMORY, ENV_PARSE_TIMEOUT, load_parse_limits
 from credit_intel.ingestion.errors import ErrorCode
 from credit_intel.llm.cache import DEFAULT_CACHE_DIR
 from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
 from credit_intel.ingestion.sandbox import SandboxedExtractor
 from credit_intel.llm.provider import FakeProvider
 
-REAL_FACTORY = cli.sandboxed_extractor
+REAL_FACTORY = service.sandboxed_extractor
 START = datetime(2026, 10, 24, 10, 15, 30, tzinfo=UTC)
 SETTINGS = '[llm]\nprovider = "fake"\nmodel_id = "m"\ntoken_ceiling = 1000000\nmax_output_tokens = 2000\n'
 LIMITS_ENV = {ENV_PARSE_TIMEOUT: "120", ENV_PARSE_MEMORY: "4096"}
@@ -44,7 +44,7 @@ def run(tmp_path, pdf, *, env, factory, settings=SETTINGS):
 
 
 def test_without_the_two_limits_a_run_stops_with_config_invalid_before_anything_is_read(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "sandboxed_extractor", REAL_FACTORY)  # the command line's own default, not an injected factory
+    monkeypatch.setattr(service, "sandboxed_extractor", REAL_FACTORY)  # the command line's own default, not an injected factory
     pdf = fx.balance_sheet_pdf(tmp_path / "statement.pdf")
     code, out, err = run(tmp_path, pdf, env={}, factory=None)
 
@@ -83,7 +83,7 @@ def test_a_run_that_passes_the_time_limit_exits_3_with_the_new_code_and_no_docum
     stub = tmp_path / "slow.py"
     stub.write_text("import time\ntime.sleep(60)\n", encoding="utf-8")
     pdf = fx.balance_sheet_pdf(tmp_path / "statement.pdf")
-    slow = lambda config, env: SandboxedExtractor(cli.load_parse_limits(config, env), command=(sys.executable, str(stub)), poll_seconds=0.05)  # noqa: E731
+    slow = lambda config, env: SandboxedExtractor(load_parse_limits(config, env), command=(sys.executable, str(stub)), poll_seconds=0.05)  # noqa: E731
 
     code, out, err = run(tmp_path, pdf, env={ENV_PARSE_TIMEOUT: "1", ENV_PARSE_MEMORY: "4096"}, factory=slow)
 

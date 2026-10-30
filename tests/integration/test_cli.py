@@ -270,7 +270,7 @@ def test_an_unexpected_error_exits_1_names_the_run_id_and_shows_no_trace_or_text
 
 
 def test_an_unexpected_error_before_the_run_is_recorded_still_exits_1_with_an_unknown_run_id(pdf, tmp_path, monkeypatch):
-    monkeypatch.setattr("credit_intel.cli.load_pricing", lambda *a, **k: 1 / 0)
+    monkeypatch.setattr("credit_intel.service.load_pricing", lambda *a, **k: 1 / 0)
 
     code, out, err = call(tmp_path, str(pdf))
 
@@ -409,11 +409,11 @@ def test_an_installed_run_of_the_real_entry_point_with_a_missing_file_exits_3(tm
 
 
 def test_a_failure_record_is_attempted_only_for_a_failure_that_was_recorded_and_not_for_the_export_itself(pdf, tmp_path, monkeypatch):
-    import credit_intel.cli as cli
+    import credit_intel.service as service
 
     attempts = []
-    real = cli.export_failure
-    monkeypatch.setattr(cli, "export_failure", lambda *a, **k: attempts.append(1) or real(*a, **k))
+    real = service.export_failure
+    monkeypatch.setattr(service, "export_failure", lambda *a, **k: attempts.append(1) or real(*a, **k))
     profile = tmp_path / "profile.json"
     profile.write_text("{not json", encoding="utf-8")
     text = tmp_path / "note.pdf"

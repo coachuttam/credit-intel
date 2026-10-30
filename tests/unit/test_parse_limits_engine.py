@@ -15,7 +15,7 @@ from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-from credit_intel import cli
+from credit_intel import service
 from credit_intel.config import ParseLimits
 from credit_intel.ingestion import sandbox
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -253,15 +253,15 @@ def test_no_scratch_file_is_written_for_the_engine(engine_path, scan):
 def test_the_command_line_hands_both_hooks_to_an_engine_that_takes_them(engine_path):
     parser = SandboxedExtractor(LIMITS)
     engine = TesseractExtractor(command=engine_path)
-    assert cli._ocr_engine(lambda: engine, parser) is engine
+    assert service.ocr_engine(lambda: engine, parser) is engine
     assert engine._renderer == parser.render_page and engine._runner == parser.run_supervised
 
 
 def test_the_command_line_leaves_an_engine_alone_when_the_parser_or_the_engine_cannot_use_them(engine_path):
     engine = TesseractExtractor(command=engine_path)
-    assert cli._ocr_engine(lambda: engine, PdfplumberExtractor()) is engine and engine._runner is None and engine._renderer is None
+    assert service.ocr_engine(lambda: engine, PdfplumberExtractor()) is engine and engine._runner is None and engine._renderer is None
     fake = FakeOcrExtractor({}, page_count=1)
-    assert cli._ocr_engine(lambda: fake, SandboxedExtractor(LIMITS)) is fake
+    assert service.ocr_engine(lambda: fake, SandboxedExtractor(LIMITS)) is fake
 
 
 @pytest.mark.real_ocr
