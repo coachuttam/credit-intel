@@ -104,7 +104,10 @@ def _derive(
         raise ValueError("a derived value uses inputs of one basis and one period role")
     # A value derived from an input whose basis the analyst asserted rests on that assertion too (H.4.6, v0.4.24).
     asserted = any(r.basis_evidence is BasisEvidence.ANALYST_ASSERTION for r in present)
-    ids = tuple(make_field_id(field, first.period_end, first.statement_basis) for field in (record_inputs or wanted))
+    if record_inputs:
+        ids = tuple(make_field_id(field, first.period_end, first.statement_basis) for field in record_inputs)
+    else:  # only inputs that have a record: an ID with no record in the results cannot be traced (K.10)
+        ids = tuple(record.field_id for record in anchors)  # no input at all: the record it was anchored on
     derivation = Derivation(method_id=method_id, formula=formula, input_field_ids=ids, component_classification=classification)
 
     def build(status: Status, reason: StatusReason | None = None, value: Decimal | None = None,

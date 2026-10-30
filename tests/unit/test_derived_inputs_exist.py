@@ -1,38 +1,51 @@
-"""KNOWN DEFECT (recorded 2026-10-30 in PROGRESS.md; not fixed): a derived value names input IDs that are not in the results.
+"""A derived value names only inputs that have a record in the field set (K.10 traceability).
 
-Found on a real run (a 6-page quarterly results document, 2026-10-26, replayed from the response cache on 2026-10-30): when neither period end
-is verified, ``missing_fields`` adds no ``not_found`` placeholders (it makes them only for validated periods), yet a derived value is still built
-from the date of an input that is present (EBIT from profit before tax) and lists **all** its inputs by ID, including one with no record. The
-memo then cites an ID that is not in ``results.json`` and the memo check stops the run (exit 1, "the memo failed its traceability check",
-a manifest-only failure record). The check did its job; the results are what is inconsistent.
-
-The test states the contract. It is ``xfail(strict=True)``: it must fail today, and when the defect is fixed it will start to pass and the strict
-marker will fail the suite until the marker is removed, so the fix cannot go unnoticed.
+Found on a real run (a 6-page quarterly results document, 2026-10-26; PROGRESS.md 2026-10-30): with no ``not_found``
+placeholders in the field set (period ends not validated), EBIT from profit before tax listed ``interest_expense.<date>``
+though that field had no record, the memo cited it, and the memo check stopped the run. Fix (owner's option B): list only inputs that exist.
 """
 
-import pytest
-
-from calc_records import CUR, rec
-from credit_intel.calculations.derived import derive_ebit_for
+from calc_records import CUR, D24, rec
+from credit_intel.calculations.derived import derive_ebit, derive_ebit_for
 from credit_intel.extraction.field_set import FieldSet
-from credit_intel.models import FieldName as F, StatementBasis as Basis
+from credit_intel.models import FieldName as F, Status, StatementBasis as Basis
 
-KNOWN = "known defect: a derived value lists input IDs that have no record when the field set has no not_found placeholders (PROGRESS 2026-10-30)"
-
-
-@pytest.mark.xfail(strict=True, reason=KNOWN)
-def test_every_input_a_derived_value_names_is_a_record_of_the_field_set():
-    only_pbt = FieldSet(Basis.CONSOLIDATED, (rec(F.PROFIT_BEFORE_TAX, "300"),), (), (), ("consolidated",))  # no placeholders: periods were not validated
-    ebit = derive_ebit_for(only_pbt, CUR)
-    assert ebit is not None and ebit.derivation is not None
-    ids = {record.field_id for record in only_pbt.fields}
-    assert set(ebit.derivation.input_field_ids) <= ids
+PBT_ID = "profit_before_tax.2025-03-31.consolidated"
+INT_ID = "interest_expense.2025-03-31.consolidated"
 
 
-def test_the_defect_is_what_is_recorded_one_named_input_has_no_record():
-    """Not an xfail: it pins the facts so that the xfail above cannot pass for another reason."""
-    only_pbt = FieldSet(Basis.CONSOLIDATED, (rec(F.PROFIT_BEFORE_TAX, "300"),), (), (), ("consolidated",))
-    ebit = derive_ebit_for(only_pbt, CUR)
-    ids = {record.field_id for record in only_pbt.fields}
-    missing = [i for i in ebit.derivation.input_field_ids if i not in ids]
-    assert missing == ["interest_expense.2025-03-31.consolidated"] and "profit_before_tax.2025-03-31.consolidated" in ids
+def field_set(*records):
+    return FieldSet(Basis.CONSOLIDATED, tuple(records), (), (), ("consolidated",))
+
+
+def test_the_missing_input_is_not_named_and_every_named_input_is_a_record():
+    fields = field_set(rec(F.PROFIT_BEFORE_TAX, "300"))  # no placeholders: periods were not validated
+    ebit = derive_ebit_for(fields, CUR)
+    assert ebit.derivation.input_field_ids == (PBT_ID,)
+    assert set(ebit.derivation.input_field_ids) <= {r.field_id for r in fields.fields}
+
+
+def test_a_not_found_placeholder_is_still_named_because_it_is_a_record():
+    fields = field_set(rec(F.PROFIT_BEFORE_TAX, "300"), rec(F.INTEREST_EXPENSE, status=Status.NOT_FOUND))
+    ebit = derive_ebit_for(fields, CUR)
+    assert ebit.status is Status.NOT_FOUND and ebit.derivation.input_field_ids == (PBT_ID, INT_ID)
+
+
+def test_both_inputs_present_are_both_named_in_order():
+    ebit = derive_ebit(None, rec(F.PROFIT_BEFORE_TAX, "300"), rec(F.INTEREST_EXPENSE, "50"))
+    assert ebit.derivation.input_field_ids == (PBT_ID, INT_ID) and ebit.status is Status.EXTRACTED
+
+
+def test_only_interest_present_names_only_interest():
+    ebit = derive_ebit(None, None, rec(F.INTEREST_EXPENSE, "50"))
+    assert ebit.derivation.input_field_ids == (INT_ID,)
+
+
+def test_each_input_is_named_by_its_own_record_id_when_period_ends_differ():
+    ebit = derive_ebit(None, rec(F.PROFIT_BEFORE_TAX, "300"), rec(F.INTEREST_EXPENSE, "50", end=D24))
+    assert ebit.derivation.input_field_ids == (PBT_ID, "interest_expense.2024-03-31.consolidated")
+
+
+def test_no_input_at_all_names_the_record_it_was_anchored_on():
+    ebit = derive_ebit(rec(F.OPERATING_PROFIT, status=Status.NOT_FOUND), None, None)
+    assert ebit.derivation.input_field_ids == ("operating_profit.2025-03-31.consolidated",)
