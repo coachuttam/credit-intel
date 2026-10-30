@@ -44,6 +44,33 @@ Added up, the worst case is roughly **1,700 s (28 minutes)** for a run in which 
 
 The reading step's memory limit is 6144 MB per run, and the measured peaks are 0.5 to 1.5 GB. **This machine has 8 GB**, so even one run at its limit would nearly fill it, and two runs at the limit (12 GB) cannot fit. Two runs at the measured peaks (about 3 GB) fit. So the right `max_concurrent_runs` depends on the host that will run the service, which is not yet decided (Phase 7 covers deployment). **I need the target host's memory** to propose a value.
 
+## 4a. Measured: several runs at once on this machine (added 2026-10-30)
+
+The 159-page report, the model's reply faked, the PDF report skipped, N whole runs started together in one process (as the API's thread pool would run them), the memory of the whole process tree sampled twice a second.
+
+| Runs at once | Wall time for all | Each run | Throughput against one after another | Peak memory of the tree |
+|---|---|---|---|---|
+| 1 | 96.3 s | 96.3 s | 1.0x | 1,458 MB |
+| 2 | 116.2 s | 116.2 s (1.21x slower) | 1.66x (2 runs in 116 s, 193 s one after another) | 2,386 MB |
+| 3 | 154.6 s | 148 to 155 s (1.6x slower) | 1.87x (3 runs in 155 s, 289 s one after another) | 2,576 MB |
+
+All runs exited 0. The peaks do not add up (three workers did not peak together), so the measured peak is below N times one run.
+
+**A caution about these figures.** This machine was already short of memory: the swap file held 6.6 GB of its 8 GB **before** the first measurement and grew to 8.8 GB and then 10 GB during the second and third. The times above therefore include paging caused partly by other things running on the machine, and they are conservative; a dedicated host would do better. The memory peaks are the processes' own and are not affected.
+
+**The worst case is set by the limits, not by these peaks.** The reading step may use up to 6144 MB each (the owner's limit, chosen so that a 600-page report is not rejected):
+
+| `max_concurrent_runs` | Worst case from the limits (plus the server, about 0.3 to 0.5 GB) | Against 8 GB |
+|---|---|---|
+| 1 | about 6.5 GB | fits, with about 1.5 GB for everything else |
+| 2 | about 12.5 GB | cannot fit: a document that reaches the limit while another run is busy exhausts memory before either limit stops it |
+| 3 | about 18.5 GB | cannot fit |
+
+**What this says, before the model timings:**
+- On an 8 GB host, **1 is the only value for which the configured memory limit is itself the guarantee**; the owner's lean of 1 is consistent with the numbers.
+- 2 would work for ordinary documents (a measured peak of 2.4 GB) and would raise throughput by about 1.7 times, but it leaves a hostile or very large document able to take the host past its memory, which the per-run limit alone no longer prevents. It would need a lower `parse_memory_mb` (about 3 GB for each of two runs), which would stop the legitimate 600-page report the limit was raised for.
+- So the choice is between safety on this host (1) and throughput (2 with a lower limit, or a larger host later, which is a Phase 7 question).
+
 ## 5. The part still to measure: the model call
 
 A real run's time is the 47 to 94 s above plus the model call (and the corrective retry, if one is needed). Nothing here has timed a real call on a full document. A live run sends the candidate statement pages to the hosted API, so it needs the owner's approval; the owner runs it in their own terminal. The proposal:
