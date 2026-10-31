@@ -62,4 +62,5 @@ def status_of(error: IngestionError) -> int:
     """The HTTP status of a catalogued failure raised in the request (500 for one that is only ever reported in a run's status)."""
     return HTTP_AT_SUBMISSION[error.code] or 500
 UNAUTHORIZED = "A valid bearer token is required."
+LOCKED_OUT = "Too many failed attempts. Try again later."
 CROSS_ORIGIN = "The request came from another origin."

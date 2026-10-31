@@ -78,7 +78,7 @@ def services_for(pdf, tmp_path, factory=None, **extra):
 
 
 def build(tmp_path, pdf, *, provider="fake", concurrent=1, queued=4, timeout=1200, factory=None, assignments=None, env=None, monotonic=None, max_file_bytes=None,
-          services=None, clock=None):  # fmt: skip
+          services=None, clock=None, failed_attempts=None):  # fmt: skip
     settings = settings_for(tmp_path, concurrent, queued, timeout)
     config = config_for(tmp_path, provider)
     services = services or services_for(pdf, tmp_path, factory)
@@ -88,7 +88,7 @@ def build(tmp_path, pdf, *, provider="fake", concurrent=1, queued=4, timeout=120
     manager = None
     if monotonic is not None:
         manager = JobManager(settings, config, services, env or {}, clock, monotonic)
-    return create_app(settings, config=config, services=services, env=env or {}, clock=clock, manager=manager, max_file_bytes=max_file_bytes), settings
+    return create_app(settings, config=config, services=services, env=env or {}, clock=clock, manager=manager, max_file_bytes=max_file_bytes, failed_attempts=failed_attempts), settings
 
 
 def post(client, pdf_bytes, name="statement.pdf", **fields):

@@ -20,7 +20,8 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from credit_intel.api.errors import CROSS_ORIGIN, UNAUTHORIZED, transport_body
+from credit_intel.api.errors import CROSS_ORIGIN, LOCKED_OUT, UNAUTHORIZED, transport_body
+from credit_intel.api.lockout import FailedAttempts
 from credit_intel.api.jobs import RUN_ID
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
 
@@ -50,6 +51,12 @@ def check_exposure(host: str, token: str | None) -> None:
         raise IngestionError(ErrorCode.CONFIG_INVALID, "api.token")
 
 
+def client_address(scope: Scope) -> str:
+    """The address the connection came from. Forwarded headers are not read: trust in a proxy is the proxy step's (SEC-15, OD-36)."""
+    client = scope.get("client")
+    return str(client[0]) if client else "unknown"
+
+
 def _bearer(headers: Headers) -> str | None:
     value = headers.get("authorization", "")
     scheme, _, credentials = value.partition(" ")
@@ -59,8 +66,9 @@ def _bearer(headers: Headers) -> str | None:
 class Security:
     """A pure ASGI middleware (the upload is a stream, which a buffering middleware would spoil)."""
 
-    def __init__(self, app: ASGIApp, token: str | None) -> None:
+    def __init__(self, app: ASGIApp, token: str | None, failed_attempts: FailedAttempts | None = None) -> None:
         self.app, self._token = app, token.encode() if token is not None else None
+        self._attempts = failed_attempts if failed_attempts is not None else FailedAttempts()
 
     def _authorised(self, headers: Headers) -> bool:
         given = _bearer(headers)
@@ -91,9 +99,17 @@ class Security:
             await send(message)
 
         refusal: JSONResponse | None = None
-        if self._token is not None and not (method == "GET" and path == "/health") and not self._authorised(headers):
+        needs_token = self._token is not None and not (method == "GET" and path == "/health")
+        address = client_address(scope)
+        if needs_token and (waiting := self._attempts.locked_for(address)) is not None:
+            refusal = JSONResponse(transport_body(LOCKED_OUT), status_code=429, headers={"Retry-After": str(waiting)})  # before the token is looked at
+        elif needs_token and not self._authorised(headers):
+            if headers.get("authorization", "").strip() and self._attempts.record_failure(address):  # a wrong credential was presented; none at all is only challenged
+                logger.warning("too many failed token attempts; address %s is locked out for %d seconds", address, int(self._attempts.lockout))
             refusal = JSONResponse(transport_body(UNAUTHORIZED), status_code=401, headers={"WWW-Authenticate": "Bearer"})
-        elif method == "POST" and self._cross_origin(headers):
+        elif needs_token:
+            self._attempts.record_success(address)
+        if refusal is None and method == "POST" and self._cross_origin(headers):
             refusal = JSONResponse(transport_body(CROSS_ORIGIN), status_code=403)
         try:
             if refusal is not None:

@@ -80,6 +80,29 @@ docker compose run --rm credit-intel prune --config /config/settings.toml --olde
 
 **A restart.** Each accepted run leaves a marker file in `.pending` on the `runs` volume before the `202` is sent and removes it when the run ends. After `docker compose down` or a crash, the next start records the runs that were waiting or going as failed with `E-RUN-INTERRUPTED` (a status request then says so; it does not say `404`). Their `manifest.json` has `started_at` as the time they were accepted and `finished_at` equal to it (the service does not know when it stopped), and `failed_stage` `validated` (the first stage after `received`: the stage reached is not recorded). Runs are not resumed: submit the document again. `docker compose down` waits up to the stop grace period for runs that are going to finish.
 
+## 5a. Rotating the token (SEC-15)
+
+There is one token, so rotation is a restart with a new value: **every client stops working at the same moment**, and there is no overlap period (several named tokens are OD-34 (b), not built).
+
+**When.** At once if the token may have leaked (it was pasted somewhere, a device was lost, someone who had it has left); otherwise on whatever schedule you set. The service imposes none.
+
+**Steps.**
+
+1. **Make a new token.** `python3 -c 'import secrets; print(secrets.token_urlsafe(48))'` prints one of 64 characters; the service accepts anything of 32 to any number of printable characters without spaces. Do not reuse an old one. Do not put it on a command line you will keep in shell history: copy it into the env file in your editor.
+2. **Let the work finish, or accept the interruption.** `curl -s http://127.0.0.1:8000/health` is open and shows `"queued"` and `"running"`. At 0 and 0 nothing is lost. Otherwise the stop waits up to the stop grace period for runs that are going to finish, and anything still waiting is recorded at the next start as `E-RUN-INTERRUPTED` (section 5).
+3. **Replace the value** of `CREDIT_INTEL_API_TOKEN` in the env file named by `CREDIT_INTEL_ENV_FILE` (outside the repository, mode 600). Keep the old value nowhere.
+4. **Recreate the container.** `docker compose up -d --force-recreate`. **Not `docker compose restart`:** a restart keeps the environment the container was created with, so the old token would still be in force. Outside a container: set the variable and restart the process.
+5. **Check, once each.** The old token must be refused and the new one accepted:
+   ```
+   curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $OLD" http://127.0.0.1:8000/runs     # 401
+   curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $NEW" http://127.0.0.1:8000/runs     # 200
+   ```
+   Each wrong attempt counts towards the limit below, so do not repeat the first one more than a few times.
+6. **Give the new token to every client** by a channel that is not kept (not chat or e-mail history), and update every script that has the old one.
+7. **If it was a leak:** read `docker compose logs credit-intel` for `too many failed token attempts` lines (they name the address), look at the list of runs for any you did not make, and rotate the `OPENAI_API_KEY` at the provider (it is in the same env file; the provider, not this service, can show what was spent with it).
+
+**The limit on failed attempts.** After 5 requests that presented a wrong credential within 5 minutes, the client address is locked out for 15 minutes: every request that needs the token is answered `429` with `Retry-After`, **even one with the right token**, and `GET /health` still answers. Requests that present no credential at all are answered `401` and are not counted. The count is in memory and restarting the service clears it. Behind a published port the service sees one address for every client of that host (and behind a proxy, the proxy's), so the limit is shared by all of them; telling clients apart behind a proxy is part of the proxy step.
+
 ## 6. Checks inside the image (criterion 10)
 
 ```

@@ -17,6 +17,7 @@ import test_api as base
 from test_api import private_temp  # noqa: F401  (the autouse fixture that points uploads at a folder of the test)
 from credit_intel.api import __main__ as launcher
 from credit_intel.api.app import create_app
+from credit_intel.api.lockout import FailedAttempts
 from credit_intel.api.security import SECURITY_HEADERS, check_exposure, is_loopback
 from credit_intel.config import ENV_API_TOKEN, load_api_token
 from credit_intel.ingestion.errors import ErrorCode, IngestionError
@@ -27,7 +28,9 @@ PRD_CSP = ("default-src 'none'; style-src 'self'; script-src 'self'; connect-src
 
 
 def build(tmp_path, pdf, token=TOKEN, **kwargs):
+    """The tests of this file make many wrong attempts on purpose; unless a test is about the limit, it is out of the way (the limit has its own tests in ``test_api_lockout.py``)."""
     env = {ENV_API_TOKEN: token} if token is not None else {}
+    kwargs.setdefault("failed_attempts", FailedAttempts(max_failures=10**9))
     return base.build(tmp_path, pdf, env=env, **kwargs)
 
 
