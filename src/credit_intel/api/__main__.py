@@ -23,7 +23,8 @@ def _serve(app: Any, host: str, port: int) -> None:
     import uvicorn
 
     # One access line comes from the service itself (without anything the client sent); the server's own would repeat the raw request line.
-    uvicorn.run(app, host=host, port=port, access_log=False, server_header=False)
+    # `proxy_headers=False`: the server's own reading of forwarded addresses is off; the only trust in a proxy is `api.trusted_proxies`, read by the service itself.
+    uvicorn.run(app, host=host, port=port, access_log=False, server_header=False, proxy_headers=False)
 
 
 def prune_main(argv: Sequence[str], *, env: Mapping[str, str] | None = None, stdout: IO[str] | None = None, stderr: IO[str] | None = None,

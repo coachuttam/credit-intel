@@ -86,3 +86,94 @@ def test_the_shipped_settings_hold_the_owners_limits_but_not_the_folders_so_the_
     assert error.value.code is ErrorCode.CONFIG_INVALID and "api.output_dir" in str(error.value)
     settings = load_api_settings(DEFAULT_SETTINGS_PATH, {"CREDIT_INTEL_API_OUTPUT_DIR": "/a", "CREDIT_INTEL_API_CACHE_DIR": "/b"})
     assert (settings.max_concurrent_runs, settings.max_queued_runs, settings.run_timeout_seconds) == (1, 4, 1200)
+
+
+# --- the proxy settings (PRD SEC-15, SEC-16, OD-36; Phase 7 step 5) ----------------------------------------------------------------------------------
+
+
+def test_the_proxy_settings_default_to_nothing_trusted_and_nothing_stated(tmp_path):
+    settings = load(tmp_path, GOOD)
+    assert (settings.behind_tls, settings.loopback_only_publication, settings.public_hosts, settings.trusted_proxies) == (False, False, (), ())
+
+
+def test_the_two_statements_are_separate_settings_and_one_does_not_set_the_other(tmp_path):
+    assert (lambda s: (s.behind_tls, s.loopback_only_publication))(load(tmp_path, GOOD + "behind_tls = true\n")) == (True, False)
+    assert (lambda s: (s.behind_tls, s.loopback_only_publication))(load(tmp_path, GOOD + "loopback_only_publication = true\n")) == (False, True)
+    both = load(tmp_path, GOOD, {"CREDIT_INTEL_API_BEHIND_TLS": "true", "CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION": "true"})
+    assert both.behind_tls is True and both.loopback_only_publication is True
+
+
+@pytest.mark.parametrize("line", ["loopback_only_publication = 1", 'loopback_only_publication = "true"', "loopback_only_publication = []"])
+def test_loopback_only_publication_in_the_file_must_be_a_true_boolean(tmp_path, line):
+    invalid(tmp_path, GOOD + line + "\n", "api.loopback_only_publication")
+
+
+@pytest.mark.parametrize("text", ["True", "1", "yes", " true", "", "tru"])
+def test_loopback_only_publication_in_the_environment_is_exactly_true_or_false(tmp_path, text):
+    invalid(tmp_path, GOOD, "api.loopback_only_publication", {"CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION": text})
+
+
+def test_they_can_be_set_in_the_file(tmp_path):
+    settings = load(tmp_path, GOOD + 'behind_tls = true\npublic_hosts = ["Memos.Example.com", "[::1]:8443", "example.org:8080", "MEMOS.example.com"]\ntrusted_proxies = ["172.30.60.0/24", "10.1.2.3", "2001:db8::/32", "172.30.60.5/24"]\n')
+    assert settings.behind_tls is True
+    assert settings.public_hosts == ("memos.example.com", "[::1]:8443", "example.org:8080")  # lower-cased, duplicates dropped, order kept
+    assert settings.trusted_proxies == ("172.30.60.0/24", "10.1.2.3/32", "2001:db8::/32")  # normalised; the host bits of 172.30.60.5/24 go and it joins the first
+
+
+def test_they_can_be_set_by_the_environment_with_lists_as_comma_separated_text(tmp_path):
+    env = {"CREDIT_INTEL_API_BEHIND_TLS": "true", "CREDIT_INTEL_API_PUBLIC_HOSTS": " a.example , b.example:8443 ", "CREDIT_INTEL_API_TRUSTED_PROXIES": "10.0.0.0/8,192.168.0.1"}
+    settings = load(tmp_path, GOOD, env)
+    assert settings.behind_tls is True and settings.public_hosts == ("a.example", "b.example:8443") and settings.trusted_proxies == ("10.0.0.0/8", "192.168.0.1/32")
+
+
+def test_the_environment_wins_over_the_file_and_empty_text_is_an_empty_list(tmp_path):
+    text = GOOD + 'behind_tls = true\npublic_hosts = ["a.example"]\ntrusted_proxies = ["10.0.0.0/8"]\n'
+    settings = load(tmp_path, text, {"CREDIT_INTEL_API_BEHIND_TLS": "false", "CREDIT_INTEL_API_PUBLIC_HOSTS": "", "CREDIT_INTEL_API_TRUSTED_PROXIES": "  "})
+    assert (settings.behind_tls, settings.public_hosts, settings.trusted_proxies) == (False, (), ())
+
+
+@pytest.mark.parametrize("line", ["behind_tls = 1", 'behind_tls = "true"', "behind_tls = []"])
+def test_behind_tls_in_the_file_must_be_a_true_boolean(tmp_path, line):
+    invalid(tmp_path, GOOD + line + "\n", "api.behind_tls")
+
+
+@pytest.mark.parametrize("text", ["True", "TRUE", "1", "yes", "on", " true", "true ", "", "tru"])
+def test_behind_tls_in_the_environment_is_exactly_true_or_false(tmp_path, text):
+    invalid(tmp_path, GOOD, "api.behind_tls", {"CREDIT_INTEL_API_BEHIND_TLS": text})
+
+
+@pytest.mark.parametrize("entry", ["", " a.example", "a.example ", "-a.example", "a.example-", "a b", "a/b", "a.example/path", "http://a.example", "a.example:", "a.example:port", "a.example:70000",
+                                   "[::1", "::1", "[zz]", "a_b.example", "ü.example", "a.example:1:2", "*", "a.example,b.example"])  # fmt: skip
+def test_a_malformed_public_host_is_config_invalid_naming_the_setting_and_not_the_value(tmp_path, entry):
+    text = GOOD + "public_hosts = [" + json_string(entry) + "]\n"
+    error = invalid(tmp_path, text, "api.public_hosts")
+    assert entry.strip() == "" or entry not in str(error)
+
+
+def json_string(value):
+    import json
+
+    return json.dumps(value)
+
+
+@pytest.mark.parametrize("entry", ["", "10.0.0.0/33", "300.1.1.1", "a.example", "10.0.0.0/8/8", "10.0.0.0/-1", "::g", "0.0.0.0/0", "::/0", "1.2.3.4/0", " 10.0.0.1"])
+def test_a_malformed_trusted_proxy_or_one_that_is_every_address_is_config_invalid(tmp_path, entry):
+    invalid(tmp_path, GOOD + "trusted_proxies = [" + json_string(entry) + "]\n", "api.trusted_proxies")
+
+
+@pytest.mark.parametrize("name, value", [("public_hosts", '"a.example"'), ("public_hosts", "[1]"), ("public_hosts", "{}"), ("trusted_proxies", '"10.0.0.0/8"'), ("trusted_proxies", "[[]]"), ("trusted_proxies", "5")])
+def test_a_list_setting_in_the_file_must_be_a_list_of_strings(tmp_path, name, value):
+    invalid(tmp_path, GOOD + f"{name} = {value}\n", f"api.{name}")
+
+
+def test_a_list_of_more_than_thirty_two_is_refused_and_thirty_two_is_not(tmp_path):
+    many = lambda n: ", ".join(json_string(f"h{i}.example") for i in range(n))  # noqa: E731
+    assert len(load(tmp_path, GOOD + f"public_hosts = [{many(32)}]\n").public_hosts) == 32
+    invalid(tmp_path, GOOD + f"public_hosts = [{many(33)}]\n", "api.public_hosts")
+    nets = lambda n: ", ".join(json_string(f"10.{i}.0.0/16") for i in range(n))  # noqa: E731
+    assert len(load(tmp_path, GOOD + f"trusted_proxies = [{nets(32)}]\n").trusted_proxies) == 32
+    invalid(tmp_path, GOOD + f"trusted_proxies = [{nets(33)}]\n", "api.trusted_proxies")
+
+
+def test_the_proxy_settings_are_optional_names_so_an_unknown_one_is_still_refused(tmp_path):
+    invalid(tmp_path, GOOD + "trusted_proxy = []\n", "api.trusted_proxy")

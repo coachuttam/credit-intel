@@ -1,0 +1,17 @@
+# The reverse proxy that ends TLS in front of the service (PRD OD-35 (a), FR-018 criterion 11). Used by compose.proxy.yaml.
+#
+# * Caddy gets and renews a certificate for the public name by itself (the name must point at this host and ports 80 and 443 must reach it).
+# * No `trusted_proxies` is set here, so Caddy does not believe an `X-Forwarded-For` that a client sends: it replaces it with the address it saw. The service believes the
+#   header only from the compose network (`api.trusted_proxies`), so a client cannot name itself.
+# * The body limit is the file-size limit (100 MB) plus room for the form fields; the service enforces the exact limit as the upload streams.
+# * The service sends `Strict-Transport-Security` itself (`api.behind_tls`); it is not repeated here.
+{
+	admin off
+}
+
+{$CREDIT_INTEL_PUBLIC_HOST} {
+	request_body {
+		max_size 110MB
+	}
+	reverse_proxy credit-intel:8000
+}

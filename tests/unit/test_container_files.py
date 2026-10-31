@@ -494,3 +494,111 @@ def test_measure_needs_the_document_and_the_token_and_says_when_the_kernel_will_
 def test_measure_never_asks_for_a_file_of_a_run_only_for_its_status():
     text = (ROOT / "deploy" / "measure_container.sh").read_text(encoding="utf-8")
     assert not re.search(r"/(memo|results|manifest|report)\b", re.sub(r"#.*", "", text))
+
+
+# --- the TLS proxy files (PRD OD-35 (a), OD-36, FR-018 criterion 11; Phase 7 step 5) ----------------------------------------------------------------------
+
+PROXY = (ROOT / "compose.proxy.yaml").read_text(encoding="utf-8")
+CADDY = (ROOT / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+CADDY_CODE = re.sub(r"#.*", "", CADDY)
+PROXY_CODE = re.sub(r"#.*", "", PROXY)
+
+
+def test_the_base_compose_states_the_loopback_only_condition_with_its_reason_and_makes_no_statement_about_tls():
+    lines = COMPOSE.splitlines()
+    at = next(n for n, l in enumerate(lines) if "CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION" in l and not l.lstrip().startswith("#"))
+    reason = " ".join(l for l in lines[max(0, at - 4):at] if l.lstrip().startswith("#"))
+    assert 'CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION: "true"' in lines[at] and "loopback" in reason and "NOT a statement about TLS" in reason
+    assert "BEHIND_TLS:" not in COMPOSE and COMPOSE.count("LOOPBACK_ONLY_PUBLICATION:") == 1  # there is no TLS here, so none is claimed
+
+
+def test_the_proxy_overlay_takes_the_service_off_the_host_and_publishes_only_the_proxy():
+    assert re.search(r"^\s+ports: !reset \[\]\s*$", PROXY_CODE, re.M)
+    published = re.findall(r'^\s*-\s*"(\d+:\d+)"', PROXY_CODE, re.M)
+    assert published == ["80:80", "443:443"]
+    service, proxy = PROXY_CODE.split("  proxy:")
+    assert "ports:" in service and "80:80" not in service and "80:80" in proxy
+
+
+def test_every_value_that_matters_in_the_proxy_overlay_is_required_and_has_no_default():
+    for variable in ("CREDIT_INTEL_PUBLIC_HOST", "CREDIT_INTEL_PROXY_SUBNET", "CREDIT_INTEL_PROXY_IMAGE"):
+        assert re.search(r"\$\{" + variable + r":\?[^}]+\}", PROXY_CODE), variable
+        assert not re.search(r"\$\{" + variable + r":-", PROXY_CODE), variable
+
+
+def test_the_proxy_image_must_be_named_by_digest_in_the_message_and_the_runbook_shows_how():
+    assert "pinned by digest" in PROXY and "name@sha256" in PROXY
+    runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
+    assert "CREDIT_INTEL_PROXY_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' caddy:2)" in runbook
+
+
+def test_the_service_is_told_the_three_things_the_proxy_means_for_it():
+    assert 'CREDIT_INTEL_API_BEHIND_TLS: "true"' in PROXY_CODE and 'CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION: "false"' in PROXY_CODE  # TLS ends here; the base file's other statement no longer holds
+    assert re.search(r"CREDIT_INTEL_API_PUBLIC_HOSTS: \$\{CREDIT_INTEL_PUBLIC_HOST:\?", PROXY_CODE)
+    assert re.search(r"CREDIT_INTEL_API_TRUSTED_PROXIES: \$\{CREDIT_INTEL_PROXY_SUBNET:\?", PROXY_CODE)
+    assert re.search(r"ipam:\s*\n\s*config:\s*\n\s*-\s*subnet:\s*\$\{CREDIT_INTEL_PROXY_SUBNET:\?", PROXY_CODE)  # the trusted network is the one the compose network is made with
+
+
+def test_the_proxy_is_hardened_waits_for_the_service_and_carries_no_secret():
+    proxy = PROXY_CODE.split("  proxy:")[1]
+    for needed in ("read_only: true", "no-new-privileges:true", "mem_limit:", "pids_limit:", "condition: service_healthy", "- ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro"):
+        assert needed in proxy, needed
+    assert re.search(r"cap_drop:\s*\n\s*-\s*ALL", proxy) and re.findall(r"cap_add:\s*\n((?:\s*-\s*\S+\n)+)", proxy) == ["      - NET_BIND_SERVICE\n"]
+    for forbidden in ("privileged", "network_mode", "/var/run/docker.sock", "user: root", "pid: host", "OPENAI", "API_TOKEN", "sk-", "Bearer"):
+        assert forbidden not in PROXY_CODE, forbidden
+
+
+def test_the_caddyfile_names_the_service_and_port_of_the_compose_file_and_the_image():
+    name = re.search(r"^  (\S+):\s*\n    image: credit-intel:", COMPOSE, re.M).group(1)
+    port = re.search(r"EXPOSE (\d+)", DOCKERFILE).group(1)
+    assert re.search(rf"reverse_proxy {re.escape(name)}:{port}\s*$", CADDY_CODE, re.M)
+    assert "{$CREDIT_INTEL_PUBLIC_HOST}" in CADDY_CODE and "admin off" in CADDY_CODE
+
+
+def test_the_caddyfile_limits_the_body_to_the_file_size_limit_with_room_for_the_form_and_trusts_no_forwarded_header():
+    from credit_intel.api.uploads import FIELD_ALLOWANCE
+    from credit_intel.config import IngestionSettings
+
+    size = int(re.search(r"max_size (\d+)MB", CADDY_CODE).group(1))
+    assert size * 1000 * 1000 >= IngestionSettings().max_file_bytes + FIELD_ALLOWANCE
+    for forbidden in ("trusted_proxies", "header_up X-Forwarded", "insecure_skip_verify", "tls internal", "tls off", "auto_https off", "http://"):
+        assert forbidden not in CADDY_CODE, forbidden
+
+
+def test_the_runbook_names_every_variable_of_the_proxy_overlay_and_the_checks():
+    runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
+    section = re.search(r"## 5b\. (.*?)\n## 6\.", runbook, re.S).group(1)
+    for variable in set(re.findall(r"\$\{(CREDIT_INTEL_[A-Z_]+):\?", PROXY)):
+        assert variable in section, variable
+    for needed in ("docker compose -f compose.yaml -f compose.proxy.yaml up -d", "strict-transport-security: max-age=31536000", "401", "429", "api.public_hosts", "api.trusted_proxies", "api.behind_tls",
+                   "2.24", "usable through this proxy"):  # fmt: skip
+        assert needed in section, needed
+    assert "written, not run" in runbook
+
+
+def test_the_runbook_gives_a_concrete_check_for_each_of_the_four_facts_written_from_memory():
+    runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
+    table = re.search(r"\| Recalled fact \| Check \| What you should see.*?\n((?:\|.*\n)+)", runbook).group(1)
+    rows = [r for r in table.splitlines() if r.startswith("| **")]
+    assert len(rows) == 4
+    wanted = {
+        "`!reset`": ("docker compose version", "config", "published", "2.24", "8000"),
+        "`admin off`": ("caddy validate", "2019", "admin endpoint closed"),
+        "`request_body": ("caddy validate", "big105", "big115", "E-INPUT-TOO-LARGE", "413"),
+        "`X-Forwarded-For`": ("X-Forwarded-For: 1.2.3.4", "429", "200", "locked out", "not `1.2.3.4`"),
+    }
+    for fact, needles in wanted.items():
+        row = next(r for r in rows if fact in r.split("|")[1])
+        for needle in needles:
+            assert needle in row, (fact, needle)
+
+
+def test_the_two_files_of_the_body_limit_check_straddle_the_proxy_limit_and_the_service_limit():
+    from credit_intel.api.uploads import FIELD_ALLOWANCE
+    from credit_intel.config import IngestionSettings
+
+    proxy_limit = int(re.search(r"max_size (\d+)MB", CADDY_CODE).group(1)) * 1000 * 1000  # Caddy reads MB as a million bytes
+    service_limit = IngestionSettings().max_file_bytes
+    small, large = 105_000_000, 115_000_000
+    assert service_limit < small and small + 1000 < proxy_limit < large  # the first reaches the service and is refused by it; the second is stopped by the proxy
+    assert small <= service_limit + FIELD_ALLOWANCE  # and it is the streaming limit, not the early refusal from the header, that refuses it

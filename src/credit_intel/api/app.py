@@ -102,7 +102,7 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
     base = dict(os.environ if env is None else env)
     base.pop(ENV_PRIVATE_APPROVED, None)
     token = load_api_token(base)  # E-CONFIG-INVALID for a short or odd token
-    check_exposure(settings.host, token)  # and for a host that is not a loopback address with no token (SEC-15)
+    check_exposure(settings.host, token, settings.behind_tls, settings.loopback_only_publication)  # and for a host that is not a loopback address with no token or no statement (SEC-15)
     if Path(tempfile.gettempdir()).resolve().is_relative_to(settings.output_dir.resolve()):
         raise IngestionError(ErrorCode.CONFIG_INVALID, "api.output_dir")  # uploads are kept outside the output folder (SEC-14)
     services = services or RunServices()
@@ -124,7 +124,8 @@ def create_app(settings: ApiSettings, *, config: Path = DEFAULT_SETTINGS_PATH, s
 
     app = FastAPI(title="AI Credit Intelligence", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)  # nothing is served beside the endpoints
     app.state.jobs, app.state.settings = jobs, settings
-    app.add_middleware(Security, token=token, failed_attempts=failed_attempts)
+    app.add_middleware(Security, token=token, failed_attempts=failed_attempts, behind_tls=settings.behind_tls, public_hosts=settings.public_hosts,
+                       trusted_proxies=settings.trusted_proxies)  # fmt: skip
     max_bytes = max_file_bytes if max_file_bytes is not None else IngestionSettings().max_file_bytes  # FR-001.2; a parameter so a test can use a small one
 
     @app.exception_handler(StarletteHTTPException)

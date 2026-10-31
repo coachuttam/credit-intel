@@ -30,6 +30,10 @@ services:
     env_file:
       - ${CREDIT_INTEL_ENV_FILE:?set CREDIT_INTEL_ENV_FILE to a root-only env file OUTSIDE the repository holding OPENAI_API_KEY and CREDIT_INTEL_API_TOKEN}
     environment:
+      # The service listens on 0.0.0.0 inside the container, which it allows only with a token and with one of two statements (SEC-15). This is the second: the only way
+      # to the service is the host's loopback address (see `ports`), so no path to it leaves the machine. It is NOT a statement about TLS (there is none here), so
+      # `behind_tls` is not set. With the proxy of compose.proxy.yaml the first statement is made instead.
+      CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION: "true"
       CREDIT_INTEL_TOKEN_CEILING: ${CREDIT_INTEL_TOKEN_CEILING:?set CREDIT_INTEL_TOKEN_CEILING (the per-run token ceiling has no default)}
     ports:
       - "127.0.0.1:8000:8000"

@@ -103,6 +103,31 @@ There is one token, so rotation is a restart with a new value: **every client st
 
 **The limit on failed attempts.** After 5 requests that presented a wrong credential within 5 minutes, the client address is locked out for 15 minutes: every request that needs the token is answered `429` with `Retry-After`, **even one with the right token**, and `GET /health` still answers. Requests that present no credential at all are answered `401` and are not counted. The count is in memory and restarting the service clears it. Behind a published port the service sees one address for every client of that host (and behind a proxy, the proxy's), so the limit is shared by all of them; telling clients apart behind a proxy is part of the proxy step.
 
+## 5b. Reaching the service from another machine: the TLS proxy (OD-35, OD-36)
+
+**Decide first whether you need this.** On one machine, `docker compose up` (section 5) publishes the service on the host's loopback address only and nothing else is needed. For a private network that already encrypts the path (a VPN or tunnel), keep that: point the tunnel at `127.0.0.1:8000` on the host; no proxy and no certificate. **Use the proxy only for a service that is reached over the internet**, and read the warning in section 8: a standing public endpoint spends model money and parses hostile files behind one token (OD-28 decided against one until there is a person to demo to).
+
+**What the service insists on.** The service listens on `0.0.0.0` inside the container; it starts there only if a token is set **and** you have made one of two statements, which it cannot check and which are not the same thing:
+
+- `api.behind_tls = true`: TLS ends in front of the service, or the path to it is encrypted by a private network. This is the only one that makes the service send `Strict-Transport-Security`.
+- `api.loopback_only_publication = true`: the only path to the service does not leave the machine. `compose.yaml` makes this one, because it publishes the service on the host's loopback address only; there is no TLS there and the file does not pretend there is.
+
+`compose.proxy.yaml` makes the first and sets the second to `false` (the service is then reached through the proxy, which the internet reaches). The other two settings, which the proxy file sets for you:
+
+- `api.public_hosts`: the name browsers use. A `POST` is accepted only from a page of that name (the proxy keeps the name in `Host`, but a proxy that rewrites it would otherwise make every form post fail with `403`).
+- `api.trusted_proxies`: the compose network. Only a connection from it is believed about the client's address (`X-Forwarded-For`, read from the right), so the lock-out of section 5a now counts the real client and one person cannot lock out the rest. A connection from anywhere else cannot name itself. The server's own reading of forwarded addresses is switched off.
+
+**Steps.**
+
+1. Point a public name at this host; open ports 80 and 443 to it (Caddy uses them to get the certificate and to redirect to HTTPS).
+2. Pin the proxy image by digest, as in section 2: `docker pull caddy:2` then `export CREDIT_INTEL_PROXY_IMAGE=$(docker inspect --format '{{index .RepoDigests 0}}' caddy:2)`.
+3. Choose a network that nothing else on the host uses, for example `export CREDIT_INTEL_PROXY_SUBNET=172.30.60.0/24`, and `export CREDIT_INTEL_PUBLIC_HOST=memos.example.com`. (The subnet must not be `0.0.0.0/0` or any network that includes clients: the service refuses a network that is every address.)
+4. `docker compose -f compose.yaml -f compose.proxy.yaml up -d` (Docker Compose 2.24 or later).
+5. Check from another machine: `curl -si https://$CREDIT_INTEL_PUBLIC_HOST/health` shows `200`, `strict-transport-security: max-age=31536000` and the headers of SEC-16; `http://` redirects to `https://`; `curl -s -o /dev/null -w '%{http_code}\n' https://$CREDIT_INTEL_PUBLIC_HOST/runs` is `401`.
+6. Check the client address: five wrong tokens from one machine lock that machine out (`429`) and a second machine still gets `200` with the right token. If a second machine is locked out too, the proxy's address is being counted: look at the trusted network.
+
+**Pages and the token.** A browser cannot send the bearer token, so with a token set the pages answer `401` (decided in Phase 6): the web page is not usable through this proxy. Use the API with `curl` or a program, or put an identity-aware proxy in front when more than one person needs access (OD-34 (c)).
+
 ## 6. Checks inside the image (criterion 10)
 
 ```
@@ -140,6 +165,17 @@ The first build and run is the real test of this runbook, and in particular of o
 - **Open the finished run's `manifest.json` and look at `report.status`.** A report that cannot be built does not fail the run (FR-015): the run completes and only `report` shows `failed` with `render_error`, so a read-only problem in the report worker would be silent unless you look. The same goes for OCR: run once with OCR on a scanned page if you can.
 - If something fails for this reason, the fix is a writable path for that one thing (an environment variable or another `tmpfs`), not turning the root file system writable. Tell me what failed.
 
+**The proxy files (`compose.proxy.yaml`, `deploy/Caddyfile`) are written, not run, and four facts in them are from memory.** The first real start must **verify each of the four**, with these checks (set the variables of section 5b first; `$PROXY` is the proxy image):
+
+| Recalled fact | Check | What you should see; if not, the file is wrong |
+|---|---|---|
+| **`!reset` works and needs Compose 2.24 or later** | `docker compose version` then `docker compose -f compose.yaml -f compose.proxy.yaml config \| grep -n 'published'` | A version of 2.24 or later. The merged configuration lists exactly two published ports, `"80"` and `"443"`, and **no `8000`**. An older Compose stops with a YAML error on `!reset`; a `8000` in the list means the reset did not apply and the service is still published on the host. |
+| **`admin off` is a valid Caddy global option and takes effect** | `docker run --rm -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -e CREDIT_INTEL_PUBLIC_HOST=memos.example.com "$PROXY" caddy validate --config /etc/caddy/Caddyfile`, then, with the proxy running, `docker compose -f compose.yaml -f compose.proxy.yaml exec proxy sh -c 'wget -qO- http://127.0.0.1:2019/config/ \|\| echo "admin endpoint closed"'` | `Valid configuration`; and `admin endpoint closed` (nothing answers on port 2019). A configuration error naming `admin` means the directive is wrong; a JSON configuration printed means the admin endpoint is open. |
+| **`request_body { max_size 110MB }` is valid and limits the body** | The same `caddy validate`; then through the running proxy, with the token: `{ printf '%%PDF-1.4\n'; head -c 105000000 /dev/zero; } > /tmp/big105.pdf` and `{ printf '%%PDF-1.4\n'; head -c 115000000 /dev/zero; } > /tmp/big115.pdf`, and `curl -s -w '\n%{http_code}\n' -H "Authorization: Bearer $CREDIT_INTEL_API_TOKEN" -F file=@/tmp/big105.pdf https://$CREDIT_INTEL_PUBLIC_HOST/runs` and the same with `big115` | For 105 MB: the service's own refusal, `413` with `"code":"E-INPUT-TOO-LARGE"` (under the proxy's limit, over the service's 100 MB). For 115 MB: `413` from the proxy with **no** `E-INPUT-TOO-LARGE` in the body (the proxy stopped it). If both show the service's code, the proxy limit is not in force; if the first is stopped by the proxy, its limit is too low. |
+| **Caddy replaces a client's `X-Forwarded-For` when no trusted proxy is set** | From your own machine, five times: `curl -s -o /dev/null -H 'X-Forwarded-For: 1.2.3.4' -H 'Authorization: Bearer wrong' https://$CREDIT_INTEL_PUBLIC_HOST/runs`; then `curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $CREDIT_INTEL_API_TOKEN" https://$CREDIT_INTEL_PUBLIC_HOST/runs` from your machine and from a second one | `429` from your machine, `200` from the second; and `docker compose logs credit-intel` shows your own address in `address ... is locked out`, **not `1.2.3.4`**. If it shows `1.2.3.4`, the proxy passes a client's header on and the lock-out can be dodged: do not use the proxy until the Caddyfile is fixed. |
+
+Other things to watch: a subnet that clashes with a network of the host stops the network from being created; the proxy runs with all capabilities dropped except `NET_BIND_SERVICE` and a read-only root, and Caddy may need another writable place than `/data`, `/config` and `/tmp`.
+
 ## 9. If something goes wrong
 
 | Symptom | Cause and action |
@@ -147,6 +183,9 @@ The first build and run is the real test of this runbook, and in particular of o
 | `compose` stops with "set CREDIT_INTEL_..." | A required value is missing on purpose (no defaults for limits or secrets). Set it. |
 | The build stops with "PYTHON_IMAGE must be pinned by digest" | Use the value from `docker inspect` in section 2. |
 | `E-CONFIG-INVALID` naming `api.token` | The token is missing, shorter than 32 characters or has a space. |
+| `E-CONFIG-INVALID` naming `api.behind_tls or api.loopback_only_publication` | The service was told to listen on a non-loopback address with a token but without either statement (section 5b). `compose.yaml` makes the loopback-only one and `compose.proxy.yaml` the TLS one; a different way of starting the container must make one. |
+| `E-CONFIG-INVALID` naming `api.public_hosts` or `api.trusted_proxies` | A malformed name or address, a list of more than 32, or a network that is every address. |
+| Every form post is `403` behind the proxy | `api.public_hosts` does not name the host a browser uses (case does not matter; a port that is not the default must be included). |
 | `E-CONFIG-INVALID` naming container memory | Section 4: give the container more memory (it names both numbers) or change a limit with a measurement. |
 | `E-CONFIG-INVALID` "resident memory cannot be measured" | The container has no `/proc` entry for itself: do not run it this way. |
 | The container is killed with no message | The kernel's out-of-memory kill (`docker inspect` shows `OOMKilled`): the limit is below what the pool used. Section 7. |

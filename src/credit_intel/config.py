@@ -703,7 +703,7 @@ def load_parse_limits(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str]
 
 ENV_API_PREFIX = "CREDIT_INTEL_API_"
 API_REQUIRED = ("max_concurrent_runs", "max_queued_runs", "run_timeout_seconds", "output_dir", "cache_dir")
-API_OPTIONAL = ("host", "port")
+API_OPTIONAL = ("host", "port", "behind_tls", "loopback_only_publication", "public_hosts", "trusted_proxies")
 DEFAULT_API_HOST = "127.0.0.1"
 DEFAULT_API_PORT = 8000
 
@@ -722,6 +722,65 @@ class ApiSettings:
     cache_dir: Path
     host: str = DEFAULT_API_HOST
     port: int = DEFAULT_API_PORT
+    behind_tls: bool = False  # the operator's statement that TLS ends in front of the service, or that the path is encrypted by a private network (SEC-15)
+    loopback_only_publication: bool = False  # the operator's statement that the only path to the service does not leave the machine (SEC-15): its own condition, not a form of TLS
+    public_hosts: tuple[str, ...] = ()  # host names (with a port if not the default) a browser reaches the service by: the origins a POST may come from
+    trusted_proxies: tuple[str, ...] = ()  # addresses or networks whose forwarded headers are believed (SEC-15)
+
+
+_HOST_ENTRY = re.compile(r"(?:[A-Za-z0-9](?:[A-Za-z0-9.\-]{0,251}[A-Za-z0-9])?|\[[0-9A-Fa-f:]{2,45}\])(?::[0-9]{1,5})?")
+MAX_LIST = 32
+
+
+def _entries(file_value: object, env_value: str | None, setting: str) -> list[str]:
+    """A list setting: a TOML array of strings, or comma-separated text from the environment (empty text is an empty list)."""
+    if env_value is not None:
+        items: object = [part.strip() for part in env_value.split(",")] if env_value.strip() else []
+    else:
+        items = [] if file_value is None else file_value
+    if not isinstance(items, list) or len(items) > MAX_LIST or not all(isinstance(item, str) and item.strip() == item and item for item in items):
+        raise _invalid(setting)
+    return list(items)
+
+
+def _switch_value(file_value: object, env_value: str | None, setting: str) -> bool:
+    if env_value is not None:
+        if env_value not in ("true", "false"):
+            raise _invalid(setting)
+        return env_value == "true"
+    if file_value is None:
+        return False
+    if not isinstance(file_value, bool):
+        raise _invalid(setting)
+    return file_value
+
+
+def _hosts(items: list[str], setting: str) -> tuple[str, ...]:
+    result: list[str] = []
+    for item in items:
+        if not _HOST_ENTRY.fullmatch(item):
+            raise _invalid(setting)
+        if ":" in item.rsplit("]", 1)[-1] and int(item.rsplit(":", 1)[1]) > 65_535:
+            raise _invalid(setting)
+        if item.lower() not in result:
+            result.append(item.lower())
+    return tuple(result)
+
+
+def _networks(items: list[str], setting: str) -> tuple[str, ...]:
+    import ipaddress
+
+    result: list[str] = []
+    for item in items:
+        try:
+            network = ipaddress.ip_network(item, strict=False)
+        except ValueError:
+            raise _invalid(setting) from None
+        if network.prefixlen == 0:
+            raise _invalid(setting)  # every address: nothing would be left to tell a proxy from a client
+        if str(network) not in result:
+            result.append(str(network))
+    return tuple(result)
 
 
 def _absolute_path(value: object, setting: str) -> Path:
@@ -736,7 +795,9 @@ def _absolute_path(value: object, setting: str) -> Path:
 def load_api_settings(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str] | None = None) -> ApiSettings:
     """The ``[api]`` settings, each overridable by ``CREDIT_INTEL_API_<NAME>``.
 
-    A missing or invalid limit, a missing or relative folder, an unknown key or a bad port is ``E-CONFIG-INVALID`` naming ``api.<name>`` and never its value.
+    A missing or invalid limit, a missing or relative folder, an unknown key, a bad port, a ``behind_tls`` or ``loopback_only_publication`` that is not true or false, a malformed host name or address in
+    ``public_hosts`` or ``trusted_proxies`` (or a network that is every address), or a list of more than 32, is ``E-CONFIG-INVALID`` naming ``api.<name>`` and never its value.
+    The two lists are TOML arrays, or comma-separated text in ``CREDIT_INTEL_API_PUBLIC_HOSTS`` and ``CREDIT_INTEL_API_TRUSTED_PROXIES``.
     """
     env = os.environ if env is None else env
     table = _settings_table(path, "api")
@@ -771,6 +832,10 @@ def load_api_settings(path: Path = DEFAULT_SETTINGS_PATH, env: Mapping[str, str]
         cache_dir=folder("cache_dir"),
         host=host,
         port=port,
+        behind_tls=_switch_value(*value("behind_tls"), "api.behind_tls"),
+        loopback_only_publication=_switch_value(*value("loopback_only_publication"), "api.loopback_only_publication"),
+        public_hosts=_hosts(_entries(*value("public_hosts"), "api.public_hosts"), "api.public_hosts"),
+        trusted_proxies=_networks(_entries(*value("trusted_proxies"), "api.trusted_proxies"), "api.trusted_proxies"),
     )
 
 

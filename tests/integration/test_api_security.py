@@ -157,7 +157,13 @@ def test_only_a_loopback_host_may_serve_without_a_token(host, loopback):
         with pytest.raises(IngestionError) as error:
             check_exposure(host, None)
         assert error.value.code is ErrorCode.CONFIG_INVALID and "api.token" in str(error.value)
-    check_exposure(host, TOKEN)
+        with pytest.raises(IngestionError) as second:
+            check_exposure(host, TOKEN)  # a token alone is not enough off the loopback address: `behind_tls` is needed too
+        assert "api.behind_tls" in str(second.value) and TOKEN not in str(second.value)
+        assert "api.loopback_only_publication" in str(second.value)  # both statements are named
+    check_exposure(host, TOKEN, True)
+    check_exposure(host, TOKEN, False, True)  # the other statement is enough as well
+    check_exposure(host, TOKEN, True, True)
 
 
 def test_the_application_is_not_built_for_a_public_host_without_a_token_or_with_a_short_one(pdf, tmp_path):
@@ -167,7 +173,11 @@ def test_the_application_is_not_built_for_a_public_host_without_a_token_or_with_
     with pytest.raises(IngestionError) as error:
         create_app(public, config=config, env={})
     assert "api.token" in str(error.value)
-    create_app(public, config=config, env={ENV_API_TOKEN: TOKEN})
+    with pytest.raises(IngestionError) as second:
+        create_app(public, config=config, env={ENV_API_TOKEN: TOKEN})
+    assert "api.behind_tls" in str(second.value)
+    tls = type(settings)(settings.max_concurrent_runs, settings.max_queued_runs, settings.run_timeout_seconds, settings.output_dir, settings.cache_dir, host="0.0.0.0", behind_tls=True)
+    create_app(tls, config=config, env={ENV_API_TOKEN: TOKEN})
     with pytest.raises(IngestionError):
         create_app(settings, config=config, env={ENV_API_TOKEN: "short"})  # a short token is refused on a loopback host too
 
@@ -339,7 +349,7 @@ def test_the_launcher_serves_a_public_host_when_a_token_is_set_and_never_prints_
     import io
 
     served, err = [], io.StringIO()
-    env = {**FOLDERS(tmp_path), "CREDIT_INTEL_API_HOST": "0.0.0.0", ENV_API_TOKEN: TOKEN}
+    env = {**FOLDERS(tmp_path), "CREDIT_INTEL_API_HOST": "0.0.0.0", "CREDIT_INTEL_API_BEHIND_TLS": "true", ENV_API_TOKEN: TOKEN}
     code = launcher.main(["--config", str(settings_file(tmp_path))], env=env, stderr=err, serve=lambda app, host, port: served.append((host, port)))
     assert code == 0 and served == [("0.0.0.0", 8000)] and TOKEN not in err.getvalue()
 
@@ -364,4 +374,4 @@ def test_the_server_is_started_without_its_own_access_log_or_server_header(monke
     calls = []
     monkeypatch.setattr(uvicorn, "run", lambda app, **kwargs: calls.append((app, kwargs)))
     launcher._serve("the-app", "127.0.0.1", 9999)
-    assert calls == [("the-app", {"host": "127.0.0.1", "port": 9999, "access_log": False, "server_header": False})]
+    assert calls == [("the-app", {"host": "127.0.0.1", "port": 9999, "access_log": False, "server_header": False, "proxy_headers": False})]

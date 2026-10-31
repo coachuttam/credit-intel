@@ -61,5 +61,9 @@ parse_memory_mb = 6144        # the worker's resident memory, polled by the pare
 max_concurrent_runs = 1       # runs at once
 max_queued_runs = 4           # runs waiting; one more is refused with 429
 run_timeout_seconds = 1200    # one run, checked at each state change and before each model call (cooperative, FR-016 criterion 10a)
-# host = "127.0.0.1"          # the default; any other address needs a token (SEC-15, step 3)
+# host = "127.0.0.1"          # the default; any other address needs a token AND behind_tls = true (SEC-15)
 # port = 8000                 # the default
+# behind_tls = false          # your statement that TLS ends in front of the service, or that the path to it is encrypted by a private network; the service cannot check it; it also turns on Strict-Transport-Security
+# loopback_only_publication = false  # your statement that the ONLY path to the service does not leave the machine (published on the host's loopback address only); its own condition, not TLS; the service cannot check it
+# public_hosts = []           # the names a browser reaches the service by, e.g. ["memos.example.com"]: the origins a POST may come from (empty: the request's own host)
+# trusted_proxies = []        # addresses or networks (never every address) whose X-Forwarded-For is believed, e.g. ["172.30.60.0/24"]; the lock-out then counts the real client

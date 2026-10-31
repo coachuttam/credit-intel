@@ -1,0 +1,56 @@
+# Adds a reverse proxy that ends TLS, for a service reached over the internet (PRD FR-018 criterion 11, OD-35 (a), OD-36).
+#
+#   docker compose -f compose.yaml -f compose.proxy.yaml up -d        (needs Docker Compose 2.24 or later, for `!reset`)
+#
+# The service is no longer published on the host: only the proxy is (ports 80 and 443), and it reaches the service over the compose network. The service is told that TLS
+# ends in front of it, which names it as the public name browsers use, and that the proxy's network is the one whose X-Forwarded-For it may believe.
+# Nothing here has a default for a value that matters; a missing one stops compose with a message. Read docs/RUNBOOK_container.md section 5b first.
+services:
+  credit-intel:
+    ports: !reset []
+    environment:
+      CREDIT_INTEL_API_BEHIND_TLS: "true"  # TLS ends at the proxy
+      CREDIT_INTEL_API_LOOPBACK_ONLY_PUBLICATION: "false"  # the base file said true; the service is now reached through the proxy, which the internet reaches
+      CREDIT_INTEL_API_PUBLIC_HOSTS: ${CREDIT_INTEL_PUBLIC_HOST:?set CREDIT_INTEL_PUBLIC_HOST to the name browsers use to reach the service (it must point at this host)}
+      CREDIT_INTEL_API_TRUSTED_PROXIES: ${CREDIT_INTEL_PROXY_SUBNET:?set CREDIT_INTEL_PROXY_SUBNET to the network of the proxy and the service (for example 172.30.60.0/24)}
+
+  proxy:
+    image: ${CREDIT_INTEL_PROXY_IMAGE:?set CREDIT_INTEL_PROXY_IMAGE to a Caddy image pinned by digest (name@sha256:...), see docs/RUNBOOK_container.md section 5b}
+    depends_on:
+      credit-intel:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CREDIT_INTEL_PUBLIC_HOST: ${CREDIT_INTEL_PUBLIC_HOST:?set CREDIT_INTEL_PUBLIC_HOST}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - proxy_data:/data
+      - proxy_config:/config
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${CREDIT_INTEL_PROXY_SUBNET:?set CREDIT_INTEL_PROXY_SUBNET}
+
+volumes:
+  proxy_data:
+  proxy_config:
