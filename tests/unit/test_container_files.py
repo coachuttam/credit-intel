@@ -602,3 +602,13 @@ def test_the_two_files_of_the_body_limit_check_straddle_the_proxy_limit_and_the_
     small, large = 105_000_000, 115_000_000
     assert service_limit < small and small + 1000 < proxy_limit < large  # the first reaches the service and is refused by it; the second is stopped by the proxy
     assert small <= service_limit + FIELD_ALLOWANCE  # and it is the streaming limit, not the early refusal from the header, that refuses it
+
+
+def test_the_runbook_command_for_the_test_image_lets_its_tmpfs_run_programs_and_the_product_tmpfs_does_not():
+    """First real run: Docker mounts ``--tmpfs`` noexec, so the tests' executable stand-ins under /tmp failed with PermissionError (56 tests, one cause)."""
+    runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
+    command = re.search(r"docker run --rm --read-only --tmpfs (\S+) --network none \\\n\s+credit-intel-test:", runbook)
+    assert command is not None
+    assert command.group(1).split(",")[1:].count("exec") == 1
+    assert "noexec" not in command.group(1)
+    assert "noexec" in re.search(r"tmpfs:\s*\n\s*-\s*(/tmp:\S+)", COMPOSE).group(1)

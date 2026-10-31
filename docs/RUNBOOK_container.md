@@ -132,9 +132,11 @@ There is one token, so rotation is a restart with a new value: **every client st
 
 ```
 deploy/build.sh test                                                       # credit-intel-test:<commit>
-docker run --rm --read-only --tmpfs /tmp:size=512m --network none \
+docker run --rm --read-only --tmpfs /tmp:size=512m,exec --network none \
   credit-intel-test:$CREDIT_INTEL_BUILD_COMMIT                             # the golden, reproducibility, service, API, parse-limit and OCR-engine tests
 ```
+
+`,exec` is needed **for the test image only**: Docker mounts a `--tmpfs` with `noexec` unless told otherwise, and the tests write small executable stand-ins for `tesseract` and the model engine under pytest's temporary folder in `/tmp`. Without it every such test fails with a `PermissionError` that the code (correctly) reports as `E-INPUT-OCR-UNAVAILABLE`: on the first run 56 tests failed this way, all from the one cause. The product container keeps `noexec` on its `/tmp` (`compose.yaml`) and does not need it: it runs the real `tesseract` from the image, not from `/tmp`.
 
 Expected: all pass (some tests that need Node are skipped). The image is not the product. Then, on the product image:
 
