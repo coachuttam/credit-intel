@@ -27,6 +27,10 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv-dev
 RUN uv sync --frozen --no-install-project --python /usr/local/bin/python
+# The tests start fresh interpreters (`-I`, `-m credit_intel.api`) that see no PYTHONPATH, and the project itself is not installed (--no-install-project):
+# a .pth file in the DEV environment only, as an editable install would leave, makes the package importable there. The product environment gets none.
+RUN /opt/venv-dev/bin/python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])" > /tmp/purelib \
+ && echo /app/src > "$(cat /tmp/purelib)/credit_intel_src.pth" && rm /tmp/purelib
 
 # ---- the product ------------------------------------------------------------------------------------------------------------------------------------
 FROM base AS runtime

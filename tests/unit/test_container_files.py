@@ -607,8 +607,19 @@ def test_the_two_files_of_the_body_limit_check_straddle_the_proxy_limit_and_the_
 def test_the_runbook_command_for_the_test_image_lets_its_tmpfs_run_programs_and_the_product_tmpfs_does_not():
     """First real run: Docker mounts ``--tmpfs`` noexec, so the tests' executable stand-ins under /tmp failed with PermissionError (56 tests, one cause)."""
     runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
-    command = re.search(r"docker run --rm --read-only --tmpfs (\S+) --network none \\\n\s+credit-intel-test:", runbook)
+    command = re.search(r"docker run --rm --init --read-only --tmpfs (\S+) --network none \\\n\s+credit-intel-test:", runbook)
     assert command is not None
     assert command.group(1).split(",")[1:].count("exec") == 1
     assert "noexec" not in command.group(1)
     assert "noexec" in re.search(r"tmpfs:\s*\n\s*-\s*(/tmp:\S+)", COMPOSE).group(1)
+
+
+def test_the_dev_environment_alone_can_import_the_package_from_a_fresh_interpreter():
+    """Second real run: 13 tests that start a fresh interpreter failed, because the project is synced with --no-install-project and ``PYTHONPATH`` does not reach ``python -I`` or a minimal child environment."""
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    pth = re.findall(r"credit_intel_src\.pth", dockerfile)
+    assert len(pth) == 1
+    builder = dockerfile.split("FROM base AS builder")[1].split("FROM base AS runtime")[0]
+    assert "/opt/venv-dev/bin/python" in builder and "echo /app/src" in builder
+    assert builder.index("UV_PROJECT_ENVIRONMENT=/opt/venv-dev") < builder.index("credit_intel_src.pth")
+    assert "credit_intel_src" not in dockerfile.split("FROM base AS runtime")[1]

@@ -132,11 +132,11 @@ There is one token, so rotation is a restart with a new value: **every client st
 
 ```
 deploy/build.sh test                                                       # credit-intel-test:<commit>
-docker run --rm --read-only --tmpfs /tmp:size=512m,exec --network none \
+docker run --rm --init --read-only --tmpfs /tmp:size=512m,exec --network none \
   credit-intel-test:$CREDIT_INTEL_BUILD_COMMIT                             # the golden, reproducibility, service, API, parse-limit and OCR-engine tests
 ```
 
-`,exec` is needed **for the test image only**: Docker mounts a `--tmpfs` with `noexec` unless told otherwise, and the tests write small executable stand-ins for `tesseract` and the model engine under pytest's temporary folder in `/tmp`. Without it every such test fails with a `PermissionError` that the code (correctly) reports as `E-INPUT-OCR-UNAVAILABLE`: on the first run 56 tests failed this way, all from the one cause. The product container keeps `noexec` on its `/tmp` (`compose.yaml`) and does not need it: it runs the real `tesseract` from the image, not from `/tmp`.
+`,exec` is needed **for the test image only**: Docker mounts a `--tmpfs` with `noexec` unless told otherwise, and the tests write small executable stand-ins for `tesseract` and the model engine under pytest's temporary folder in `/tmp`. Without it every such test fails with a `PermissionError` that the code (correctly) reports as `E-INPUT-OCR-UNAVAILABLE`: on the first run 56 tests failed this way, all from the one cause. `--init` is needed for the same reason as `init: true` in `compose.yaml`: a stopped engine's child is adopted by process 1, and unless process 1 reaps it, it stays as a zombie that still answers `kill -0` (one test, `test_a_stopped_engine_and_its_children_are_gone`, checks that). The package reaches the fresh interpreters the tests start through a `.pth` file in the test image's environment only (second run: 13 failures with `No module named 'credit_intel'` because the project is not installed in the image, only put on `PYTHONPATH`, which `-I` and the minimal child environment do not carry). The product container keeps `noexec` on its `/tmp` (`compose.yaml`) and does not need it: it runs the real `tesseract` from the image, not from `/tmp`.
 
 Expected: all pass (some tests that need Node are skipped). The image is not the product. Then, on the product image:
 
