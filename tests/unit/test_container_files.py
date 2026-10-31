@@ -614,12 +614,15 @@ def test_the_runbook_command_for_the_test_image_lets_its_tmpfs_run_programs_and_
     assert "noexec" in re.search(r"tmpfs:\s*\n\s*-\s*(/tmp:\S+)", COMPOSE).group(1)
 
 
-def test_the_dev_environment_alone_can_import_the_package_from_a_fresh_interpreter():
-    """Second real run: 13 tests that start a fresh interpreter failed, because the project is synced with --no-install-project and ``PYTHONPATH`` does not reach ``python -I`` or a minimal child environment."""
+def test_both_environments_can_import_the_package_from_an_isolated_interpreter_as_the_workers_start():
+    """Real runs in the image: the workers start as ``python -I`` (``PYTHONPATH`` is ignored) and the project is synced with --no-install-project, so each environment
+    needs a .pth file; with it in the dev environment only, the tests passed and every real document failed with E-INPUT-CORRUPT."""
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    pth = re.findall(r"credit_intel_src\.pth", dockerfile)
-    assert len(pth) == 1
+    assert dockerfile.count("credit_intel_src.pth") == 1
     builder = dockerfile.split("FROM base AS builder")[1].split("FROM base AS runtime")[0]
-    assert "/opt/venv-dev/bin/python" in builder and "echo /app/src" in builder
+    assert "for env in /opt/venv /opt/venv-dev" in builder and "echo /app/src" in builder
     assert builder.index("UV_PROJECT_ENVIRONMENT=/opt/venv-dev") < builder.index("credit_intel_src.pth")
-    assert "credit_intel_src" not in dockerfile.split("FROM base AS runtime")[1]
+    assert builder.index("uv sync --frozen --no-dev") < builder.index("credit_intel_src.pth")
+    assert "-I" in (ROOT / "src/credit_intel/ingestion/sandbox.py").read_text(encoding="utf-8")  # if the workers stop using -I, this reasoning needs revisiting
+    runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
+    assert "--entrypoint python credit-intel:$CREDIT_INTEL_BUILD_COMMIT -I -c" in runbook

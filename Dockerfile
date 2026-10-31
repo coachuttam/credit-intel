@@ -27,10 +27,14 @@ ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 RUN uv sync --frozen --no-dev --no-install-project --python /usr/local/bin/python
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv-dev
 RUN uv sync --frozen --no-install-project --python /usr/local/bin/python
-# The tests start fresh interpreters (`-I`, `-m credit_intel.api`) that see no PYTHONPATH, and the project itself is not installed (--no-install-project):
-# a .pth file in the DEV environment only, as an editable install would leave, makes the package importable there. The product environment gets none.
-RUN /opt/venv-dev/bin/python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])" > /tmp/purelib \
- && echo /app/src > "$(cat /tmp/purelib)/credit_intel_src.pth" && rm /tmp/purelib
+# The package is not installed by either sync (--no-install-project; OD-29 (a): the source tree at /app/src is the code, and prompts/ and config/ sit beside it).
+# Yet the parse worker, the page-render worker and the report worker are started as `python -I -m credit_intel...`, and -I ignores PYTHONPATH. Without a way to
+# find /app/src they cannot import the package: every document then fails with E-INPUT-CORRUPT. A .pth file in each environment, as an editable install would
+# leave, makes the package importable there, from any interpreter and whatever the environment variables (found on the first real-document run in the image).
+RUN for env in /opt/venv /opt/venv-dev; do \
+      "$env/bin/python" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])" > /tmp/purelib \
+      && echo /app/src > "$(cat /tmp/purelib)/credit_intel_src.pth" && rm /tmp/purelib; \
+    done
 
 # ---- the product ------------------------------------------------------------------------------------------------------------------------------------
 FROM base AS runtime
