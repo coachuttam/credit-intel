@@ -44,6 +44,8 @@ RUN case "${BUILD_COMMIT}" in [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0
 RUN apt-get update \
  && apt-get install --no-install-recommends -y tesseract-ocr tesseract-ocr-eng \
  && rm -rf /var/lib/apt/lists/*
+# pip is a build tool: nothing in the product installs anything, and the base image's pip carries advisories of its own (trivy, 2026-11-01). Removed, not bumped.
+RUN python -m pip uninstall -y pip
 RUN groupadd --system --gid 10001 app \
  && useradd --system --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin app \
  && mkdir -p /data/runs /data/cache /config \

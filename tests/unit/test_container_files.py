@@ -626,3 +626,12 @@ def test_both_environments_can_import_the_package_from_an_isolated_interpreter_a
     assert "-I" in (ROOT / "src/credit_intel/ingestion/sandbox.py").read_text(encoding="utf-8")  # if the workers stop using -I, this reasoning needs revisiting
     runbook = (ROOT / "docs" / "RUNBOOK_container.md").read_text(encoding="utf-8")
     assert "--entrypoint python credit-intel:$CREDIT_INTEL_BUILD_COMMIT -I -c" in runbook
+
+
+def test_the_product_image_has_no_pip():
+    """trivy found advisories in the base image's pip; the product never installs anything, so it is removed in the runtime stage (before the non-root user)."""
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    runtime = dockerfile.split("FROM base AS runtime")[1].split("FROM runtime AS test")[0]
+    assert "python -m pip uninstall -y pip" in runtime
+    assert runtime.index("python -m pip uninstall -y pip") < runtime.index("USER 10001:10001")
+    assert "pip install" not in runtime
