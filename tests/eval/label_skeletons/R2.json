@@ -2,6 +2,15 @@
   "document_id": "R2",
   "sha256": "dfc1ed6c9bcd879a3cfedc06b8f6123d1d7caaf81340f7a437afe395f9b00ea6",
   "basis": null,
+  "features": {
+    "statements_layout": null,
+    "title_names_basis": null,
+    "period_header": null,
+    "scale_declared_in": null,
+    "notes_column": null,
+    "comparative_first": null,
+    "reporting_framework": null
+  },
   "entries": [
     {
       "field": "revenue",
@@ -10,7 +19,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "revenue",
@@ -19,7 +29,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "net_profit",
@@ -28,7 +39,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "net_profit",
@@ -37,7 +49,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "operating_profit",
@@ -46,7 +59,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "operating_profit",
@@ -55,7 +69,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "profit_before_tax",
@@ -64,7 +79,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "profit_before_tax",
@@ -73,7 +89,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "interest_expense",
@@ -82,7 +99,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "interest_expense",
@@ -91,7 +109,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "current_assets",
@@ -100,7 +119,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "current_assets",
@@ -109,7 +129,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "current_liabilities",
@@ -118,7 +139,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "current_liabilities",
@@ -127,7 +149,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "total_borrowings",
@@ -136,7 +159,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "total_borrowings",
@@ -145,7 +169,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "borrowings_non_current",
@@ -154,7 +179,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "borrowings_non_current",
@@ -163,7 +189,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "borrowings_current",
@@ -172,7 +199,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "borrowings_current",
@@ -181,7 +209,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "current_maturities_long_term_borrowings",
@@ -190,7 +219,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "current_maturities_long_term_borrowings",
@@ -199,7 +229,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "total_equity",
@@ -208,7 +239,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     },
     {
       "field": "total_equity",
@@ -217,7 +249,8 @@
       "printed": null,
       "scale": null,
       "currency": null,
-      "page": null
+      "page": null,
+      "row_label": null
     }
   ]
 }

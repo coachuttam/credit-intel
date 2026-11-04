@@ -31,6 +31,10 @@ What is counted (the denominators are the owner's labels, never the pipeline's o
 * **SC-05** over ``extracted`` source records whose value matched: the cited page is one of the labelled pages. A value that
   differs has no ground-truth page, so it is not scored here. A derived total has no cited page and is left out.
 * Counts of each ``requires_review`` reason and of each status over the run's records.
+* **Diagnosis aids (Phase 7c; optional in the labels).** ``row_label`` on a present entry (the label as printed): the scorer reports, as
+  counts, whether it is a configured phrase for the field (``on_list``, ``off_list``, ``section_dependent``) and how that crosses with the
+  outcome, and never repeats the label. ``features`` (``FEATURES``: layout tags from a closed list): the aggregate groups SC-01 and SC-03
+  counts by tag.
 
 Output is counts, field names, period roles and reason codes. It holds no value, quote or label. The replay reads the model's
 reply from the response cache (nothing is sent); a cache miss is a failed replay, not a score. A held-out document, or one
@@ -56,10 +60,11 @@ from decimal import Decimal
 from pathlib import Path
 
 from credit_intel.calculations.borrowings import total_borrowings_for
-from credit_intel.config import DEFAULT_SETTINGS_PATH, ENV_TOKEN_CEILING, LLMSettings, load_llm_settings
+from credit_intel.config import DEFAULT_SETTINGS_PATH, ENV_TOKEN_CEILING, LabelSettings, LLMSettings, load_llm_settings
 from credit_intel.evaluation.gate import GateReferenceError, _amount, _NoCallProvider, _not_presented, _page
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, check_may_send, file_sha256, load_current_sets, refuse_if_held_out
 from credit_intel.extraction.field_set import FieldSet
+from credit_intel.extraction.labels import check_label
 from credit_intel.extraction.pipeline import run_extraction
 from credit_intel.extraction.prompt import DEFAULT_PROMPT, Prompt, load_prompt
 from credit_intel.ingestion.errors import IngestionError
@@ -71,11 +76,25 @@ SCORED_FIELDS = tuple(name for name in FieldName if name is not FieldName.EBIT) 
 ROLES = (PeriodRole.CURRENT, PeriodRole.COMPARATIVE)
 MAX_BYTES = 64 * 1024
 REQUIRED_KEYS = ("document_id", "sha256", "basis", "entries")
-OPTIONAL_KEYS = ("pages", "assert_basis")
-ENTRY_KEYS = {"field", "period", "period_end", "printed", "scale", "currency", "page", "pages", "parts", "absent"}
+OPTIONAL_KEYS = ("pages", "assert_basis", "features")
+ENTRY_KEYS = {"field", "period", "period_end", "printed", "scale", "currency", "page", "pages", "parts", "absent", "row_label"}
 PART_KEYS = {"printed", "scale", "page"}
 SHA = re.compile(r"[0-9a-f]{64}")
 CURRENCY = re.compile(r"[A-Z]{3}")
+
+
+# The layout tags a labels file may carry (Phase 7c, S-2). A closed vocabulary, so that counts can be grouped by it and so that
+# a tag cannot carry a name. Every key is optional; each value is one of the words listed (or true/false where the list is empty).
+FEATURES: dict[str, tuple[str, ...]] = {
+    "statements_layout": ("single_page", "split_pages"),  # the income statement and the balance sheet on one page, or on separate pages
+    "title_names_basis": (),
+    "period_header": ("year_ended_date", "fiscal_year_range", "two_year_columns", "other"),
+    "scale_declared_in": ("heading", "column_header", "note", "none"),
+    "notes_column": (),
+    "comparative_first": (),
+    "reporting_framework": ("ifrs", "us_gaap", "ind_as", "other"),
+}
+MAX_ROW_LABEL = 160
 
 
 class LabelsError(Exception):
@@ -92,6 +111,7 @@ class Label:
     currency: str | None = None
     scale: str | None = None  # the scale printed on the page; ``None`` for a total built from parts
     pages: tuple[int, ...] = ()
+    row_label: str | None = None  # the row's label as printed (optional, S-3); never repeated in any output
 
 
 @dataclass(frozen=True)
@@ -102,6 +122,30 @@ class Labels:
     entries: tuple[Label, ...]
     pages: str | None = None
     assert_basis: StatementBasis | None = None
+    features: tuple[tuple[str, str | bool], ...] = ()
+
+
+def _features(raw: object) -> tuple[tuple[str, str | bool], ...]:
+    if not isinstance(raw, dict):
+        raise LabelsError("features must be an object")
+    out = []
+    for key, value in raw.items():
+        if key not in FEATURES:
+            raise LabelsError(f"features: unknown tag {key!r}; the tags are {', '.join(FEATURES)}")
+        words = FEATURES[key]
+        if words and value not in words or not words and not isinstance(value, bool):
+            raise LabelsError(f"features: {key} must be " + (f"one of {', '.join(words)}" if words else "true or false"))
+        out.append((key, value))
+    return tuple(sorted(out))
+
+
+def _row_label(raw: dict, where: str) -> str | None:
+    if "row_label" not in raw:
+        return None
+    text = raw["row_label"]
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_ROW_LABEL or any(ord(c) < 32 for c in text):
+        raise LabelsError(f"{where}: row_label must be the printed label on one line, 1 to {MAX_ROW_LABEL} characters")
+    return text
 
 
 def _pages_of(raw: dict, where: str) -> tuple[int, ...]:
@@ -148,8 +192,8 @@ def _label(raw: object, index: int) -> Label:
     if not isinstance(currency, str) or not CURRENCY.fullmatch(currency):
         raise LabelsError(f"{where}: currency must be three capital letters")
     if "parts" in raw:
-        if field is not FieldName.TOTAL_BORROWINGS or any(k in raw for k in ("printed", "scale", "page", "pages")):
-            raise LabelsError(f"{where}: parts are for total_borrowings only and replace printed, scale and page")
+        if field is not FieldName.TOTAL_BORROWINGS or any(k in raw for k in ("printed", "scale", "page", "pages", "row_label")):
+            raise LabelsError(f"{where}: parts are for total_borrowings only and replace printed, scale, page and row_label")
         parts = raw["parts"]
         if not isinstance(parts, list) or len(parts) < 2:
             raise LabelsError(f"{where}: parts must list at least two components")
@@ -160,7 +204,7 @@ def _label(raw: object, index: int) -> Label:
         pages = tuple(sorted({_checked(_page, part, f"{where}, part {n}") for n, part in enumerate(parts, 1)}))
         return Label(field, role, False, period_end, sum(amounts, Decimal(0)), currency, None, pages)
     amount = _checked(_amount, raw, where)
-    return Label(field, role, False, period_end, amount, currency, raw["scale"], _pages_of(raw, where))
+    return Label(field, role, False, period_end, amount, currency, raw["scale"], _pages_of(raw, where), _row_label(raw, where))
 
 
 def load_labels(path: Path) -> Labels:
@@ -211,7 +255,8 @@ def load_labels(path: Path) -> Labels:
         ends = {e.period_end for e in entries if e.role is role and not e.absent}
         if len(ends) > 1:
             raise LabelsError(f"the {role.value} entries do not share one period_end")
-    return Labels(document_id, sha256, StatementBasis(basis), entries, pages, StatementBasis(asserted) if asserted else None)
+    features = _features(data["features"]) if "features" in data else ()
+    return Labels(document_id, sha256, StatementBasis(basis), entries, pages, StatementBasis(asserted) if asserted else None, features)
 
 
 def skeleton(document_id: str, sha256: str) -> dict:
@@ -220,13 +265,15 @@ def skeleton(document_id: str, sha256: str) -> dict:
     To fill it, set ``basis`` (and add ``pages`` and ``assert_basis`` if the live run used them), then for each entry either give
     ``period_end``, ``printed``, ``scale``, ``currency`` and ``page`` or replace the entry with ``{"field": ..., "period": ..., "absent": true}``.
     A ``total_borrowings`` entry may instead carry ``currency``, ``period_end`` and ``parts`` (see the module docstring).
+    ``row_label`` (the label as printed, optional) and ``features`` (layout tags from ``FEATURES``, each optional; delete the tags that do
+    not apply) serve the diagnosis of Phase 7c; the skeleton asks for both, and a skeleton is refused until they are filled in or removed.
     """
     entries = [
-        {"field": name.value, "period": role.value, "period_end": None, "printed": None, "scale": None, "currency": None, "page": None}
+        {"field": name.value, "period": role.value, "period_end": None, "printed": None, "scale": None, "currency": None, "page": None, "row_label": None}
         for name in SCORED_FIELDS
         for role in ROLES
     ]
-    return {"document_id": document_id, "sha256": sha256, "basis": None, "entries": entries}
+    return {"document_id": document_id, "sha256": sha256, "basis": None, "features": dict.fromkeys(FEATURES), "entries": entries}
 
 
 def _record(field_set: FieldSet, label: Label) -> ExtractedField | None:
@@ -276,6 +323,20 @@ def _absent(field_set: FieldSet, label: Label, record: ExtractedField | None) ->
     return out
 
 
+def _label_on_list(label: Label) -> str | None:
+    """Whether the printed row label is a configured phrase for the field (FR-005.10): ``on_list``, ``off_list`` or ``section_dependent``
+    (a phrase accepted only under a section heading, which a label alone cannot settle). ``None`` when no row label was given. A boolean
+    class only: the label itself is never put in a report."""
+    if label.absent or label.row_label is None:
+        return None
+    settings = LabelSettings()
+    field = label.field.value
+    check = check_label(field, f"{label.row_label} 1", settings=settings)
+    if check.matched_phrase is None:
+        return "off_list"
+    return "on_list" if check.ok else "section_dependent"
+
+
 def score_document(labels: Labels, field_set: FieldSet) -> dict:
     """Counts only (pure). The field set must be of the labels' basis; a record of another basis is never used."""
     if field_set.configured_basis is not labels.basis:
@@ -284,7 +345,8 @@ def score_document(labels: Labels, field_set: FieldSet) -> dict:
     for label in labels.entries:
         record = _record(field_set, label)
         scored = _absent(field_set, label, record) if label.absent else _present(label, record)
-        entries.append({"field": label.field.value, "period": label.role.value, "labelled": "absent" if label.absent else "present", **scored})
+        entries.append({"field": label.field.value, "period": label.role.value, "labelled": "absent" if label.absent else "present",
+                        "label_on_list": _label_on_list(label), **scored})  # fmt: skip
     present = [e for e in entries if e["labelled"] == "present"]
     absent = [e for e in entries if e["labelled"] == "absent"]
     extracted_source = [r for r in field_set.fields if r.status is Status.EXTRACTED and r.origin is Origin.SOURCE]
@@ -300,10 +362,14 @@ def score_document(labels: Labels, field_set: FieldSet) -> dict:
         "sc05": {"page_agrees": sum(bool(e["page_agrees"]) for e in paged), "of": len(paged)},
     }
     records = field_set.fields
+    given = [e for e in present if e["label_on_list"] is not None]
     return {
         "document_id": labels.document_id,
+        "features": dict(labels.features),
         "entries": entries,
         "counts": counts,
+        "label_list": dict(sorted(Counter(e["label_on_list"] for e in given).items())),
+        "label_list_by_outcome": dict(sorted(Counter(f"{e['outcome']}/{e['label_on_list']}" for e in given).items())),
         "statuses": field_set.counts,
         "reasons": dict(sorted(Counter(r.status_reason.value for r in records if r.status_reason).items())),
     }
@@ -315,7 +381,18 @@ def aggregate(reports: Sequence[dict]) -> dict:
     total: dict = {"sc01": {"match": 0, "of": 0}, "sc02": {"extracted_for_absent": 0, "value_differs": 0},
                    "sc03": {"correct": 0, "undecided": 0, "of": 0}, "sc04": {"passed": 0, "of": 0}, "sc05": {"page_agrees": 0, "of": 0}}  # fmt: skip
     reasons: Counter = Counter()
+    label_list: Counter = Counter()
+    by_outcome: Counter = Counter()
+    by_feature: dict[str, dict] = {}
     for report in done:
+        label_list.update(report.get("label_list", {}))
+        by_outcome.update(report.get("label_list_by_outcome", {}))
+        for tag, value in report.get("features", {}).items():
+            group = by_feature.setdefault(f"{tag}={str(value).lower()}", {"documents": [], "sc01": {"match": 0, "of": 0}, "sc03": {"correct": 0, "of": 0}})
+            group["documents"].append(report["document_id"])
+            for measure in ("sc01", "sc03"):
+                for key in group[measure]:
+                    group[measure][key] += report["counts"][measure][key]
         for measure, values in report["counts"].items():
             for key, number in values.items():
                 total[measure][key] += number
@@ -332,6 +409,9 @@ def aggregate(reports: Sequence[dict]) -> dict:
             "sc05": f"{total['sc05']['page_agrees']}/{total['sc05']['of']}",
         },
         "reasons": dict(sorted(reasons.items())),
+        "label_list": dict(sorted(label_list.items())),
+        "label_list_by_outcome": dict(sorted(by_outcome.items())),
+        "by_feature": dict(sorted(by_feature.items())),
     }
 
 

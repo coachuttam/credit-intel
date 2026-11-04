@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from calc_records import CUR, D24, D25, conflicting, rec
-from credit_intel.evaluation.score import LabelsError, aggregate, load_labels, score_document, skeleton
+from credit_intel.evaluation.score import FEATURES, LabelsError, aggregate, load_labels, score_document, skeleton
 from credit_intel.extraction.field_set import FieldSet
 from credit_intel.models import FieldName as F, PeriodRole, Scale, StatementBasis as Basis, Status, StatusReason as R
 
@@ -415,7 +415,9 @@ def test_a_skeleton_filled_in_each_of_the_two_ways_is_accepted(tmp_path):
             entry.clear()
             entry.update({"field": SCORED[number // 2].value, "period": "comparative", "absent": True})
         else:
+            entry.pop("row_label")
             entry.update(period_end=END[entry["period"]], printed="1", scale="units", currency="INR", page=3)
+    data.pop("features")
 
     assert sum(e.absent for e in load_labels(write(tmp_path, data)).entries) == 12
 
@@ -450,3 +452,115 @@ def test_a_skeleton_is_offered_for_a_tuning_document_only(tmp_path, capsys):
     for refused in ("H1", "R9"):
         assert main(["--skeleton", refused, "--assignments", str(record)]) == 2
         assert capsys.readouterr().out == ""
+
+
+# --- features and row labels (Phase 7c, S-2 and S-3) ---------------------------------------------------------------------------------------------
+
+
+def with_options(**options):
+    data = full()
+    data.update({k: v for k, v in options.items() if k == "features"})
+    return data
+
+
+def with_row_labels(labels):
+    """``full()`` with the given printed row label on the given (field, period) entries."""
+    data = full()
+    for entry in data["entries"]:
+        key = (F(entry["field"]), entry["period"])
+        if key in labels:
+            entry["row_label"] = labels[key]
+    return data
+
+
+def test_the_skeleton_asks_for_features_and_row_labels_and_the_tags_are_a_closed_list():
+    data = skeleton("R1", SHA)
+
+    assert list(data["features"]) == list(FEATURES) and all(v is None for v in data["features"].values())
+    assert all("row_label" in e and e["row_label"] is None for e in data["entries"])
+
+
+def test_features_are_read_and_sorted(tmp_path):
+    labels = load_labels(write(tmp_path, with_options(features={"title_names_basis": False, "period_header": "two_year_columns", "reporting_framework": "us_gaap"})))
+
+    assert labels.features == (("period_header", "two_year_columns"), ("reporting_framework", "us_gaap"), ("title_names_basis", False))
+
+
+@pytest.mark.parametrize(
+    ("features", "fragment"),
+    [
+        ({"company": "Acme"}, "unknown tag"),
+        ({"period_header": "monthly"}, "period_header must be one of"),
+        ({"title_names_basis": "yes"}, "title_names_basis must be true or false"),
+        ({"notes_column": 1}, "notes_column must be true or false"),
+        ({"statements_layout": None}, "statements_layout must be one of"),
+        (["single_page"], "features must be an object"),
+    ],
+)
+def test_a_feature_outside_the_closed_list_is_refused_and_the_message_holds_no_value(tmp_path, features, fragment):
+    with pytest.raises(LabelsError, match=fragment) as caught:
+        load_labels(write(tmp_path, with_options(features=features)))
+
+    assert "Acme" not in str(caught.value) and "monthly" not in str(caught.value)
+
+
+@pytest.mark.parametrize("bad", ["", "   ", "a" * 161, "two\nlines", 5, None])
+def test_a_row_label_must_be_one_printed_line(tmp_path, bad):
+    with pytest.raises(LabelsError, match="row_label must be"):
+        load_labels(write(tmp_path, with_row_labels({(F.REVENUE, "current"): bad})))
+
+
+def test_a_row_label_is_refused_on_an_absent_entry_and_on_parts(tmp_path):
+    data = full({(F.REVENUE, "current"): {**absent(F.REVENUE, "current"), "row_label": "Revenue"}})
+    with pytest.raises(LabelsError, match="absent must be true"):
+        load_labels(write(tmp_path, data))
+    parts = {"field": "total_borrowings", "period": "current", "period_end": END["current"], "currency": "INR", "row_label": "Debt",
+             "parts": [{"printed": "4", "scale": "units", "page": 5}, {"printed": "6", "scale": "units", "page": 5}]}  # fmt: skip
+    with pytest.raises(LabelsError, match="replace printed, scale, page and row_label"):
+        load_labels(write(tmp_path, full({(F.TOTAL_BORROWINGS, "current"): parts})))
+
+
+def test_each_row_label_is_classed_against_the_configured_phrases_and_never_repeated(tmp_path):
+    names = {
+        (F.REVENUE, "current"): "Revenue from operations",  # on the list
+        (F.NET_PROFIT, "current"): "Profit after taxation attributable to owners",  # off the list
+        (F.BORROWINGS_CURRENT, "current"): "Borrowings",  # accepted only under a section heading
+        (F.PROFIT_BEFORE_TAX, "current"): "  II. Income before income taxes  ",  # markers and case are normalised as the check does
+    }
+    report = score_document(load_labels(write(tmp_path, with_row_labels(names))), field_set())
+
+    classes = {(e["field"], e["period"]): e["label_on_list"] for e in report["entries"]}
+    assert classes[("revenue", "current")] == "on_list" and classes[("net_profit", "current")] == "off_list"
+    assert classes[("borrowings_current", "current")] == "section_dependent" and classes[("profit_before_tax", "current")] == "on_list"
+    assert classes[("revenue", "comparative")] is None
+    assert report["label_list"] == {"off_list": 1, "on_list": 2, "section_dependent": 1}
+    assert report["label_list_by_outcome"] == {"match/off_list": 1, "match/on_list": 2, "match/section_dependent": 1}
+    text = json.dumps(report)
+    for forbidden in ("Revenue from operations", "taxation", "Borrowings", "Income before"):
+        assert forbidden not in text
+
+
+def test_a_total_that_is_a_plain_synonym_is_off_the_list(tmp_path):
+    report = score_document(load_labels(write(tmp_path, with_row_labels({(F.TOTAL_EQUITY, "current"): "Shareholders funds"}))), field_set())
+
+    assert next(e for e in report["entries"] if e["field"] == "total_equity" and e["period"] == "current")["label_on_list"] == "off_list"
+
+
+def test_a_miss_with_an_off_list_label_is_counted_in_its_own_cell(tmp_path):
+    data = with_row_labels({(F.REVENUE, "current"): "Turnover figure", (F.NET_PROFIT, "current"): "Net income"})
+    report = score_document(load_labels(write(tmp_path, data)), field_set(replace={(F.REVENUE, CUR): rec(F.REVENUE, status=Status.REQUIRES_REVIEW, reason=R.LABEL_NOT_RECOGNISED)}))
+
+    assert report["label_list_by_outcome"] == {"match/on_list": 1, "missing/off_list": 1}
+
+
+def test_the_aggregate_groups_sc01_and_sc03_by_feature_and_sums_the_label_classes(tmp_path):
+    one_data = {**with_row_labels({(F.REVENUE, "current"): "Revenue"}), "features": {"title_names_basis": True, "period_header": "two_year_columns"}}
+    one_data["entries"] = [absent(F.OPERATING_PROFIT, "current") if (e["field"], e["period"]) == ("operating_profit", "current") else e for e in one_data["entries"]]
+    one = score_document(load_labels(write(tmp_path, one_data)), field_set(replace={(F.OPERATING_PROFIT, CUR): rec(F.OPERATING_PROFIT, status=Status.NOT_FOUND)}))
+    two_data = {**with_row_labels({(F.REVENUE, "current"): "Sales"}), "features": {"title_names_basis": False, "period_header": "two_year_columns"}, "document_id": "R2"}
+    two = score_document(load_labels(write(tmp_path, two_data, "b.json")), field_set(replace={(F.REVENUE, CUR): r(F.REVENUE, "11")}))
+    total = aggregate([{"replayed": True, **one}, {"replayed": True, **two}])
+
+    assert total["by_feature"]["period_header=two_year_columns"] == {"documents": ["R1", "R2"], "sc01": {"match": 46, "of": 47}, "sc03": {"correct": 1, "of": 1}}
+    assert total["by_feature"]["title_names_basis=true"]["sc01"] == {"match": 23, "of": 23} and total["by_feature"]["title_names_basis=true"]["sc03"] == {"correct": 1, "of": 1} and total["by_feature"]["title_names_basis=false"]["sc01"] == {"match": 23, "of": 24}
+    assert total["label_list"] == {"off_list": 1, "on_list": 1} and total["label_list_by_outcome"] == {"match/on_list": 1, "mismatch/off_list": 1}
