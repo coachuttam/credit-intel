@@ -1,4 +1,4 @@
-# PRD v0.4.72 — draft for the owner's approval (the setup check on an unused held-out document; not applied)
+# PRD v0.4.72 — draft (the setup check on an unused held-out document); approved by the owner on 2026-11-05 and applied to `docs/PRD.md` as written, with 'the closure of the used documents' in place of 'the closure of H1 to H6' in the revision row
 
 Nothing below is applied to `docs/PRD.md`. It records the owner's decision of 2026-11-05 (reasoning in `docs/PHASE7c_diagnosis_plan.md` section 8) and brings the O.2 sentence that lists the tools which refuse a held-out document into line with the code. On your word I apply it as written, run the suite and commit. It changes no requirement of the product and no setting.
 
