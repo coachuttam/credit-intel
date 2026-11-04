@@ -1,0 +1,79 @@
+{"list":"locator.title.income_statement","phrase":"statement of profit and loss","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.income_statement","phrase":"statement of profit or loss","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.income_statement","phrase":"profit and loss statement","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.income_statement","phrase":"income statement","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.income_statement","phrase":"statement of comprehensive income","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.income_statement","phrase":"income statements","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.title.balance_sheet","phrase":"balance sheet","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.balance_sheet","phrase":"statement of financial position","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.title.balance_sheet","phrase":"balance sheets","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.income_statement","phrase":"revenue from operations","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"total income","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"total expenses","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"finance costs","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"profit before tax","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"tax expense","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"profit for the year","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.income_statement","phrase":"finance cost","origin":"tuning_added","documents":["R1"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.income_statement","phrase":"total revenue","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.income_statement","phrase":"operating income","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.income_statement","phrase":"income before income taxes","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.income_statement","phrase":"net income","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.balance_sheet","phrase":"total non-current assets","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total current assets","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total assets","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total equity","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total non-current liabilities","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total current liabilities","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total equity and liabilities","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.line_item.balance_sheet","phrase":"total liabilities","origin":"unverified","documents":[],"date":null,"record":"PROGRESS.md AC-E-7: no supporting row in either log"}
+{"list":"locator.line_item.balance_sheet","phrase":"total stockholders' equity","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.balance_sheet","phrase":"total liabilities and stockholders' equity","origin":"unverified","documents":[],"date":null,"record":"PROGRESS.md AC-E-7: no supporting row in either log"}
+{"list":"locator.line_item.balance_sheet","phrase":"long-term debt","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.line_item.balance_sheet","phrase":"short-term debt","origin":"tuning_added","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.title_prefix","phrase":"consolidated","origin":"tuning_added","documents":["R1"],"date":null,"record":"PROGRESS.md AC-E-7"}
+{"list":"locator.title_prefix","phrase":"standalone","origin":"tuning_added_unverified","documents":["R1"],"date":null,"record":"PROGRESS.md AC-E-7: the log does not support it as an observed title prefix; also a configured basis phrase"}
+{"list":"locator.title_prefix","phrase":"separate","origin":"unverified","documents":[],"date":null,"record":"PROGRESS.md AC-E-7: no tuning-source record"}
+{"list":"locator.prefix_connector","phrase":"and","origin":"rule_defined","documents":[],"date":null,"record":"PRD LOC-4; PROGRESS.md AC-E-7"}
+{"list":"locator.prefix_connector","phrase":"&","origin":"rule_defined","documents":[],"date":null,"record":"PRD LOC-4; PROGRESS.md AC-E-7"}
+{"list":"locator.other_statement_title","phrase":"comprehensive income statements","origin":"tuning_added_unverified","documents":["R2"],"date":null,"record":"PROGRESS.md AC-E-7: PRD-derived (R2 p37), not among the inspected pages"}
+{"list":"locator.basis.consolidated","phrase":"consolidated","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.basis.standalone","phrase":"standalone","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"locator.basis.standalone","phrase":"separate","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.revenue","phrase":"revenue from operations","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.revenue","phrase":"revenue","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.revenue","phrase":"turnover","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.revenue","phrase":"total revenue","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.net_profit","phrase":"profit/(loss) for the year","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.net_profit","phrase":"profit for the year","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.net_profit","phrase":"profit/(loss) for the period","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.net_profit","phrase":"profit for the period","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.net_profit","phrase":"net income","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.operating_profit","phrase":"operating profit","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.operating_profit","phrase":"ebit","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.operating_profit","phrase":"operating income","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.profit_before_tax","phrase":"profit/(loss) before tax","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.profit_before_tax","phrase":"profit before tax","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.profit_before_tax","phrase":"income before income taxes","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.interest_expense","phrase":"finance costs","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.interest_expense","phrase":"finance cost","origin":"tuning_added","documents":["R1"],"date":"2026-10-22","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.interest_expense","phrase":"interest expense","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.current_assets","phrase":"total current assets","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.current_liabilities","phrase":"total current liabilities","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.total_borrowings","phrase":"total borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.borrowings_non_current","phrase":"non-current borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.borrowings_non_current","phrase":"long-term debt","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.borrowings_non_current.sectioned","phrase":"borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.borrowings_current","phrase":"current borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.borrowings_current","phrase":"short-term debt","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.borrowings_current.sectioned","phrase":"borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.current_maturities_long_term_borrowings","phrase":"current maturities of long-term borrowings","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.current_maturities_long_term_borrowings","phrase":"current maturities of long-term debt","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.current_maturities_long_term_borrowings","phrase":"current portion of long-term debt","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"label.total_equity","phrase":"total equity","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"label.total_equity","phrase":"total stockholders' equity","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment; PROGRESS.md AC-E-7"}
+{"list":"borrowings.inclusion","phrase":"including current maturities","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"borrowings.inclusion","phrase":"including current portion","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment"}
+{"list":"borrowings.exclusion","phrase":"excluding current maturities","origin":"prd_initial","documents":[],"date":null,"record":"PRD initial table"}
+{"list":"borrowings.exclusion","phrase":"current portion of long-term debt","origin":"tuning_added","documents":["R2"],"date":"2026-10-25","record":"config.py comment"}
