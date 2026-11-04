@@ -14,9 +14,11 @@ It prints no page text, value, label or path.
     uv run --locked python -m credit_intel.evaluation.setupcheck --labels <pdf> <labels.json> [--labels ...]
     uv run --locked python -m credit_intel.evaluation.setupcheck --gate-reference <pdf> <reference.json> [--gate-reference ...]
 
-It works on tuning documents only, like every other tool but the held-out run. Whether it may also be run on a held-out document that no
-round has used, before its one shot, is a decision for the owner (it would be a setup check, not an inspection of output, but PRD O.2 does
-not say so); until then it refuses a held-out document, and a held-out document that a round has used stays closed.
+It works on a tuning document, and on a held-out document that no round has used, before its one shot (the owner's decision of 2026-11-05,
+recorded in ``docs/PHASE7c_diagnosis_plan.md`` section 8). It never calls the model and prints no gate field value, only booleans and counts:
+it tests what the person who wrote the reference wrote, so that a setup error (a wrong page, a range that leaves out a page, a page the
+basis gate drops) is found before the one shot is spent on it. A held-out document that a round has used, in the ledger, stays closed, and
+so does a document that is not on the assignment record.
 """
 
 import argparse
@@ -31,7 +33,8 @@ from pathlib import Path
 from credit_intel.config import ENV_TOKEN_CEILING, LLMSettings, load_llm_settings
 from credit_intel.evaluation.dry_run import dry_run
 from credit_intel.evaluation.gate import GateReferenceError, load_reference
-from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, check_may_send, file_sha256, refuse_if_held_out
+from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, file_sha256, load_current_sets
+from credit_intel.evaluation.heldout import LEDGER_PATH, HeldOutRefused, load_ledger
 from credit_intel.evaluation.score import LabelsError, load_labels
 from credit_intel.extraction.normalise import parse_value
 from credit_intel.ingestion.errors import IngestionError
@@ -132,11 +135,24 @@ def _figure(printed: str) -> Decimal | None:
     return None
 
 
-def check_setup(setup: Setup, pdf: Path, llm: LLMSettings, assignments: Path = ASSIGNMENTS_PATH) -> dict:
-    """Booleans and counts for one document and its reference (a tuning document only)."""
+def _guard(sha256: str, assignments: Path, ledger: Path) -> tuple[str, str]:
+    """``(document id, set)`` of a document the check may read: a tuning document, or a held-out document no round has used. Fails closed."""
+    try:
+        known = load_current_sets(assignments).get(sha256) if assignments.exists() else None
+        used = {record["sha256"] for record in load_ledger(ledger)}
+    except (SendRefused, HeldOutRefused):
+        raise SendRefused("the assignment record or the ledger cannot be read") from None
+    if known is None:
+        raise SendRefused(f"the document ({sha256[:12]}) is not on the assignment record")
+    if known[1] == "held_out" and sha256 in used:
+        raise SendRefused(f"the document ({sha256[:12]}) is held out and a round has used it: it stays closed")
+    return known
+
+
+def check_setup(setup: Setup, pdf: Path, llm: LLMSettings, assignments: Path = ASSIGNMENTS_PATH, ledger: Path = LEDGER_PATH) -> dict:
+    """Booleans and counts for one document and its reference (a tuning document, or a held-out document no round has used)."""
     sha256 = file_sha256(pdf)
-    refuse_if_held_out(sha256, assignments)
-    document_id = check_may_send(sha256, assignments)  # tuning documents on the record only
+    document_id, kind = _guard(sha256, assignments, ledger)
     sha_ok = sha256 == setup.sha256 and document_id == setup.document_id
     if not sha_ok:
         raise SetupCheckError("the file was not written for this document")
@@ -159,12 +175,13 @@ def check_setup(setup: Setup, pdf: Path, llm: LLMSettings, assignments: Path = A
         if any(item.printed in p.text for p in pages):
             literal += 1
 
-    run = dry_run(pdf, llm, basis=setup.basis, page_range=setup.pages, assert_basis=setup.assert_basis, assignments=assignments)
+    run = dry_run(pdf, llm, basis=setup.basis, page_range=setup.pages, assert_basis=setup.assert_basis, assignments=assignments, allow_unused_held_out=kind == "held_out")
     candidates = set(run["candidate_pages"])
     gate = run["basis_gate"]
     all_candidates = bool(labelled) and set(labelled) <= candidates
     report = {
-        "set": "tuning",
+        "set": kind,
+        "pre_run_setup_check": kind == "held_out",
         "document_id": document_id,
         "sha256_matches": True,
         "values": len(figures),
@@ -192,6 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--labels", nargs=2, action="append", metavar=("PDF", "LABELS"), default=[])
     parser.add_argument("--gate-reference", nargs=2, action="append", metavar=("PDF", "REFERENCE"), default=[])
     parser.add_argument("--assignments", type=Path, default=ASSIGNMENTS_PATH, help=argparse.SUPPRESS)
+    parser.add_argument("--ledger", type=Path, default=LEDGER_PATH, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     if not args.labels and not args.gate_reference:
         parser.error("give --labels PDF LABELS or --gate-reference PDF REFERENCE")
@@ -199,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         setups = [(reader(Path(file)), Path(pdf)) for reader, pdf, file in jobs]  # the files first: a bad one is refused before anything is read
         llm = load_llm_settings(env={**os.environ, ENV_TOKEN_CEILING: os.environ.get(ENV_TOKEN_CEILING, "1")})  # no call is made
-        reports = [check_setup(setup, pdf, llm, args.assignments) for setup, pdf in setups]
+        reports = [check_setup(setup, pdf, llm, args.assignments, args.ledger) for setup, pdf in setups]
     except (SetupCheckError, SendRefused) as error:
         print(f"setupcheck: refused: {error}", file=sys.stderr)
         return 2

@@ -58,8 +58,17 @@ def records(tmp_path, pdf, group="tuning"):
     return path
 
 
-def check(tmp_path, pdf, llm, data, group="tuning"):
-    return check_setup(setup_from_gate_reference(write(tmp_path, data)), pdf, llm, records(tmp_path, pdf, group))
+def ledger(tmp_path, pdf=None):
+    """A held-out ledger (none yet, or with one used document), in a file of its own."""
+    from credit_intel.evaluation.heldout import LEDGER_MEMBERS
+
+    path = tmp_path / ("ledger.jsonl" if pdf is None else "ledger_used.jsonl")
+    path.write_text("" if pdf is None else "".join(json.dumps(dict(zip(LEDGER_MEMBERS, ("R9", file_sha256(pdf), "H-1", event, "2026-11-04T00:00:00Z", "c" * 40, "a" * 64), strict=True)), separators=(",", ":")) + "\n" for event in ("started", "completed")), encoding="utf-8")
+    return path
+
+
+def check(tmp_path, pdf, llm, data, group="tuning", used=False):
+    return check_setup(setup_from_gate_reference(write(tmp_path, data)), pdf, llm, records(tmp_path, pdf, group), ledger(tmp_path, pdf if used else None))
 
 
 # --- the parts ---------------------------------------------------------------------------------------------------------------------------
@@ -191,21 +200,76 @@ def test_a_labels_file_of_the_scorer_is_read_too(pdf, tmp_path, llm):
     from test_score_run import labels_data  # the scorer's own builder of a 24-entry file
 
     path = write(tmp_path, labels_data(pdf), "labels.json")
-    report = check_setup(setup_from_labels(path), pdf, llm, records(tmp_path, pdf))
+    report = check_setup(setup_from_labels(path), pdf, llm, records(tmp_path, pdf), ledger(tmp_path))
 
     assert report["values"] == 7 * 2 + 4 and report["ready"]
 
 
-def test_a_held_out_or_unrecorded_document_or_another_documents_file_is_refused(pdf, tmp_path, llm):
+def test_an_unrecorded_document_or_another_documents_file_is_refused(pdf, tmp_path, llm):
     data = reference_data(pdf)
-    with pytest.raises(SendRefused, match="held out"):
-        check(tmp_path, pdf, llm, data, group="held_out")
     empty = tmp_path / "empty.jsonl"
     empty.write_text("", encoding="utf-8")
     with pytest.raises(SendRefused, match="not on the assignment record"):
-        check_setup(setup_from_gate_reference(write(tmp_path, data)), pdf, llm, empty)
+        check_setup(setup_from_gate_reference(write(tmp_path, data)), pdf, llm, empty, ledger(tmp_path))
     with pytest.raises(SetupCheckError, match="not written for this document"):
         check(tmp_path, pdf, llm, {**data, "document_id": "R2"})
+
+
+# --- a held-out document that no round has used (the owner's decision of 2026-11-05) ----------------------------------------------------------------
+
+
+def test_an_unused_held_out_document_may_be_checked_before_its_one_shot_and_the_report_says_so(pdf, tmp_path, llm):
+    report = check(tmp_path, pdf, llm, reference_data(pdf), group="held_out")
+
+    assert report["set"] == "held_out" and report["pre_run_setup_check"] is True and report["ready"] is True
+    text = json.dumps(report)
+    for forbidden in ("352.70", "400.00", "Profit before tax", "statement.pdf", str(tmp_path)):
+        assert forbidden not in text
+
+
+def test_a_tuning_document_is_not_marked_as_a_pre_run_check(pdf, tmp_path, llm):
+    assert check(tmp_path, pdf, llm, reference_data(pdf))["pre_run_setup_check"] is False
+
+
+def test_a_held_out_document_that_a_round_has_used_stays_closed(pdf, tmp_path, llm):
+    with pytest.raises(SendRefused, match="a round has used it: it stays closed"):
+        check(tmp_path, pdf, llm, reference_data(pdf), group="held_out", used=True)
+
+
+def test_a_used_tuning_sha_in_the_ledger_does_not_close_a_tuning_document(pdf, tmp_path, llm):
+    assert check(tmp_path, pdf, llm, reference_data(pdf), used=True)["ready"] is True
+
+
+@pytest.mark.parametrize("damage", ["not json\n", '{"document_id":"R9"}\n', "\r\n", '{"a":1}'])
+def test_an_unreadable_ledger_refuses_everything(pdf, tmp_path, llm, damage):
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(damage, encoding="utf-8")
+    setup = setup_from_gate_reference(write(tmp_path, reference_data(pdf)))
+    for group in ("tuning", "held_out"):
+        with pytest.raises(SendRefused, match="cannot be read"):
+            check_setup(setup, pdf, llm, records(tmp_path, pdf, group), bad)
+
+
+@pytest.mark.parametrize("damage", ["not json\n", '{"document_id":"R9"}\n'])
+def test_an_unreadable_assignment_record_refuses_everything(pdf, tmp_path, llm, damage):
+    bad = tmp_path / "bad.jsonl"
+    bad.write_text(damage, encoding="utf-8")
+    with pytest.raises(SendRefused, match="cannot be read"):
+        check_setup(setup_from_gate_reference(write(tmp_path, reference_data(pdf))), pdf, llm, bad, ledger(tmp_path))
+
+
+def test_a_missing_assignment_record_means_the_document_is_not_on_it(pdf, tmp_path, llm):
+    with pytest.raises(SendRefused, match="not on the assignment record"):
+        check_setup(setup_from_gate_reference(write(tmp_path, reference_data(pdf))), pdf, llm, tmp_path / "none.jsonl", ledger(tmp_path))
+
+
+def test_the_dry_run_still_refuses_a_held_out_document_unless_the_setup_check_asks(pdf, tmp_path, llm):
+    from credit_intel.evaluation.dry_run import dry_run
+
+    held = records(tmp_path, pdf, "held_out")
+    with pytest.raises(SendRefused, match="held out"):
+        dry_run(pdf, llm, assignments=held)
+    assert dry_run(pdf, llm, assignments=held, allow_unused_held_out=True)["set"] == "held_out"
 
 
 def test_a_bad_file_is_refused_without_a_value(pdf, tmp_path):
@@ -225,14 +289,15 @@ def run_main(capsys, *argv):
 def test_the_command_exits_0_when_ready_1_when_not_and_2_on_a_refusal(pdf, tmp_path, capsys):
     good = write(tmp_path, reference_data(pdf), "good.json")
     bad = write(tmp_path, reference_data(pdf, printed={("profit_before_tax", "current"): "999.99"}), "bad.json")
-    record = records(tmp_path, pdf)
+    record, empty = records(tmp_path, pdf), ledger(tmp_path)
 
-    code0, out0, err0 = run_main(capsys, "--gate-reference", pdf, good, "--assignments", record)
-    code1, out1, _ = run_main(capsys, "--gate-reference", pdf, bad, "--assignments", record)
-    code2, out2, err2 = run_main(capsys, "--gate-reference", pdf, good, "--assignments", records(tmp_path, pdf, "held_out"))
+    code0, out0, err0 = run_main(capsys, "--gate-reference", pdf, good, "--assignments", record, "--ledger", empty)
+    code1, out1, _ = run_main(capsys, "--gate-reference", pdf, bad, "--assignments", record, "--ledger", empty)
+    code2, out2, err2 = run_main(capsys, "--gate-reference", pdf, good, "--assignments", records(tmp_path, pdf, "held_out"), "--ledger", ledger(tmp_path, pdf))
+    code3, out3, _ = run_main(capsys, "--gate-reference", pdf, good, "--assignments", records(tmp_path, pdf, "held_out"), "--ledger", empty)
 
-    assert (code0, code1, code2) == (0, 1, 2) and '"ready": true' in out0 and err0 == "" and '"ready": false' in out1
-    assert out2 == "" and "held out" in err2
+    assert (code0, code1, code2, code3) == (0, 1, 2, 0) and '"ready": true' in out0 and err0 == "" and '"ready": false' in out1
+    assert out2 == "" and "stays closed" in err2 and '"pre_run_setup_check": true' in out3
     for forbidden in ("352.70", "999.99", "Profit", str(tmp_path)):
         assert forbidden not in out0 + out1
 
@@ -255,7 +320,7 @@ def manual(pdf, items, **options):
 
 
 def run(tmp_path, pdf, llm, setup):
-    return check_setup(setup, pdf, llm, records(tmp_path, pdf))
+    return check_setup(setup, pdf, llm, records(tmp_path, pdf), ledger(tmp_path))
 
 
 def test_a_range_that_is_wider_than_the_labelled_pages_still_covers_them(tmp_path, llm):

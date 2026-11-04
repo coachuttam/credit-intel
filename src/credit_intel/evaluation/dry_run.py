@@ -42,6 +42,7 @@ def dry_run(
     assert_basis: str | None = None,
     jev: JevSettings | None = None,
     jev_all_pages: bool = False,
+    allow_unused_held_out: bool = False,
 ) -> dict:
     """Counts and estimates for one document. Raises ``IngestionError`` for an unreadable input.
 
@@ -50,11 +51,15 @@ def dry_run(
 
     ``assert_basis`` is the analyst's assertion for the pages of ``page_range`` (H.4.6, v0.4.24); it needs a page range. A page whose
     title names the other basis stops the gate here, as it would stop the run, and the result says which pages the assertion covers.
+
+    ``allow_unused_held_out`` skips the refusal of a held-out document; it is for the setup check alone (``setupcheck``, owner's decision
+    of 2026-11-05), which makes its own check that the document is held out and unused. The command line of this module never sets it.
     """
     if assert_basis is not None and page_range is None:
         raise ValueError("an assertion of the basis needs a page range")
     try:
-        refuse_if_held_out(file_sha256(path), assignments)  # before any page is read (PRD O.2)
+        if not allow_unused_held_out:  # only the setup check (S-4) sets this, and only after its own guard has shown the document is unused
+            refuse_if_held_out(file_sha256(path), assignments)  # before any page is read (PRD O.2)
     except OSError:
         pass  # an unreadable file is reported by ingest below, as a catalogued error
     document = ingest(path)  # validates the file and hashes it; an unreadable input is a catalogued error
