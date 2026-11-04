@@ -31,6 +31,10 @@ What is counted (the denominators are the owner's labels, never the pipeline's o
 * **SC-05** over ``extracted`` source records whose value matched: the cited page is one of the labelled pages. A value that
   differs has no ground-truth page, so it is not scored here. A derived total has no cited page and is left out.
 * Counts of each ``requires_review`` reason and of each status over the run's records.
+* **Stage attribution (Phase 7c, S-1).** For every labelled-present entry that is not a match, where it died: ``no_period_end`` (no validated
+  period end, so no record is made), ``unplaced``, ``other_basis``, ``refused`` (with the record's reason), ``not_proposed`` (the model returned
+  nothing), ``dropped``, ``derived`` (a total of borrowings built from components, with the stages of the three components) or
+  ``extracted_wrong``. Counts per stage, and per stage and label class. Names and enum words only.
 * **Diagnosis aids (Phase 7c; optional in the labels).** ``row_label`` on a present entry (the label as printed): the scorer reports, as
   counts, whether it is a configured phrase for the field (``on_list``, ``off_list``, ``section_dependent``) and how that crosses with the
   outcome, and never repeats the label. ``features`` (``FEATURES``: layout tags from a closed list): the aggregate groups SC-01 and SC-03
@@ -65,7 +69,7 @@ from credit_intel.evaluation.gate import GateReferenceError, _amount, _NoCallPro
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, check_may_send, file_sha256, load_current_sets, refuse_if_held_out
 from credit_intel.extraction.field_set import FieldSet
 from credit_intel.extraction.labels import check_label
-from credit_intel.extraction.pipeline import run_extraction
+from credit_intel.extraction.pipeline import ExtractionRun, run_extraction
 from credit_intel.extraction.prompt import DEFAULT_PROMPT, Prompt, load_prompt
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.locator import parse_page_range
@@ -323,6 +327,64 @@ def _absent(field_set: FieldSet, label: Label, record: ExtractedField | None) ->
     return out
 
 
+@dataclass(frozen=True)
+class Trace:
+    """What the run did with the model's proposals, as the stage attribution needs it (Phase 7c, S-1). Names only, no values."""
+
+    proposed: frozenset[tuple[str, str]]  # (field name, period role) the model, or the code on its behalf, proposed
+    unplaced: frozenset[tuple[str, str]]  # proposals whose claimed period had no usable end date, so no record exists
+    period_ok: dict[str, bool]  # per period role: a validated period end exists, so a record (or a not_found) can be made
+
+
+def trace_of(run: ExtractionRun) -> Trace:
+    proposed = {(v.proposed.field_name.value, v.proposed.period_role.value) for v in run.verifications}
+    unplaced = {(v.proposed.field_name.value, v.proposed.period_role.value) for v in run.verifications if v.field is None}
+    return Trace(frozenset(proposed), frozenset(unplaced), {role.value: run.attributes.period_end(role) is not None for role in ROLES})
+
+
+def _stage(field_set: FieldSet, trace: Trace, name: FieldName, role: PeriodRole) -> tuple[str, str | None]:
+    """Where a field of one period died, for a field that is not ``extracted``: the first stage that explains it.
+
+    ``no_period_end``: no validated period end, so no record is made for the period at all. ``unplaced``: proposed, but its claimed
+    period has no usable end date. ``other_basis``: verified under the other statement basis and never used. ``refused``: proposed and
+    refused or left open by a check (the reason is the record's). ``dropped``: proposed, yet the record is ``not_found`` (should not
+    happen). ``not_proposed``: the model returned nothing for it.
+    """
+    key = (name.value, role.value)
+    record = field_set.get(name, role)
+    if not trace.period_ok.get(role.value, False):
+        return "no_period_end", None
+    if key in trace.unplaced:
+        return "unplaced", None
+    if record is None or record.status is Status.NOT_FOUND:
+        if any(r.field_name is name and r.period_role is role for r in field_set.ignored):
+            return "other_basis", None
+        return ("dropped", None) if key in trace.proposed else ("not_proposed", None)
+    if record.status in (Status.REQUIRES_REVIEW, Status.CONFLICTING):
+        return "refused", record.status_reason.value if record.status_reason else record.status.value
+    return "extracted", None
+
+
+def _stage_of_entry(field_set: FieldSet, trace: Trace, label: Label, record: ExtractedField | None) -> tuple[str, str | None, dict[str, int] | None]:
+    """The stage of a labelled-present entry that did not match, and for a total of borrowings the stages of its three components."""
+    if record is not None and record.status is Status.EXTRACTED:
+        return "extracted_wrong", None, None
+    if label.field is FieldName.TOTAL_BORROWINGS:
+        reported = _stage(field_set, trace, label.field, label.role)
+        components = Counter(
+            _stage(field_set, trace, name, label.role)[0]
+            for name in (FieldName.BORROWINGS_NON_CURRENT, FieldName.BORROWINGS_CURRENT, FieldName.CURRENT_MATURITIES_LONG_TERM_BORROWINGS)
+        )
+        if record is not None and record.origin is Origin.DERIVED and record.status is not Status.EXTRACTED:
+            return "derived", record.status_reason.value if record.status_reason else record.status.value, dict(sorted(components.items()))
+        return (*reported, dict(sorted(components.items())))
+    return (*_stage(field_set, trace, label.field, label.role), None)
+
+
+def _stage_key(entry: dict) -> str:
+    return entry["stage"] if entry["stage_reason"] is None else f"{entry['stage']}/{entry['stage_reason']}"
+
+
 def _label_on_list(label: Label) -> str | None:
     """Whether the printed row label is a configured phrase for the field (FR-005.10): ``on_list``, ``off_list`` or ``section_dependent``
     (a phrase accepted only under a section heading, which a label alone cannot settle). ``None`` when no row label was given. A boolean
@@ -337,7 +399,7 @@ def _label_on_list(label: Label) -> str | None:
     return "on_list" if check.ok else "section_dependent"
 
 
-def score_document(labels: Labels, field_set: FieldSet) -> dict:
+def score_document(labels: Labels, field_set: FieldSet, trace: Trace | None = None) -> dict:
     """Counts only (pure). The field set must be of the labels' basis; a record of another basis is never used."""
     if field_set.configured_basis is not labels.basis:
         raise ValueError("the field set is of another statement basis than the labels")
@@ -345,8 +407,12 @@ def score_document(labels: Labels, field_set: FieldSet) -> dict:
     for label in labels.entries:
         record = _record(field_set, label)
         scored = _absent(field_set, label, record) if label.absent else _present(label, record)
+        stage = None
+        if trace is not None and not label.absent and scored["outcome"] != "match":
+            stage = _stage_of_entry(field_set, trace, label, record)
         entries.append({"field": label.field.value, "period": label.role.value, "labelled": "absent" if label.absent else "present",
-                        "label_on_list": _label_on_list(label), **scored})  # fmt: skip
+                        "label_on_list": _label_on_list(label), "stage": None if stage is None else stage[0],
+                        "stage_reason": None if stage is None else stage[1], "components": None if stage is None else stage[2], **scored})  # fmt: skip
     present = [e for e in entries if e["labelled"] == "present"]
     absent = [e for e in entries if e["labelled"] == "absent"]
     extracted_source = [r for r in field_set.fields if r.status is Status.EXTRACTED and r.origin is Origin.SOURCE]
@@ -370,6 +436,8 @@ def score_document(labels: Labels, field_set: FieldSet) -> dict:
         "counts": counts,
         "label_list": dict(sorted(Counter(e["label_on_list"] for e in given).items())),
         "label_list_by_outcome": dict(sorted(Counter(f"{e['outcome']}/{e['label_on_list']}" for e in given).items())),
+        "stages": dict(sorted(Counter(_stage_key(e) for e in entries if e["stage"] is not None).items())),
+        "stages_by_label_class": dict(sorted(Counter(f"{_stage_key(e)}/{e['label_on_list']}" for e in given if e["stage"] is not None).items())),
         "statuses": field_set.counts,
         "reasons": dict(sorted(Counter(r.status_reason.value for r in records if r.status_reason).items())),
     }
@@ -383,10 +451,14 @@ def aggregate(reports: Sequence[dict]) -> dict:
     reasons: Counter = Counter()
     label_list: Counter = Counter()
     by_outcome: Counter = Counter()
+    stages: Counter = Counter()
+    stages_by_class: Counter = Counter()
     by_feature: dict[str, dict] = {}
     for report in done:
         label_list.update(report.get("label_list", {}))
         by_outcome.update(report.get("label_list_by_outcome", {}))
+        stages.update(report.get("stages", {}))
+        stages_by_class.update(report.get("stages_by_label_class", {}))
         for tag, value in report.get("features", {}).items():
             group = by_feature.setdefault(f"{tag}={str(value).lower()}", {"documents": [], "sc01": {"match": 0, "of": 0}, "sc03": {"correct": 0, "of": 0}})
             group["documents"].append(report["document_id"])
@@ -411,6 +483,8 @@ def aggregate(reports: Sequence[dict]) -> dict:
         "reasons": dict(sorted(reasons.items())),
         "label_list": dict(sorted(label_list.items())),
         "label_list_by_outcome": dict(sorted(by_outcome.items())),
+        "stages": dict(sorted(stages.items())),
+        "stages_by_label_class": dict(sorted(stages_by_class.items())),
         "by_feature": dict(sorted(by_feature.items())),
     }
 
@@ -442,7 +516,7 @@ def replay(
         return {**failed, "reason": "cache_miss"}
     except IngestionError as error:
         return {**failed, "reason": error.code.value}
-    return {"set": "tuning", "replayed": True, "sha256_prefix": sha256[:12], **score_document(labels, run.field_set)}
+    return {"set": "tuning", "replayed": True, "sha256_prefix": sha256[:12], **score_document(labels, run.field_set, trace_of(run))}
 
 
 def _assignments_commit(assignments: Path) -> str | None:
@@ -478,7 +552,8 @@ def main(argv: list[str] | None = None) -> int:
             labels = load_labels(labels_path)
             present = sum(not e.absent for e in labels.entries)
             print("score: labels ok " + json.dumps({"document_id": labels.document_id, "entries": len(labels.entries), "present": present,
-                                                    "absent": len(labels.entries) - present, "pages": labels.pages}, sort_keys=True))  # fmt: skip
+                                                    "absent": len(labels.entries) - present, "pages": labels.pages, "features": len(labels.features),
+                                                    "row_labels": sum(e.row_label is not None for e in labels.entries)}, sort_keys=True))  # fmt: skip
         if not args.report:
             return 0
         prompt = load_prompt(os.environ.get("CREDIT_INTEL_PROMPT", DEFAULT_PROMPT))

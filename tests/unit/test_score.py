@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from calc_records import CUR, D24, D25, conflicting, rec
-from credit_intel.evaluation.score import FEATURES, LabelsError, aggregate, load_labels, score_document, skeleton
+from credit_intel.evaluation.score import FEATURES, LabelsError, Trace, aggregate, load_labels, score_document, skeleton, trace_of
 from credit_intel.extraction.field_set import FieldSet
 from credit_intel.models import FieldName as F, PeriodRole, Scale, StatementBasis as Basis, Status, StatusReason as R
 
@@ -564,3 +564,145 @@ def test_the_aggregate_groups_sc01_and_sc03_by_feature_and_sums_the_label_classe
     assert total["by_feature"]["period_header=two_year_columns"] == {"documents": ["R1", "R2"], "sc01": {"match": 46, "of": 47}, "sc03": {"correct": 1, "of": 1}}
     assert total["by_feature"]["title_names_basis=true"]["sc01"] == {"match": 23, "of": 23} and total["by_feature"]["title_names_basis=true"]["sc03"] == {"correct": 1, "of": 1} and total["by_feature"]["title_names_basis=false"]["sc01"] == {"match": 23, "of": 24}
     assert total["label_list"] == {"off_list": 1, "on_list": 1} and total["label_list_by_outcome"] == {"match/on_list": 1, "mismatch/off_list": 1}
+
+
+# --- stage attribution (Phase 7c, S-1) -----------------------------------------------------------------------------------------------------------
+
+
+def trace(proposed=(), unplaced=(), current_ok=True, comparative_ok=True):
+    names = lambda pairs: frozenset((f.value, p) for f, p in pairs)  # noqa: E731
+    return Trace(names(proposed), names(unplaced), {"current": current_ok, "comparative": comparative_ok})
+
+
+def staged(replace=None, drop=(), extra=(), tr=None, labels_data=None):
+    report = score_document(labels_of(labels_data or full()), field_set(drop=drop, replace=replace, extra=extra), tr)
+    return {(e["field"], e["period"]): (e["stage"], e["stage_reason"]) for e in report["entries"]}, report
+
+
+REV = ("revenue", "current")
+
+
+def test_no_trace_means_no_stage():
+    stages, report = staged(replace={(F.REVENUE, CUR): rec(F.REVENUE, status=Status.NOT_FOUND)})
+
+    assert all(v == (None, None) for v in stages.values()) and report["stages"] == {} and report["stages_by_label_class"] == {}
+
+
+def test_a_match_and_an_absent_entry_have_no_stage():
+    data = full({(F.OPERATING_PROFIT, "current"): absent(F.OPERATING_PROFIT, "current")})
+    stages, report = staged(labels_data=data, tr=trace(), replace={(F.OPERATING_PROFIT, CUR): rec(F.OPERATING_PROFIT, status=Status.NOT_FOUND)})
+
+    assert all(v == (None, None) for v in stages.values()) and report["stages"] == {}
+
+
+def test_a_field_the_model_never_returned_is_not_proposed():
+    stages, report = staged(replace={(F.REVENUE, CUR): rec(F.REVENUE, status=Status.NOT_FOUND)}, tr=trace())
+
+    assert stages[REV] == ("not_proposed", None) and report["stages"] == {"not_proposed": 1}
+
+
+def test_a_proposal_whose_record_is_not_found_is_dropped():
+    stages, _ = staged(replace={(F.REVENUE, CUR): rec(F.REVENUE, status=Status.NOT_FOUND)}, tr=trace(proposed=[(F.REVENUE, "current")]))
+
+    assert stages[REV] == ("dropped", None)
+
+
+@pytest.mark.parametrize(
+    ("record", "expected"),
+    [
+        (rec(F.REVENUE, status=Status.REQUIRES_REVIEW, reason=R.LABEL_NOT_RECOGNISED), ("refused", "label_not_recognised")),
+        (rec(F.REVENUE, status=Status.REQUIRES_REVIEW, reason=R.PERIOD_MISMATCH), ("refused", "period_mismatch")),
+        (conflicting(F.REVENUE, ["1", "2"]), ("refused", "conflicting")),
+    ],
+)
+def test_a_proposal_a_check_refused_is_attributed_to_the_check_by_its_reason(record, expected):
+    stages, report = staged(replace={(F.REVENUE, CUR): record}, tr=trace(proposed=[(F.REVENUE, "current")]))
+
+    assert stages[REV] == expected and report["stages"] == {f"{expected[0]}/{expected[1]}": 1}
+
+
+def test_no_validated_period_end_comes_before_anything_else():
+    stages, report = staged(replace={(F.REVENUE, CUR): rec(F.REVENUE, status=Status.NOT_FOUND)}, tr=trace(proposed=[(F.REVENUE, "current")], unplaced=[(F.REVENUE, "current")], current_ok=False))
+
+    assert stages[REV] == ("no_period_end", None) and stages[("revenue", "comparative")] == (None, None) and report["stages"] == {"no_period_end": 1}
+
+
+def test_a_proposal_with_no_usable_period_is_unplaced():
+    stages, _ = staged(drop=[(F.REVENUE, CUR)], tr=trace(proposed=[(F.REVENUE, "current")], unplaced=[(F.REVENUE, "current")]))
+
+    assert stages[REV] == ("unplaced", None)
+
+
+def test_a_field_verified_only_under_the_other_basis_is_other_basis():
+    ignored = rec(F.REVENUE, "10", basis=Basis.STANDALONE).model_copy(update={"scale": Scale.UNITS})
+    field_set_with_ignored = FieldSet(Basis.CONSOLIDATED, (), (ignored,), (), ("standalone",))
+    report = score_document(labels_of(full()), field_set_with_ignored, trace(proposed=[(F.REVENUE, "current")]))
+
+    assert next(e for e in report["entries"] if (e["field"], e["period"]) == REV)["stage"] == "other_basis"
+
+
+def test_a_value_that_was_extracted_but_wrong_is_its_own_stage_not_a_miss():
+    stages, report = staged(replace={(F.REVENUE, CUR): r(F.REVENUE, "11")}, tr=trace(proposed=[(F.REVENUE, "current")]))
+
+    assert stages[REV] == ("extracted_wrong", None) and report["stages"] == {"extracted_wrong": 1}
+
+
+def test_a_total_that_could_not_be_derived_carries_the_stages_of_its_components():
+    replace = {(F.TOTAL_BORROWINGS, CUR): rec(F.TOTAL_BORROWINGS, status=Status.NOT_FOUND), (F.BORROWINGS_CURRENT, CUR): rec(F.BORROWINGS_CURRENT, status=Status.NOT_FOUND),
+               (F.CURRENT_MATURITIES_LONG_TERM_BORROWINGS, CUR): rec(F.CURRENT_MATURITIES_LONG_TERM_BORROWINGS, status=Status.NOT_FOUND)}  # fmt: skip
+    report = score_document(labels_of(full()), field_set(replace=replace), trace(proposed=[(F.BORROWINGS_NON_CURRENT, "current")]))
+
+    total = next(e for e in report["entries"] if (e["field"], e["period"]) == ("total_borrowings", "current"))
+    assert total["stage"] == "derived" and total["stage_reason"] == "missing_input" and total["components"] == {"extracted": 1, "not_proposed": 2}
+
+
+def test_a_total_with_no_record_at_all_is_attributed_like_any_field():
+    replace = {(F.TOTAL_BORROWINGS, CUR): rec(F.TOTAL_BORROWINGS, status=Status.NOT_FOUND)}
+    drop = [(F.BORROWINGS_NON_CURRENT, CUR), (F.BORROWINGS_CURRENT, CUR), (F.CURRENT_MATURITIES_LONG_TERM_BORROWINGS, CUR)]
+    report = score_document(labels_of(full()), field_set(replace=replace, drop=drop), trace())
+
+    total = next(e for e in report["entries"] if (e["field"], e["period"]) == ("total_borrowings", "current"))
+    assert total["stage"] == "not_proposed" and total["components"] == {"not_proposed": 3}
+
+
+def test_stages_are_counted_by_label_class_and_summed_across_documents():
+    data = with_row_labels({(F.REVENUE, "current"): "Sales", (F.NET_PROFIT, "current"): "Net income"})
+    replace = {(F.REVENUE, CUR): rec(F.REVENUE, status=Status.REQUIRES_REVIEW, reason=R.LABEL_NOT_RECOGNISED), (F.NET_PROFIT, CUR): rec(F.NET_PROFIT, status=Status.NOT_FOUND)}
+    _, report = staged(replace=replace, tr=trace(proposed=[(F.REVENUE, "current")]), labels_data=data)
+
+    assert report["stages"] == {"not_proposed": 1, "refused/label_not_recognised": 1}
+    assert report["stages_by_label_class"] == {"not_proposed/on_list": 1, "refused/label_not_recognised/off_list": 1}
+    total = aggregate([{"replayed": True, **report}, {"replayed": True, **report, "document_id": "R2"}])
+    assert total["stages"] == {"not_proposed": 2, "refused/label_not_recognised": 2} and total["stages_by_label_class"]["refused/label_not_recognised/off_list"] == 2
+
+
+def test_the_report_with_stages_still_holds_no_value_or_label():
+    data = with_row_labels({(F.REVENUE, "current"): "Sales volume 888999"})
+    _, report = staged(replace={(F.REVENUE, CUR): rec(F.REVENUE, status=Status.NOT_FOUND)}, tr=trace(), labels_data=data)
+
+    assert "Sales" not in json.dumps(report) and "888999" not in json.dumps(report)
+
+
+def test_a_record_of_the_other_basis_for_the_other_period_does_not_explain_a_miss():
+    ignored = rec(F.REVENUE, "10", role=COMP, end=D24, basis=Basis.STANDALONE).model_copy(update={"scale": Scale.UNITS})
+    report = score_document(labels_of(full()), FieldSet(Basis.CONSOLIDATED, (), (ignored,), (), ("standalone",)), trace())
+
+    assert next(e for e in report["entries"] if (e["field"], e["period"]) == REV)["stage"] == "not_proposed"
+    assert next(e for e in report["entries"] if (e["field"], e["period"]) == ("revenue", "comparative"))["stage"] == "other_basis"
+
+
+def test_the_trace_of_a_run_lists_the_proposals_the_unplaced_ones_and_the_periods_with_a_validated_end():
+    from types import SimpleNamespace as NS
+
+    def verification(name, role, placed):
+        return NS(proposed=NS(field_name=name, period_role=role), field=object() if placed else None)
+
+    run = NS(
+        verifications=(verification(F.REVENUE, CUR, True), verification(F.NET_PROFIT, COMP, False)),
+        attributes=NS(period_end=lambda role: D25 if role is CUR else None),
+    )
+    result = trace_of(run)
+
+    assert result.proposed == {("revenue", "current"), ("net_profit", "comparative")}
+    assert result.unplaced == {("net_profit", "comparative")}
+    assert result.period_ok == {"current": True, "comparative": False}

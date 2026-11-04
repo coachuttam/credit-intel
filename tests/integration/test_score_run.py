@@ -194,3 +194,31 @@ def test_the_module_runs_as_a_command(tmp_path):
     done = subprocess.run([sys.executable, "-m", "credit_intel.evaluation.score", "--check-labels", str(tmp_path / "none.json")], capture_output=True, cwd=tmp_path)
 
     assert done.returncode == 2 and b"score: refused" in done.stderr and done.stdout == b""
+
+
+# --- stage attribution and the label summary (Phase 7c) ---------------------------------------------------------------------------------------
+
+
+def test_a_field_the_model_left_out_is_attributed_to_the_model_and_a_row_the_code_reads_is_not(pdf, tmp_path, config):
+    data = json.loads(reply(pdf))
+    data["fields"] = [f for f in data["fields"] if not (f["field_name"] == "profit_before_tax" or (f["field_name"] == "borrowings_current" and f["period_role"] == "current"))]
+    fill_cache(pdf, tmp_path, json.dumps(data))
+
+    report = replay(pdf, load_labels(labels_file(tmp_path, pdf)), assignments=records(tmp_path, pdf), cache_dir=tmp_path / ".cache" / "llm", llm=settings_for(config))
+
+    stages = {(e["field"], e["period"]): (e["stage"], e["stage_reason"]) for e in report["entries"] if e["stage"]}
+    assert stages[("profit_before_tax", "current")] == ("not_proposed", None) and stages[("profit_before_tax", "comparative")] == ("not_proposed", None)
+    assert report["counts"]["sc01"]["match"] == report["counts"]["sc01"]["of"] - len(stages)
+    assert report["stages"] == {"not_proposed": 2}  # the omitted current borrowings row is read by the code (v0.4.39), so the total still derives
+
+
+def test_check_labels_counts_the_features_and_row_labels_it_found(pdf, tmp_path, capsys):
+    data = labels_data(pdf)
+    data["features"] = {"title_names_basis": True, "period_header": "two_year_columns"}
+    next(e for e in data["entries"] if e["field"] == "current_assets" and e["period"] == "current")["row_label"] = "Total current assets"
+    path = tmp_path / "labels.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    code, out, _ = run_main(capsys, "--check-labels", path)
+
+    assert code == 0 and '"features": 2' in out and '"row_labels": 1' in out and "Total current assets" not in out
