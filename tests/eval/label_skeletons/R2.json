@@ -1,0 +1,223 @@
+{
+  "document_id": "R2",
+  "sha256": "dfc1ed6c9bcd879a3cfedc06b8f6123d1d7caaf81340f7a437afe395f9b00ea6",
+  "basis": null,
+  "entries": [
+    {
+      "field": "revenue",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "revenue",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "net_profit",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "net_profit",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "operating_profit",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "operating_profit",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "profit_before_tax",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "profit_before_tax",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "interest_expense",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "interest_expense",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "current_assets",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "current_assets",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "current_liabilities",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "current_liabilities",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "total_borrowings",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "total_borrowings",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "borrowings_non_current",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "borrowings_non_current",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "borrowings_current",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "borrowings_current",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "current_maturities_long_term_borrowings",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "current_maturities_long_term_borrowings",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "total_equity",
+      "period": "current",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    },
+    {
+      "field": "total_equity",
+      "period": "comparative",
+      "period_end": null,
+      "printed": null,
+      "scale": null,
+      "currency": null,
+      "page": null
+    }
+  ]
+}

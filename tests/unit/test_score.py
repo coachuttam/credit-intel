@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from calc_records import CUR, D24, D25, conflicting, rec
-from credit_intel.evaluation.score import LabelsError, aggregate, load_labels, score_document
+from credit_intel.evaluation.score import LabelsError, aggregate, load_labels, score_document, skeleton
 from credit_intel.extraction.field_set import FieldSet
 from credit_intel.models import FieldName as F, PeriodRole, Scale, StatementBasis as Basis, Status, StatusReason as R
 
@@ -393,3 +393,60 @@ def test_the_report_holds_no_value_quote_or_label():
 
     for forbidden in (SECRET, "777,123", "888,999", "revenue 7", "Acme", date(2025, 3, 31).isoformat()):
         assert forbidden not in text
+
+
+# --- the skeleton -------------------------------------------------------------------------------------------------------------------------------
+
+
+def test_the_skeleton_has_every_entry_unfilled_and_is_refused_until_it_is_filled(tmp_path):
+    data = skeleton("R1", SHA)
+
+    assert len(data["entries"]) == 24 and {(e["field"], e["period"]) for e in data["entries"]} == {(n.value, p) for n in SCORED for p in ("current", "comparative")}
+    assert all(v is None for e in data["entries"] for k, v in e.items() if k not in ("field", "period"))
+    with pytest.raises(LabelsError, match="basis must be"):
+        load_labels(write(tmp_path, data))
+
+
+def test_a_skeleton_filled_in_each_of_the_two_ways_is_accepted(tmp_path):
+    data = skeleton("R1", SHA)
+    data["basis"] = "consolidated"
+    for number, entry in enumerate(data["entries"]):
+        if number % 2:
+            entry.clear()
+            entry.update({"field": SCORED[number // 2].value, "period": "comparative", "absent": True})
+        else:
+            entry.update(period_end=END[entry["period"]], printed="1", scale="units", currency="INR", page=3)
+
+    assert sum(e.absent for e in load_labels(write(tmp_path, data)).entries) == 12
+
+
+def test_a_partly_filled_skeleton_is_still_refused(tmp_path):
+    data = skeleton("R1", SHA)
+    data["basis"] = "consolidated"
+
+    with pytest.raises(LabelsError):
+        load_labels(write(tmp_path, data))
+
+
+def test_the_committed_skeletons_are_what_the_generator_writes_for_the_two_tuning_documents():
+    from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, load_current_sets
+
+    known = {document_id: sha for sha, (document_id, group) in load_current_sets(ASSIGNMENTS_PATH).items() if group == "tuning"}
+    folder = Path(__file__).resolve().parents[1] / "eval" / "label_skeletons"
+
+    for document_id in ("R1", "R2"):
+        assert json.loads((folder / f"{document_id}.json").read_text(encoding="utf-8")) == skeleton(document_id, known[document_id])
+
+
+def test_a_skeleton_is_offered_for_a_tuning_document_only(tmp_path, capsys):
+    from credit_intel.evaluation.guard import MEMBERS
+    from credit_intel.evaluation.score import main
+
+    record = tmp_path / "a.jsonl"
+    record.write_text("\n".join(json.dumps(dict(zip(MEMBERS, (d, s * 64, g, "2026-10-24", "assigned", None, None), strict=True))) for d, s, g in (("R1", "1", "tuning"), ("H1", "2", "held_out"))) + "\n", encoding="utf-8")
+
+    assert main(["--skeleton", "R1", "--assignments", str(record)]) == 0
+    assert json.loads(capsys.readouterr().out)["sha256"] == "1" * 64
+    for refused in ("H1", "R9"):
+        assert main(["--skeleton", refused, "--assignments", str(record)]) == 2
+        assert capsys.readouterr().out == ""

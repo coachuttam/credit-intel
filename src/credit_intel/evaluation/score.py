@@ -36,6 +36,7 @@ Output is counts, field names, period roles and reason codes. It holds no value,
 reply from the response cache (nothing is sent); a cache miss is a failed replay, not a score. A held-out document, or one
 the labels were not written for, is refused.
 
+    uv run --locked python -m credit_intel.evaluation.score --skeleton <document_id> > <labels.json>
     uv run --locked python -m credit_intel.evaluation.score --check-labels <labels.json>
     uv run --locked python -m credit_intel.evaluation.score --report <pdf> <labels.json> [--report <pdf> <labels.json> ...]
 """
@@ -213,6 +214,21 @@ def load_labels(path: Path) -> Labels:
     return Labels(document_id, sha256, StatementBasis(basis), entries, pages, StatementBasis(asserted) if asserted else None)
 
 
+def skeleton(document_id: str, sha256: str) -> dict:
+    """An unfilled labels file: every entry present with its shape and nothing in it, so ``load_labels`` refuses it until it is filled in.
+
+    To fill it, set ``basis`` (and add ``pages`` and ``assert_basis`` if the live run used them), then for each entry either give
+    ``period_end``, ``printed``, ``scale``, ``currency`` and ``page`` or replace the entry with ``{"field": ..., "period": ..., "absent": true}``.
+    A ``total_borrowings`` entry may instead carry ``currency``, ``period_end`` and ``parts`` (see the module docstring).
+    """
+    entries = [
+        {"field": name.value, "period": role.value, "period_end": None, "printed": None, "scale": None, "currency": None, "page": None}
+        for name in SCORED_FIELDS
+        for role in ROLES
+    ]
+    return {"document_id": document_id, "sha256": sha256, "basis": None, "entries": entries}
+
+
 def _record(field_set: FieldSet, label: Label) -> ExtractedField | None:
     if label.field is FieldName.TOTAL_BORROWINGS:
         return total_borrowings_for(field_set, label.role)
@@ -364,13 +380,20 @@ def _assignments_commit(assignments: Path) -> str | None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--report", nargs=2, action="append", metavar=("PDF", "LABELS"), default=[])
+    parser.add_argument("--skeleton", metavar="DOCUMENT_ID", help="print an unfilled labels file for a tuning document on the assignment record")
     parser.add_argument("--check-labels", action="append", type=Path, metavar="LABELS", default=[])
     parser.add_argument("--assignments", type=Path, default=ASSIGNMENTS_PATH, help=argparse.SUPPRESS)
     parser.add_argument("--config", type=Path, default=DEFAULT_SETTINGS_PATH, metavar="SETTINGS_TOML")
     args = parser.parse_args(argv)
-    if not args.report and not args.check_labels:
-        parser.error("give --report PDF LABELS or --check-labels LABELS")
+    if not args.report and not args.check_labels and not args.skeleton:
+        parser.error("give --report PDF LABELS, --check-labels LABELS or --skeleton DOCUMENT_ID")
     try:
+        if args.skeleton:
+            known = {document_id: (sha256, group) for sha256, (document_id, group) in load_current_sets(args.assignments).items()}
+            if args.skeleton not in known or known[args.skeleton][1] != "tuning":
+                raise LabelsError("a skeleton is for a tuning document on the assignment record")
+            print(json.dumps(skeleton(args.skeleton, known[args.skeleton][0]), indent=2))
+            return 0
         for labels_path in args.check_labels:
             labels = load_labels(labels_path)
             present = sum(not e.absent for e in labels.entries)
