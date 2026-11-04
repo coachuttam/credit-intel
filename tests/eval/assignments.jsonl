@@ -7,3 +7,5 @@
 {"document_id":"S1","sha256":"ec44d04b7514ff955b34c5d33d334e63a23ca2ec14a9045dc5002244b5f09bb9","set":"tuning","assigned_on":"2026-10-26","event":"assigned","moved_from":null,"reason":null}
 {"document_id":"S2","sha256":"05cb3f4cffe567c7310b2afc1d547986ebf9321bae88490c19fc78f0c8122196","set":"tuning","assigned_on":"2026-10-26","event":"assigned","moved_from":null,"reason":null}
 {"document_id":"S3","sha256":"deea23dce67d977fa2dbb81ec1438f4ff8a84263d60a33a329166ac2931b442f","set":"held_out","assigned_on":"2026-10-26","event":"assigned","moved_from":null,"reason":null}
+{"document_id":"H5","sha256":"58e3bc2732e058c17444e5c02bc7b1fa0f6d4f3941fa47873485a4df76dfdbeb","set":"held_out","assigned_on":"2026-11-04","event":"assigned","moved_from":null,"reason":null}
+{"document_id":"H6","sha256":"f5411203d68c7cd3266c065fe01e6e4ee73ec87059aba4105214c7034612aef9","set":"held_out","assigned_on":"2026-11-04","event":"assigned","moved_from":null,"reason":null}
