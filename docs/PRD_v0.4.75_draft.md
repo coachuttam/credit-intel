@@ -1,6 +1,6 @@
-# PRD v0.4.75 — draft for the owner's review (a reason on every `not_found`; not applied)
+# PRD v0.4.75 — draft (a reason on every `not_found`); approved by the owner on 2026-11-05 with the three open points resolved, and applied to `docs/PRD.md` (examples 195 to 197); open points: (1) a period with no record stays a known gap, (2) `recognised_row_not_read` informs only, (3) the section 7 sentence is approved as written
 
-Nothing below is applied to `docs/PRD.md` and no code is written. It answers the owner's instruction of 2026-11-05 ("draft the PRD change for splitting not_found into 'not located in pages sent' vs. 'report presents none' where the code can tell … draft first, I review, then apply"). On your word I apply it, then build it (a change to the field set and the memo, with tests and mutation checks) as a separate step.
+The code follows in a separate step. It answers the owner's instruction of 2026-11-05 ("draft the PRD change for splitting not_found into 'not located in pages sent' vs. 'report presents none' where the code can tell … draft first, I review, then apply"). On your word I apply it, then build it (a change to the field set and the memo, with tests and mutation checks) as a separate step.
 
 ## 0. One thing the code cannot do, and the draft therefore does not promise
 
