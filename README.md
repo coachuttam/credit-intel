@@ -160,6 +160,14 @@ The same pipeline ships three ways, and none of them adds extraction, calculatio
 
 **What has and has not been run.** The owner built the image and ran it on one real document (2026-11-01); the in-image tests passed. The TLS proxy path is written and documented but **has not been run by anyone**, and the service has not been deployed to the public internet. Do not read this section as a statement that it has.
 
+## Architecture / pipeline
+
+`docs/architecture/pipeline.html` is an interactive diagram of the command-line path from a PDF to a run folder. Each box is a component and each arrow carries what passes between them: the send rule and the offline dry-run tool, then PDF ingestion, the candidate-page locator, the basis gate, the model extraction (through a gateway with a cache and a token ceiling), the deterministic checks of evidence, period and sign, the metrics and rules (exact decimals, no model), and the run folder with its results, manifest and memo. The optional page classifier is drawn too, off by default and able only to remove pages. These are the stages of "How it works" below.
+
+![The extraction pipeline: the CLI, the send rule, PDF ingestion, the candidate-page locator, the basis gate, the optional page classifier, model extraction, deterministic checks, metrics and rules, and the run folder](docs/architecture/pipeline.png)
+
+The picture above is a still of that diagram (`docs/architecture/pipeline.png`). The interactive version is a single self-contained HTML file that loads nothing from the internet. **GitHub shows HTML files as source, not as a page**, so to use it, download the file and open it in a browser. The diagram was drawn on 2026-10-25 and shows the command-line path only; it does not show the HTTP service or the container (see "From CLI to production deployment").
+
 ## How it works
 
 1. **Ingest:** the PDF is validated and its text is read page by page.
