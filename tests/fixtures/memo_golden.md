@@ -46,26 +46,26 @@ Values are shown as printed in the document, with scale and currency; derived va
 
 | Field ID | Value | Status | Origin | Notes |
 |---|---|---|---|---|
-| `revenue.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `revenue.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `net_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `net_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `operating_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `operating_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `profit_before_tax.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `profit_before_tax.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `interest_expense.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `interest_expense.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
+| `revenue.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `revenue.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `net_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `net_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `operating_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `operating_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `profit_before_tax.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `profit_before_tax.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `interest_expense.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `interest_expense.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
 | `current_assets.2025-03-31.consolidated` | 1,482.30 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `current_assets.2024-03-31.consolidated` | 1,356.75 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `current_liabilities.2025-03-31.consolidated` | 900.00 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `current_liabilities.2024-03-31.consolidated` | 850.00 (INR crore) | extracted | [SOURCE: p.1] | — |
-| `borrowings_non_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `borrowings_non_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `borrowings_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `borrowings_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `current_maturities_long_term_borrowings.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `current_maturities_long_term_borrowings.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
+| `borrowings_non_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `borrowings_non_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `borrowings_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `borrowings_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `current_maturities_long_term_borrowings.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `current_maturities_long_term_borrowings.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
 | `total_equity.2025-03-31.consolidated` | 600.00 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `total_equity.2024-03-31.consolidated` | 500.00 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `ebit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | missing input; `ebit = profit_before_tax + interest_expense` (EBIT-PBT) |
@@ -157,41 +157,43 @@ Indicators are prompts for a human to investigate. They are not a rating, a scor
 
 **Not found** (20)
 
-- `revenue.2025-03-31.consolidated` [UNVERIFIED]
-- `revenue.2024-03-31.consolidated` [UNVERIFIED]
-- `net_profit.2025-03-31.consolidated` [UNVERIFIED]
-- `net_profit.2024-03-31.consolidated` [UNVERIFIED]
-- `operating_profit.2025-03-31.consolidated` [UNVERIFIED]
-- `operating_profit.2024-03-31.consolidated` [UNVERIFIED]
-- `profit_before_tax.2025-03-31.consolidated` [UNVERIFIED]
-- `profit_before_tax.2024-03-31.consolidated` [UNVERIFIED]
-- `interest_expense.2025-03-31.consolidated` [UNVERIFIED]
-- `interest_expense.2024-03-31.consolidated` [UNVERIFIED]
-- `borrowings_non_current.2025-03-31.consolidated` [UNVERIFIED]
-- `borrowings_non_current.2024-03-31.consolidated` [UNVERIFIED]
-- `borrowings_current.2025-03-31.consolidated` [UNVERIFIED]
-- `borrowings_current.2024-03-31.consolidated` [UNVERIFIED]
-- `current_maturities_long_term_borrowings.2025-03-31.consolidated` [UNVERIFIED]
-- `current_maturities_long_term_borrowings.2024-03-31.consolidated` [UNVERIFIED]
+- `revenue.2025-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `revenue.2024-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `net_profit.2025-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `net_profit.2024-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `operating_profit.2025-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `operating_profit.2024-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `profit_before_tax.2025-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `profit_before_tax.2024-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `interest_expense.2025-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `interest_expense.2024-03-31.consolidated` — statement not in pages sent [UNVERIFIED]
+- `borrowings_non_current.2025-03-31.consolidated` — no recognised row [UNVERIFIED]
+- `borrowings_non_current.2024-03-31.consolidated` — no recognised row [UNVERIFIED]
+- `borrowings_current.2025-03-31.consolidated` — no recognised row [UNVERIFIED]
+- `borrowings_current.2024-03-31.consolidated` — no recognised row [UNVERIFIED]
+- `current_maturities_long_term_borrowings.2025-03-31.consolidated` — no recognised row [UNVERIFIED]
+- `current_maturities_long_term_borrowings.2024-03-31.consolidated` — no recognised row [UNVERIFIED]
 - `ebit.2025-03-31.consolidated` — missing input [UNVERIFIED]
 - `ebit.2024-03-31.consolidated` — missing input [UNVERIFIED]
 - `total_borrowings.2025-03-31.consolidated` — missing input [UNVERIFIED]
 - `total_borrowings.2024-03-31.consolidated` — missing input [UNVERIFIED]
 
+“No recognised row” means no line on the statement pages has a label the system accepts; the report may print the row under another name.
+
 ## 8. Questions for the credit analyst
 
-1. Revenue for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-2. Revenue for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-3. Net profit for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-4. Net profit for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-5. Profit before tax for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-6. Profit before tax for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-7. Interest expense for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-8. Interest expense for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-9. Non-current borrowings for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-10. Non-current borrowings for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-11. Current borrowings for the period ending 2025-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
-12. Current borrowings for the period ending 2024-03-31 was not found on page 1 — confirm the figure from the audited statements. [UNVERIFIED]
+1. Revenue for the period ending 2025-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+2. Revenue for the period ending 2024-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+3. Net profit for the period ending 2025-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+4. Net profit for the period ending 2024-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+5. Profit before tax for the period ending 2025-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+6. Profit before tax for the period ending 2024-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+7. Interest expense for the period ending 2025-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+8. Interest expense for the period ending 2024-03-31 was not found on page 1 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]
+9. Non-current borrowings for the period ending 2025-03-31 was not found on page 1 (no recognised row) — confirm the figure from the audited statements. [UNVERIFIED]
+10. Non-current borrowings for the period ending 2024-03-31 was not found on page 1 (no recognised row) — confirm the figure from the audited statements. [UNVERIFIED]
+11. Current borrowings for the period ending 2025-03-31 was not found on page 1 (no recognised row) — confirm the figure from the audited statements. [UNVERIFIED]
+12. Current borrowings for the period ending 2024-03-31 was not found on page 1 (no recognised row) — confirm the figure from the audited statements. [UNVERIFIED]
 13. RI-001 Declining revenue could not be evaluated because of missing inputs (`MET-01.2025-03-31 (missing_input)`). Can they be provided? [RULE: RI-001]
 14. RI-002 Negative net profit could not be evaluated because of missing inputs (`net_profit.2025-03-31 (not_found)`). Can they be provided? [RULE: RI-002]
 15. RI-004 Increasing leverage could not be evaluated because of missing inputs (`MET-04.2025-03-31 (missing_input)`, `MET-04.2024-03-31 (missing_input)`). Can they be provided? [RULE: RI-004]

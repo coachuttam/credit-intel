@@ -34,7 +34,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -64,7 +64,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -94,7 +94,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -124,7 +124,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -154,7 +154,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -184,7 +184,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -214,7 +214,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -244,7 +244,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -274,7 +274,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -304,7 +304,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "statement_not_in_pages_sent",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -754,7 +754,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -784,7 +784,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -814,7 +814,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -844,7 +844,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -874,7 +874,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -904,7 +904,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -934,7 +934,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null
@@ -964,7 +964,7 @@
       },
       "statement_basis": "consolidated",
       "status": "not_found",
-      "status_reason": null,
+      "status_reason": "no_recognised_row",
       "validation": null,
       "value": null,
       "value_interpretation": null

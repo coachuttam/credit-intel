@@ -123,6 +123,7 @@ def test_status_reasons_are_the_h1_list():
         "scale_not_verified", "scale_ambiguous", "currency_not_verified", "label_not_recognised",
         "period_mismatch", "basis_unknown", "implausible_value", "missing_input",
         "currency_mismatch", "borrowings_classification_unresolved", "ocr_unconfirmed",
+        "statement_not_in_pages_sent", "no_recognised_row", "recognised_row_not_read",  # the reasons of a source not_found (H.2, v0.4.75)
     }  # fmt: skip
 
 

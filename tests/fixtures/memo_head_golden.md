@@ -46,26 +46,26 @@ Values are shown as printed in the document, with scale and currency; derived va
 
 | Field ID | Value | Status | Origin | Notes |
 |---|---|---|---|---|
-| `revenue.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `revenue.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `net_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `net_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `operating_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `operating_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `profit_before_tax.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `profit_before_tax.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `interest_expense.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `interest_expense.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
+| `revenue.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `revenue.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `net_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `net_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `operating_profit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `operating_profit.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `profit_before_tax.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `profit_before_tax.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `interest_expense.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
+| `interest_expense.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | statement not in pages sent |
 | `current_assets.2025-03-31.consolidated` | 1,482.30 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `current_assets.2024-03-31.consolidated` | 1,356.75 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `current_liabilities.2025-03-31.consolidated` | 900.00 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `current_liabilities.2024-03-31.consolidated` | 850.00 (INR crore) | extracted | [SOURCE: p.1] | — |
-| `borrowings_non_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `borrowings_non_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `borrowings_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `borrowings_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `current_maturities_long_term_borrowings.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
-| `current_maturities_long_term_borrowings.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | — |
+| `borrowings_non_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `borrowings_non_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `borrowings_current.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `borrowings_current.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `current_maturities_long_term_borrowings.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
+| `current_maturities_long_term_borrowings.2024-03-31.consolidated` | — | not found | [UNVERIFIED] | no recognised row |
 | `total_equity.2025-03-31.consolidated` | 600.00 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `total_equity.2024-03-31.consolidated` | 500.00 (INR crore) | extracted | [SOURCE: p.1] | — |
 | `ebit.2025-03-31.consolidated` | — | not found | [UNVERIFIED] | missing input; `ebit = profit_before_tax + interest_expense` (EBIT-PBT) |

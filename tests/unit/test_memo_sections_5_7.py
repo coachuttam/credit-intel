@@ -202,7 +202,7 @@ def test_a_run_with_no_evidence_says_so(golden):
 def test_missing_fields_are_listed_with_their_reason(golden):
     text = part(body(golden), 7)
 
-    assert "**Not found** (20)" in text and "- `revenue.2025-03-31.consolidated` [UNVERIFIED]" in text
+    assert "**Not found** (20)" in text and "- `revenue.2025-03-31.consolidated` — statement not in pages sent [UNVERIFIED]" in text
     assert "- `ebit.2025-03-31.consolidated` — missing input [UNVERIFIED]" in text
     assert text.count("`total_borrowings.2025-03-31.consolidated`") == 1
 
@@ -277,3 +277,35 @@ def test_only_known_labels_resolve_to_data_in_the_results(stressed):
     for kind, identifier in re.findall(r"(?<![\\`])\[(CALCULATED|RULE): ([^\]]+)\]", text):
         if identifier != "ID" and identifier != "RI-xxx":
             assert identifier in ids, (kind, identifier)
+
+
+# --- the reason of a not_found and the fixed sentence (PRD H.2, K.1-K.9 section 7; v0.4.75) --------------------------------------------------------
+
+
+def with_reasons(golden, reasons):
+    """The golden results with the given reason on every source not_found field named in ``reasons`` (field name -> reason)."""
+    for record in golden["fields"]:
+        if record["status"] == "not_found" and record["field_name"] in reasons:
+            record["status_reason"] = reasons[record["field_name"]]
+    return golden
+
+
+def test_the_fixed_sentence_follows_the_not_found_group_when_a_row_was_not_recognised(golden):
+    text = part(body(with_reasons(golden, {"revenue": "no_recognised_row"})), 7)
+
+    assert "- `revenue.2025-03-31.consolidated` — no recognised row [UNVERIFIED]" in text
+    assert text.count("“No recognised row” means no line on the statement pages has a label the system accepts; the report may print the row under another name.") == 1
+    assert text.index("“No recognised row” means") > text.index("- `revenue.2025-03-31.consolidated`")  # it follows the list it explains
+
+
+def test_the_fixed_sentence_is_absent_when_no_row_was_unrecognised(golden):
+    only_others = {r["field_name"]: "statement_not_in_pages_sent" for r in golden["fields"] if r["status"] == "not_found"}
+    text = part(body(with_reasons(golden, only_others)), 7)
+
+    assert "“No recognised row” means" not in text and "statement not in pages sent" in text
+
+
+def test_the_other_two_reasons_are_shown_in_words(golden):
+    text = part(body(with_reasons(golden, {"revenue": "recognised_row_not_read", "net_profit": "statement_not_in_pages_sent"})), 7)
+
+    assert "— recognised row not read [UNVERIFIED]" in text and "— statement not in pages sent [UNVERIFIED]" in text

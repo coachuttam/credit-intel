@@ -61,8 +61,8 @@ def test_a_missing_field_gets_the_question_with_its_period_and_the_pages_reviewe
     revenue = [q for q in asked(golden) if q.startswith("Revenue")]
 
     assert revenue == [
-        "Revenue for the period ending 2025-03-31 was not found on pages 110–115 — confirm the figure from the audited statements. [UNVERIFIED]",
-        "Revenue for the period ending 2024-03-31 was not found on pages 110–115 — confirm the figure from the audited statements. [UNVERIFIED]"]  # fmt: skip
+        "Revenue for the period ending 2025-03-31 was not found on pages 110–115 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]",
+        "Revenue for the period ending 2024-03-31 was not found on pages 110–115 (statement not in pages sent) — confirm the figure from the audited statements. [UNVERIFIED]"]  # fmt: skip
 
 
 def test_fields_that_only_support_another_are_not_asked_about_when_absent(golden):
@@ -233,3 +233,13 @@ def test_the_memo_states_no_decision_recommendation_rating_or_score():
     for word in ("approv", "reject", "recommend", "score of", "rated", "grade"):
         assert not re.search(rf"\b{word}", text), word
     assert text.count("creditworthy") == 1 and "not how creditworthy" in text
+
+
+def test_the_question_for_a_not_found_field_adds_its_reason_in_brackets_and_none_when_there_is_none(golden):
+    golden["extraction"]["candidate_pages"] = [110, 111]
+    for record in golden["fields"]:
+        if record["field_name"] == "revenue" and record["status"] == "not_found":
+            record["status_reason"] = "no_recognised_row" if record["period_role"] == "current" else None
+    revenue = [q for q in asked(golden) if q.startswith("Revenue")]
+
+    assert "was not found on pages 110–111 (no recognised row) — confirm" in revenue[0] and "(" not in revenue[1].split("pages 110–111")[1].split("—")[0]

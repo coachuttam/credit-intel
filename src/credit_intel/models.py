@@ -100,6 +100,17 @@ class StatusReason(StrEnum):
     CURRENCY_MISMATCH = "currency_mismatch"
     BORROWINGS_CLASSIFICATION_UNRESOLVED = "borrowings_classification_unresolved"
     OCR_UNCONFIRMED = "ocr_unconfirmed"  # v0.4.44: the evidence is an OCR reading; always the last reason (FR-005 criterion 11)
+    # v0.4.75, H.2: the reasons of a source ``not_found``. They say what the code can tell of the pages sent, never that the report presents none.
+    STATEMENT_NOT_IN_PAGES_SENT = "statement_not_in_pages_sent"
+    NO_RECOGNISED_ROW = "no_recognised_row"
+    RECOGNISED_ROW_NOT_READ = "recognised_row_not_read"
+
+
+NOT_FOUND_REASONS = (
+    StatusReason.STATEMENT_NOT_IN_PAGES_SENT,
+    StatusReason.NO_RECOGNISED_ROW,
+    StatusReason.RECOGNISED_ROW_NOT_READ,
+)
 
 
 class EvidenceSource(StrEnum):
@@ -394,6 +405,8 @@ class ExtractedField(_Model):
                 raise ValueError("value is null unless the status is extracted")
             if self.status is Status.REQUIRES_REVIEW and self.status_reason is None:
                 raise ValueError("requires_review needs a status_reason")
+            if self.status_reason in NOT_FOUND_REASONS and (self.status is not Status.NOT_FOUND or self.origin is not Origin.SOURCE):
+                raise ValueError("only a source field that was not found has a not-found reason")
 
         if self.status is Status.CONFLICTING and len(self.candidates) < 2:
             raise ValueError("a conflicting field lists at least two candidates")

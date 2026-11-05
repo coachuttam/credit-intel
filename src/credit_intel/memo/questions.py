@@ -67,7 +67,8 @@ def _review(record: dict[str, Any]) -> str:
 
 
 def _not_found(record: dict[str, Any], pages: str) -> str:
-    return f"{_subject(record)} was not found on {pages} — confirm the figure from the audited statements. {UNVERIFIED_LABEL}"
+    reason = f" ({esc(words(record['status_reason']))})" if record["status_reason"] else ""  # PRD K.1-K.9 section 8, v0.4.75
+    return f"{_subject(record)} was not found on {pages}{reason} — confirm the figure from the audited statements. {UNVERIFIED_LABEL}"
 
 
 def _unevaluable(indicator: dict[str, Any]) -> str:

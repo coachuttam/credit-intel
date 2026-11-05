@@ -154,7 +154,7 @@ def run_layout(tmp_path: Path, layout: Layout, name: str = "stress.pdf") -> dict
     records = result.field_set.fields
     reasons: dict[str, int] = {}
     for record in records:
-        if record.status_reason:
+        if record.status_reason and record.status.value != "not_found":  # the reasons of a field that was proposed and failed a check
             reasons[record.status_reason.value] = reasons.get(record.status_reason.value, 0) + 1
     right = sum(
         1

@@ -418,6 +418,9 @@ def section_6(results: dict[str, Any]) -> list[str]:
 # --- section 7: missing information and conflicts ---------------------------------------------------------------------------------------------
 
 
+NO_RECOGNISED_ROW_NOTE = "“No recognised row” means no line on the statement pages has a label the system accepts; the report may print the row under another name."
+
+
 def section_7(results: dict[str, Any]) -> list[str]:
     lines = ["## 7. Missing information and conflicts", ""]
     flagged = [r for r in listed_records(results) if r["status"] != "extracted"]
@@ -444,6 +447,8 @@ def section_7(results: dict[str, Any]) -> list[str]:
                     lines += ["", f"  OCR confidence, the engine's own figures and not a measure of correctness: lowest word {figures['min_word_confidence']}, mean of the quote's words {figures['mean_word_confidence']}, page mean {figures['page_mean_confidence']}. {calculated('extraction')}"]
             if record["candidates"] or (status == "requires_review" and record["evidence_quote"] is not None):
                 lines.append("")
+        if status == "not_found" and any(r["status_reason"] == "no_recognised_row" for r in group):  # PRD K.1-K.9 section 7, v0.4.75
+            lines += ["", NO_RECOGNISED_ROW_NOTE]
         lines.append("")
     if attributes:
         lines += [f"**Document details not confirmed** ({len(attributes)})", ""]

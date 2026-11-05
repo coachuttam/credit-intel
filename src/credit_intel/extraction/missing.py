@@ -10,7 +10,7 @@ A period whose end date was not validated has no date to give a record, and its
 absence is reported by the period-end attribute, so no records are made for it.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from credit_intel.extraction.attributes import VerifiedAttributes
 from credit_intel.models import (
@@ -21,6 +21,7 @@ from credit_intel.models import (
     SourceDocument,
     StatementBasis,
     Status,
+    StatusReason,
     make_field_id,
 )
 
@@ -34,11 +35,13 @@ def missing_fields(
     attributes: VerifiedAttributes,
     basis: StatementBasis,
     source_document: SourceDocument,
+    reason_of: Callable[[FieldName], StatusReason] | None = None,
 ) -> tuple[ExtractedField, ...]:
     """A ``not_found`` record for each H.3 field and validated period with no record.
 
     ``present`` are the run's records after the basis filter. The new records have the
-    run's ``basis`` and are in field order, current period first.
+    run's ``basis`` and are in field order, current period first. ``reason_of`` gives the
+    reason of H.2 (v0.4.75) for a field name; without it a record has none.
     """
     have = {(record.field_name, record.period_role) for record in present}
     records = []
@@ -57,6 +60,7 @@ def missing_fields(
                     period_role=role,
                     statement_basis=basis,
                     status=Status.NOT_FOUND,
+                    status_reason=reason_of(name) if reason_of is not None else None,
                     source_document=source_document,
                 )
             )

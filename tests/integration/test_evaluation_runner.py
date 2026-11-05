@@ -82,7 +82,8 @@ def test_reasons_are_counted_when_fields_fail(pdf, tmp_path):
     summary, _ = tuning(pdf, tmp_path, replies=[reply])
 
     assert summary["fields"]["counts"]["requires_review"] == 1
-    assert summary["fields"]["reasons"] == {"period_not_verified": 1}
+    # a balance sheet alone is sent: the ten income-statement records are not in the pages sent, the eight absent balance-sheet records have no recognised row (H.2, v0.4.75)
+    assert summary["fields"]["reasons"] == {"period_not_verified": 1, "statement_not_in_pages_sent": 10, "no_recognised_row": 8}
     assert "current_assets/current/consolidated: requires_review (period_not_verified)" in summary["fields"]["outcomes"]
 
 

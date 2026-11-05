@@ -316,7 +316,7 @@ def run_extraction(
             )
         )
         verifications = verifier.verify_all(extraction.response)
-        field_set = build_field_set(verifications, attributes, located, basis, source)
+        field_set = build_field_set(verifications, attributes, located, basis, source, pages, label_settings, locator_settings)
         log(VALIDATED_FIELDS, **field_set.counts, ignored=len(field_set.ignored), unplaced=len(field_set.unplaced))
     except IngestionError as error:
         logger.info("stage=%s doc=%s after=%s code=%s", FAILED, document_tag, stage, error.code.value)

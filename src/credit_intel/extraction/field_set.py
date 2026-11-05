@@ -8,16 +8,18 @@ Every record keeps its status; nothing downstream changes one.
 """
 
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from credit_intel.config import LabelSettings, LocatorSettings
 from credit_intel.extraction.attributes import VerifiedAttributes
 from credit_intel.extraction.bases import filter_by_basis
 from credit_intel.extraction.missing import H3_FIELDS, PERIOD_ROLES, missing_fields
+from credit_intel.extraction.notfound import not_found_reason
 from credit_intel.extraction.plausibility import apply_plausibility
 from credit_intel.extraction.reconcile import reconcile
 from credit_intel.extraction.verify import FieldVerification
-from credit_intel.ingestion.models import LocatorResult
+from credit_intel.ingestion.models import LocatorResult, PageText
 from credit_intel.models import ExtractedField, FieldName, PeriodRole, SourceDocument, StatementBasis, Status
 
 _FIELD_ORDER = {name: index for index, name in enumerate(H3_FIELDS)}
@@ -56,7 +58,11 @@ def build_field_set(
     located: LocatorResult,
     configured_basis: StatementBasis,
     source_document: SourceDocument,
+    pages: Mapping[int, PageText] | None = None,
+    label_settings: LabelSettings | None = None,
+    locator_settings: LocatorSettings | None = None,
 ) -> FieldSet:
+    """``pages`` are the pages sent; with them a ``not_found`` record carries its reason (H.2, v0.4.75)."""
     if configured_basis not in (StatementBasis.CONSOLIDATED, StatementBasis.STANDALONE):
         raise ValueError("the configured basis is consolidated or standalone")
     records = [v.field for v in verifications if v.field is not None]
@@ -65,7 +71,8 @@ def build_field_set(
     split = filter_by_basis(records, configured_basis.value, lambda record: record.statement_basis)
     reconciled = reconcile(split.kept, located)
     plausible = apply_plausibility(reconciled)
-    absent = missing_fields(plausible, attributes, configured_basis, source_document)
+    reason_of = None if pages is None else (lambda name: not_found_reason(name, located, pages, label_settings, locator_settings))
+    absent = missing_fields(plausible, attributes, configured_basis, source_document, reason_of)
 
     ordered = sorted(
         (*plausible, *absent),
