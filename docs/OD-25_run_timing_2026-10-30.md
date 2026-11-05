@@ -88,15 +88,15 @@ A real run's time is the 47 to 94 s above plus the model call (and the correctiv
 Commands for the owner's terminal (each run in a fresh directory):
 
 ```
-cd /Users/uttam/projects/ai-credit-intelligence
+cd <repo>
 set -a; source .env; set +a
 export CREDIT_INTEL_TOKEN_CEILING=30000
-PDF=/private/tmp/claude-501/-Users-uttam-projects-ai-credit-intelligence/27d85da9-4434-4bc0-984a-fdaef87413c0/scratchpad/dl/RIL-Integrated-Annual-Report-2024-25.pdf
+PDF=<scratch>/dl/RIL-Integrated-Annual-Report-2024-25.pdf
 for i in 1 2 3; do
   d=$(mktemp -d)
-  ( cd "$d" && uv run --project /Users/uttam/projects/ai-credit-intelligence credit-intel "$PDF" \
+  ( cd "$d" && uv run --project <repo> credit-intel "$PDF" \
       --confirm-public-document --output-dir "$d/runs" \
-      --config /Users/uttam/projects/ai-credit-intelligence/config/settings.toml )
+      --config <repo>/config/settings.toml )
   echo "run $i folder: $d/runs"
 done
 ```
