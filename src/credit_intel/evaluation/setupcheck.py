@@ -34,7 +34,7 @@ from credit_intel.config import ENV_TOKEN_CEILING, LLMSettings, load_llm_setting
 from credit_intel.evaluation.dry_run import dry_run
 from credit_intel.evaluation.gate import GateReferenceError, load_reference
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, file_sha256, load_current_sets
-from credit_intel.evaluation.heldout import LEDGER_PATH, HeldOutRefused, load_ledger
+from credit_intel.evaluation.ledger import LEDGER_PATH, LedgerUnreadable, read_ledger, used_shas
 from credit_intel.evaluation.score import LabelsError, load_labels
 from credit_intel.extraction.normalise import parse_value
 from credit_intel.ingestion.errors import IngestionError
@@ -139,8 +139,8 @@ def _guard(sha256: str, assignments: Path, ledger: Path) -> tuple[str, str]:
     """``(document id, set)`` of a document the check may read: a tuning document, or a held-out document no round has used. Fails closed."""
     try:
         known = load_current_sets(assignments).get(sha256) if assignments.exists() else None
-        used = {record["sha256"] for record in load_ledger(ledger)}
-    except (SendRefused, HeldOutRefused):
+        used = used_shas(read_ledger(ledger))
+    except (SendRefused, LedgerUnreadable):
         raise SendRefused("the assignment record or the ledger cannot be read") from None
     if known is None:
         raise SendRefused(f"the document ({sha256[:12]}) is not on the assignment record")

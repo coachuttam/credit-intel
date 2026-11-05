@@ -236,6 +236,29 @@ def test_a_held_out_document_that_a_round_has_used_stays_closed(pdf, tmp_path, l
         check(tmp_path, pdf, llm, reference_data(pdf), group="held_out", used=True)
 
 
+def test_a_released_held_out_document_may_be_checked_and_one_used_again_after_its_release_is_closed(pdf, tmp_path, llm):
+    from credit_intel.evaluation.ledger import LEDGER_MEMBERS, RELEASE_MEMBERS
+
+    sha = file_sha256(pdf)
+    base = ("R9", sha, "H-1", "{}", "2026-11-04T00:00:00Z", "c" * 40, "a" * 64)
+
+    def lines(*events):
+        out = []
+        for event in events:
+            members = RELEASE_MEMBERS if event == "released" else LEDGER_MEMBERS
+            values = [event if v == "{}" else v for v in base] + (["stopped before any page was read"] if event == "released" else [])
+            out.append(json.dumps(dict(zip(members, values, strict=True)), separators=(",", ":")))
+        return "\n".join(out) + "\n"
+
+    path = tmp_path / "released.jsonl"
+    path.write_text(lines("started", "completed", "released"), encoding="utf-8")
+    setup = setup_from_gate_reference(write(tmp_path, reference_data(pdf)))
+    assert check_setup(setup, pdf, llm, records(tmp_path, pdf, "held_out"), path)["pre_run_setup_check"] is True
+    path.write_text(lines("started", "completed", "released", "started"), encoding="utf-8")
+    with pytest.raises(SendRefused, match="stays closed"):
+        check_setup(setup, pdf, llm, records(tmp_path, pdf, "held_out"), path)
+
+
 def test_a_used_tuning_sha_in_the_ledger_does_not_close_a_tuning_document(pdf, tmp_path, llm):
     assert check(tmp_path, pdf, llm, reference_data(pdf), used=True)["ready"] is True
 

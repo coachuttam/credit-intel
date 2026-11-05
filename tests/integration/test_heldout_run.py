@@ -225,9 +225,13 @@ def test_no_other_module_imports_the_held_out_tool():
         if path.name == "heldout.py":
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            names = [a.name for a in node.names] if isinstance(node, ast.Import | ast.ImportFrom) else []
-            module = node.module if isinstance(node, ast.ImportFrom) else ""
-            assert "heldout" not in [*names, module or ""] and not any(n.endswith("heldout") for n in names), path.name
+            if isinstance(node, ast.Import):
+                dotted = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                dotted = [node.module or "", *(f"{node.module}.{a.name}" for a in node.names)]
+            else:
+                continue
+            assert not any(part == "heldout" for name in dotted for part in name.split(".")), path.name
 
 
 def test_one_held_out_document_given_twice_is_refused(setup):
@@ -318,3 +322,36 @@ def test_a_still_unused_held_out_document_left_out_still_refuses_the_run(tmp_pat
     other, setup = _two_documents(tmp_path, pdf)  # nothing used: both are required
 
     setup.refused("not_the_held_out_set")
+
+
+# --- a released document (the owner's decision of 2026-11-05) ---------------------------------------------------------------------------------
+
+
+def _release_line(sha, run_id="H-earlier"):
+    from credit_intel.evaluation.ledger import RELEASE_MEMBERS
+
+    return json.dumps(dict(zip(RELEASE_MEMBERS, ("H8", sha, run_id, "released", "2026-11-05T00:00:00Z", HEAD, "x", "stopped before any page was read"), strict=True)), separators=(",", ":")) + "\n"
+
+
+def test_a_released_document_is_required_again_and_a_run_that_leaves_it_out_is_refused(tmp_path, pdf):
+    other, setup = _two_documents(tmp_path, pdf)
+    setup.ledger.write_text(_used_line(file_sha256(other)) + _release_line(file_sha256(other)), encoding="utf-8")  # H8 was used, then released
+
+    setup.refused("not_the_held_out_set")  # both are unused again, so both are required
+
+
+def test_a_released_document_is_run_with_the_other_and_is_used_again(tmp_path, pdf):
+    other, setup = _two_documents(tmp_path, pdf)
+    setup.ledger.write_text(_used_line(file_sha256(other)) + _release_line(file_sha256(other)), encoding="utf-8")
+    setup.reference.write_text(json.dumps(g.reference_data(pdf, document_id="H9")), encoding="utf-8")
+    second_reference = tmp_path / "ref2.json"
+    second_reference.write_text(json.dumps(g.reference_data(other, document_id="H8")), encoding="utf-8")
+    setup.provider = FakeProvider(script=[g.reply(pdf), g.reply(other)])
+
+    setup.run(documents=[(pdf, setup.reference), (other, second_reference)])
+
+    events = [(r["document_id"], r["event"]) for r in setup.ledger_lines()]
+    assert events.count(("H8", "started")) == 1 and ("H8", "released") in events and events[-1] == ("H8", "completed")
+    with pytest.raises(HeldOutRefused) as raised:  # and now every held-out document is used again
+        setup.run(documents=[(pdf, setup.reference), (other, second_reference)])
+    assert raised.value.reason == "already_used"

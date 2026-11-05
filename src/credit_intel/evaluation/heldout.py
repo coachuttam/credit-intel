@@ -37,16 +37,15 @@ from credit_intel.evaluation.guard import (
     file_sha256,
     load_current_sets,
 )
+from credit_intel.evaluation.ledger import LEDGER_MEMBERS, LEDGER_PATH, LedgerUnreadable, append_ledger, read_ledger, used_shas
 from credit_intel.extraction.pipeline import run_extraction
 from credit_intel.extraction.prompt import DEFAULT_PROMPT, load_prompt
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.llm.factory import build_provider
 
 ENV_HELD_OUT_APPROVED = "CREDIT_INTEL_HELD_OUT_APPROVED"  # the freeze commit (12 or more characters) the owner typed for this run
-LEDGER_PATH = PROJECT_ROOT / "tests" / "eval" / "heldout_runs.jsonl"
 CACHE_DIR = PROJECT_ROOT / ".cache" / "llm_heldout"  # separate from the tuning cache; must be empty at the start
 REPORT_DIR = PROJECT_ROOT / "private" / "eval"
-LEDGER_MEMBERS = ("document_id", "sha256", "run_id", "event", "at", "freeze_commit", "assignments_sha256")
 FROZEN_PATHS = ("src", "config", "prompts", "tests/eval", "uv.lock", "pyproject.toml")  # a change under any of them means not frozen
 HASHED_FILES = ("uv.lock", "config/settings.toml", "config/risk_rules.toml")
 MIN_COMMIT_CHARACTERS = 12
@@ -66,40 +65,11 @@ class HeldOutRefused(Exception):
 
 
 def load_ledger(path: Path) -> list[dict]:
-    """The ledger's lines; a missing file is an empty ledger (the first run). Anything malformed refuses everything."""
-    if not path.exists():
-        return []
+    """The ledger's lines (``ledger.read_ledger``); anything malformed refuses everything."""
     try:
-        text = path.read_bytes().decode("utf-8")
-    except (OSError, UnicodeDecodeError):
+        return read_ledger(path)
+    except LedgerUnreadable:
         raise HeldOutRefused("ledger_unreadable") from None
-    if "\r" in text or (text and not text.endswith("\n")):
-        raise HeldOutRefused("ledger_unreadable")
-    records = []
-    for line in text.split("\n")[:-1] if text else []:
-        try:
-            record = json.loads(line)
-        except ValueError:
-            raise HeldOutRefused("ledger_unreadable") from None
-        if (
-            not isinstance(record, dict)
-            or tuple(record) != LEDGER_MEMBERS
-            or not all(isinstance(value, str) for value in record.values())
-            or record["event"] not in ("started", "completed")
-        ):
-            raise HeldOutRefused("ledger_unreadable")
-        records.append(record)
-    return records
-
-
-def append_ledger(path: Path, record: dict) -> None:
-    """Append one line and make it durable before the caller goes on (a ``started`` line must outlive a crash)."""
-    assert tuple(record) == LEDGER_MEMBERS
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(record, separators=(",", ":"), ensure_ascii=True) + "\n")
-        handle.flush()
-        os.fsync(handle.fileno())
 
 
 def git_state(root: Path) -> tuple[str, list[str]]:
@@ -173,7 +143,7 @@ def run_held_out(
     except OSError:
         raise HeldOutRefused("not_held_out") from None
     # 4. One shot per document: a used document is refused, and nothing left to run is refused too.
-    used = {record["sha256"] for record in load_ledger(ledger)}
+    used = used_shas(load_ledger(ledger))
     if set(shas) & used or not held_out - used:
         raise HeldOutRefused("already_used")
     if len(set(shas)) != len(shas) or set(shas) != held_out - used:
