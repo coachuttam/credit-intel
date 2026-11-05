@@ -64,7 +64,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from credit_intel.calculations.borrowings import total_borrowings_for
-from credit_intel.config import DEFAULT_SETTINGS_PATH, ENV_TOKEN_CEILING, LabelSettings, LLMSettings, load_llm_settings
+from credit_intel.config import DEFAULT_SETTINGS_PATH, ENV_TOKEN_CEILING, LabelSettings, LLMSettings, LocatorSettings, load_llm_settings
 from credit_intel.evaluation.gate import GateReferenceError, _amount, _NoCallProvider, _not_presented, _page
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, check_may_send, file_sha256, load_current_sets, refuse_if_held_out
 from credit_intel.extraction.field_set import FieldSet
@@ -498,8 +498,12 @@ def replay(
     config: Path = DEFAULT_SETTINGS_PATH,
     llm: LLMSettings | None = None,
     prompt: Prompt | None = None,
+    label_settings: LabelSettings | None = None,
+    locator_settings: LocatorSettings | None = None,
 ) -> dict:
-    """Replay a tuning document from the response cache and score it. Nothing is sent; a held-out document is refused before any page is read."""
+    """Replay a tuning document from the response cache and score it. Nothing is sent; a held-out document is refused before any page is read.
+
+    ``label_settings`` and ``locator_settings`` replace the defaults the run verifies and locates with (the ablation of ``ablation.py``)."""
     sha256 = file_sha256(path)
     refuse_if_held_out(sha256, assignments)
     document_id = check_may_send(sha256, assignments)
@@ -510,7 +514,7 @@ def replay(
     try:
         run = run_extraction(
             path, _NoCallProvider(), llm, basis=labels.basis, cache_dir=cache_dir, prompt=prompt,
-            page_range=labels.pages, assert_basis=labels.assert_basis,
+            page_range=labels.pages, assert_basis=labels.assert_basis, label_settings=label_settings, locator_settings=locator_settings,
         )  # fmt: skip
     except RuntimeError:
         return {**failed, "reason": "cache_miss"}

@@ -95,3 +95,29 @@ Out of scope: opening H1 to H6; any change to a prompt, list or setting during d
 - **What was learned from H3's attempt:** its size, and the input limits were raised because of that stop (v0.4.43, decided openly at the time). No content was learned.
 
 The PRD wording of the ledger (the `event` values, the `reason` member, the meaning of `already_used`, and this release) is drafted in `docs/PRD_v0.4.73_draft.md` for the owner's approval; it is not applied.
+
+## 10. Controlled variant 1: the ablation of added phrases (2026-11-05; tuning documents only; offline; no spend)
+
+`credit_intel.evaluation.ablation` replays R1 and R2 from the response cache with the phrases that were added from tuning documents taken out (section 7 and `tests/eval/phrase_provenance.json`), and scores them against the owner's labels with the stage of each failure (S-1). Counts only.
+
+| Variant | R1 (locator run) | R2 (pages given) |
+|---|---|---|
+| Baseline | SC-01 14/14 | SC-01 22/22 |
+| Row-label phrases added from this document removed (`own`) | 12/14; the 2 lost entries are `not_proposed` | **4/22**; 10 `refused/label_not_recognised`, 6 `not_proposed`, 2 `derived/missing_input` |
+| Row-label phrases added from any tuning document removed (`added`) | 12/14 | 4/22 (the same) |
+| Locator phrases cut too (`--locator`), `own` or `added` | **the run stops, no result:** `E-EXTRACT-BASIS-UNAVAILABLE` (R1's locator needs the prefix word "consolidated" it was given) | 4/22 (the pages were given, so the locator cut changes nothing) |
+
+**What it shows (tuning evidence, and a statement about these two documents only):**
+1. **R2's whole tuning score rests on phrases added from R2.** Without the eight label phrases added from it (and with the same cached model reply and the same pages), it falls from 22/22 to 4/22. This is the nearest tuning-only stand-in for what a document of its kind scores before the list has been fitted to it. It is an upper bound, not a prediction: the model's reply was obtained with the current prompt, which was itself tuned on R1 and R2.
+2. **The failures take three shapes, not one.** Most are a refusal with a reason (`label_not_recognised`). Some are a field that is simply absent, `not_proposed`, with no reason at all: the code finds a row for a field the model did not return by the same phrase list, so with the phrase gone the row is never proposed and the field reads `not_found`. And the borrowings total fails as a consequence (`derived/missing_input`). That matches the differing reason sets of H5 and H6 (H5: `label_not_recognised`, `period_mismatch`, `no_record`; H6: `basis_unknown`, `not_found`, `missing_input`) as a possibility, not as an explanation of them.
+3. **A `not_found` can hide a list failure.** For the memo and the analyst, a field that reads `not_found` does not say whether the report does not present it or the row label was not recognised. S-1's `not_proposed` stage cannot yet tell the model's omission from a code scan that found no row.
+4. **The locator is a second single point of failure.** R1 without the locator phrases added for it does not degrade; it stops with no result at all.
+
+**Not shown:** that any of this is what happened on H5 and H6 (their documents stay closed); anything about the period-column check, the basis handling beyond the stop above, or the model's own omissions on a new document.
+
+**Next, each needing the owner's approval before any send (none is made here):** the variants that cannot be answered from the cache, in the order I would take them, each one document, one send, under the USD 1.00 cap:
+- **V2** R2 run by the locator without its page range and assertion (expected: stops at the basis gate, which the dry run already shows with no send; so probably no send needed);
+- **V3** R1 with its statement pages given explicitly, to separate the locator's page choice from the extraction;
+- **V4** R1 or R2 with the other statements' fields (a second pair of pages), to see label vocabulary outside the first pair;
+- **V5** the same pages with a re-ordered or re-worded instruction is **not** proposed (it changes the prompt).
+I will propose exact commands one at a time and wait.
