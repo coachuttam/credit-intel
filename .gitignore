@@ -48,3 +48,7 @@ uploads/
 
 # --- Run folders: memo.md, results.json and manifest.json hold financial figures and quotes (FR-010) ---
 runs/
+
+# --- Local diagram-tool output: run folders and delivery receipts hold absolute local paths ---
+.archify/
+docs/architecture/pipeline.*.json

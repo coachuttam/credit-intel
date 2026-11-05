@@ -35,10 +35,12 @@ def test_it_starts_by_saying_it_is_a_draft_for_human_review_and_not_a_credit_dec
     assert "draft credit memo for a human analyst to review" in first and "not a credit decision" in first
 
 
-def test_it_says_the_held_out_evaluation_has_not_been_done_and_claims_no_measured_result():
+def test_it_states_the_held_out_miss_plainly_and_claims_no_measured_result():
     status = section("Status")
 
-    assert "not been evaluated against the held-out set" in status and "none is claimed" in status
+    assert "0 of 12" in status and "0 of 30" in status and "did not generalise" in status
+    assert "docs/PHASE7c_findings_report.md" in status and "second held-out round" in status
+    assert "none is claimed" in status
     assert not re.search(r"\d\s?%\s+(accura|precis|recall|coverage|correct)", README, re.I)
 
 
