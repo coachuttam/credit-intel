@@ -523,14 +523,71 @@ def test_a_year_only_header_on_a_second_page_is_derived_from_the_current_period_
     assert result.field.validation.details["column"]["anchor_quotes"] == ["2024"]
 
 
-def test_without_a_run_the_second_page_has_no_declaration(tmp_path):
-    located = LocatorResult("page_range", (CandidatePage(1, (), None, ()), CandidatePage(2, (), None, ())))
-    env = build(tmp_path / "r2.pdf", candidates=(1, 2), located=located, pages=2)
-    verifier, line, _ = env
+def range_env(tmp_path, name, candidates, pages, **options):
+    located = LocatorResult("page_range", tuple(CandidatePage(n, (), None, ()) for n in candidates))
+    return build(tmp_path / name, candidates=candidates, located=located, pages=pages, **options)
+
+
+def test_with_a_page_range_the_second_page_of_a_statement_takes_the_first_pages_declaration(tmp_path):
+    verifier, line, _ = range_env(tmp_path, "r2.pdf", (1, 2), 2)  # the second page repeats the title, so it continues the statement (rule 3b)
 
     result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2))
 
+    assert result.field.status is Status.EXTRACTED and result.field.status_reason is None
+
+
+def test_with_a_page_range_a_second_page_that_does_not_continue_the_statement_has_no_declaration(tmp_path):
+    verifier, line, _ = range_env(tmp_path, "r3.pdf", (1, 2), 2, rows=[ROWS[0], ROWS[2]], titles={1: None})  # no title and under four line items: not a continuation
+
+    result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2))
+
+    assert R.SCALE_NOT_VERIFIED in result.reasons and result.field.status is not Status.EXTRACTED  # the basis is unknown too: no title on that page
+
+
+def test_with_a_page_range_a_page_that_is_not_next_to_the_first_has_no_declaration(tmp_path):
+    verifier, line, _ = range_env(tmp_path, "r4.pdf", (1, 3), 3)  # page 2 is not among the pages given, so page 3 continues nothing
+
+    result = verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=3))
+
     assert result.field.status_reason is R.SCALE_NOT_VERIFIED
+
+
+def test_with_a_page_range_the_first_page_still_relies_on_its_own_declaration(tmp_path):
+    verifier, line, _ = range_env(tmp_path, "r5.pdf", (1, 2), 2)
+
+    assert verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=1)).field.status is Status.EXTRACTED
+
+
+def test_with_a_page_range_a_declaration_on_no_page_of_the_run_is_still_not_verified(tmp_path):
+    verifier, line, _ = range_env(tmp_path, "r6.pdf", (1, 2), 2, scale_line=None)
+
+    assert verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2)).field.status_reason is R.SCALE_NOT_VERIFIED
+
+
+def test_a_located_run_does_not_take_the_range_rule_for_a_page_the_locator_did_not_select_for_the_type(tmp_path):
+    located = LocatorResult("keywords", (CandidatePage(1, ("balance_sheet",), 9, ()), CandidatePage(2, (), None, ())))
+    verifier, line, _ = build(tmp_path / "k2.pdf", candidates=(1, 2), located=located, pages=2)
+
+    assert R.SCALE_NOT_VERIFIED in verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2)).reasons
+
+
+def test_the_locator_settings_in_the_context_decide_which_pages_of_a_range_continue_a_statement(tmp_path):
+    from dataclasses import replace
+
+    from credit_intel.config import LocatorSettings
+
+    verifier, line, _ = range_env(tmp_path, "r7.pdf", (1, 2), 2)
+    no_titles = LocatorSettings(title_phrases={"balance_sheet": ("something else entirely",), "income_statement": ()})
+    other = FieldVerifier(replace(verifier._ctx, locator_settings=no_titles))
+
+    assert R.SCALE_NOT_VERIFIED in other.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2)).reasons
+
+
+def test_a_located_run_is_unchanged_by_the_range_rule(tmp_path):
+    located = LocatorResult("keywords", (CandidatePage(1, ("balance_sheet",), 9, ()), CandidatePage(2, ("balance_sheet",), 5, ())))
+    verifier, line, _ = build(tmp_path / "k.pdf", candidates=(1, 2), located=located, pages=2)
+
+    assert verifier.verify(proposal(line, F.TOTAL_EQUITY, CUR, "600.00", "Total equity", page=2)).field.status is Status.EXTRACTED
 
 
 # --- the basis of each field (H.4.6, step 8a) -----------------------------------------------------------------------------------

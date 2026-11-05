@@ -41,8 +41,8 @@ from credit_intel.extraction.labels import LabelCheck, check_label, expense_tabl
 from credit_intel.extraction.normalise import apply_scale, parse_value
 from credit_intel.extraction.periods import page_period_resolver
 from credit_intel.extraction.presence import check_presence
-from credit_intel.extraction.runs import statement_run_start
-from credit_intel.ingestion.locator import title_lines
+from credit_intel.extraction.runs import range_page_types, run_start, statement_run_start
+from credit_intel.ingestion.locator import PAGE_RANGE, title_lines
 from credit_intel.ingestion.models import LocatorResult, PageText, PageWords
 from credit_intel.models import (
     BasisEvidence,
@@ -153,6 +153,7 @@ class FieldVerifier:
     def __init__(self, context: VerificationContext) -> None:
         self._ctx = context
         self._structures: dict[int, PageStructure | None] = {}
+        self._range_types: dict[int, tuple[str, ...]] | None = None  # the statement types of the pages of a page range, worked out once
         self.refilings: tuple[FieldRefiling, ...] = ()
         self.scans: tuple[FieldScan, ...] = ()
 
@@ -373,6 +374,10 @@ class FieldVerifier:
         page = ctx.pages.get(proposed.page_number)
         if page is not None:
             start = statement_run_start(ctx.located, proposed.page_number, FIELD_STATEMENT_TYPES[name.value])
+            if start is None and ctx.located.method == PAGE_RANGE:  # v0.4.74: the pages of a range have no types from the locator; work the run out from the pages given
+                if self._range_types is None:
+                    self._range_types = range_page_types(ctx.pages, ctx.locator_settings)
+                start = run_start(self._range_types, proposed.page_number, FIELD_STATEMENT_TYPES[name.value])
             run_page = ctx.pages.get(start) if start is not None and start != proposed.page_number else None
             run_text = run_page.text if run_page is not None else None
             scale = check_scale(proposed.scale, page.text, run_text, ctx.declaration_settings)

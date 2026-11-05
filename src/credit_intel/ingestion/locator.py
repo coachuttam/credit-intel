@@ -363,6 +363,18 @@ def locate_statements(
     return LocatorResult(KEYWORDS, candidates, (), excluded)
 
 
+def page_statement_types(pages: Sequence[PageText], settings: LocatorSettings | None = None) -> dict[int, tuple[str, ...]]:
+    """The statement types each of the given pages qualifies for under rules 3a to 3c (PRD v0.4.74), taken in ascending page order.
+
+    It is the locator's own page classification, with no cap, no chain cut and no exclusion: a page that is not one of the given pages
+    does not exist for it, so a continuation (rule 3b) needs the page before it among the pages given. Used for the pages of a page range,
+    which the locator itself does not classify (``locate_statements`` records no statement types for a range). A page that qualifies for
+    no type is left out.
+    """
+    scored, _, _ = _score_pages(pages, _Matchers(settings or LocatorSettings()))
+    return {number: tuple(page.statement_types) for number, page in scored.items()}
+
+
 def statement_runs(result: LocatorResult) -> tuple[tuple[str, tuple[int, ...]], ...]:
     """Consecutive selected pages sharing a statement type (FR-013 rule 6).
 
