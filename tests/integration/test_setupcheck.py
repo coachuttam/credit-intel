@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -112,16 +113,23 @@ def test_a_printed_text_that_is_not_a_figure_has_no_magnitude(printed):
     assert _figure(printed) is None
 
 
-def test_the_items_of_a_file_are_its_printed_figures_with_their_pages_and_parts_are_separate_items():
+def test_the_items_of_a_file_are_its_printed_figures_with_their_pages_fields_and_parts_are_separate_items():
     entries = [
-        {"field": "revenue", "period": "current", "printed": "1", "page": 3},
-        {"field": "revenue", "period": "comparative", "printed": "2", "pages": [9, 4, 9]},
-        {"field": "total_borrowings", "period": "current", "parts": [{"printed": "4", "page": 5}, {"printed": "6", "page": 6}]},
-        {"field": "total_borrowings", "period": "comparative", "presented": False},
+        {"field": "revenue", "period": "current", "period_end": "2025-03-31", "scale": "crore", "currency": "INR", "printed": "1", "page": 3},
+        {"field": "revenue", "period": "comparative", "period_end": "2024-03-31", "scale": "crore", "printed": "2", "pages": [9, 4, 9]},
+        {"field": "total_borrowings", "period": "current", "period_end": "2025-03-31", "currency": "INR",
+         "parts": [{"printed": "4", "scale": "crore", "page": 5}, {"printed": "6", "scale": "lakh", "page": 6}]},  # fmt: skip
+        {"field": "total_borrowings", "period": "comparative", "period_end": "2024-03-31", "presented": False},
         {"field": "net_profit", "period": "current", "absent": True},
     ]
 
-    assert [(i.printed, i.pages) for i in _items(entries)] == [("1", (3,)), ("2", (4, 9)), ("4", (5,)), ("6", (6,))]
+    items = _items(entries)
+
+    assert [(i.printed, i.pages) for i in items] == [("1", (3,)), ("2", (4, 9)), ("4", (5,)), ("6", (6,))]
+    assert [(i.field, i.period_end, i.scale, i.currency) for i in items] == [
+        ("revenue", date(2025, 3, 31), "crore", "INR"), ("revenue", date(2024, 3, 31), "crore", None),
+        ("total_borrowings", date(2025, 3, 31), "crore", "INR"), ("total_borrowings", date(2025, 3, 31), "lakh", "INR"),
+    ]  # fmt: skip
 
 
 # --- a titled document ----------------------------------------------------------------------------------------------------------------------
@@ -406,3 +414,148 @@ def test_the_report_says_it_is_for_a_tuning_document_and_counts_the_pages_droppe
     report = run(tmp_path, pdf, llm, manual(pdf, [("352.70", (1,))]))
 
     assert report["set"] == "tuning" and report["pages_dropped_for_unknown_basis"] == 2
+
+
+# --- the declaration and period-column checks, against the stress layouts (Phase 7c, S-4 widened) ----------------------------------------------
+
+
+def layout_setup(pdf, layout):
+    """A setup for a stress layout, with the values the page prints as the owner would label them."""
+    from credit_intel.evaluation.setupcheck import Item, Setup
+    from stress_layouts import BASE_ROWS
+
+    pages = layout.page_range or ("1" if layout.asserted else None)
+    items = []
+    for index, ((field, _, _, _), (current, comparative)) in enumerate(zip(BASE_ROWS, layout.figures, strict=True)):
+        page = 2 if layout.second_page_from is not None and index >= layout.second_page_from else 1
+        for printed, end in ((current, date.fromisoformat(layout.period_current)), (comparative, date.fromisoformat(layout.period_comparative))):
+            items.append(Item(printed, (page,), field, end, layout.scale_token, layout.currency_code))
+    return Setup("R9", file_sha256(pdf), layout.basis_value, pages, layout.basis_value if layout.asserted else None, tuple(items))
+
+
+def stress(tmp_path, llm, layout, name="s.pdf"):
+    from stress_layouts import build
+
+    pdf = build(tmp_path / name, layout)
+    return check_setup(layout_setup(pdf, layout), pdf, llm, records(tmp_path, pdf), ledger(tmp_path))
+
+
+def test_a_base_layout_has_a_declaration_and_a_period_column_for_every_value(tmp_path, llm):
+    from stress_layouts import variant
+
+    report = stress(tmp_path, llm, variant())
+
+    assert report["ready"] and report["scale_and_currency_declared"] == report["values_checked_for_a_declaration"] == 6
+    assert report["value_in_a_column_of_its_period"] == report["values_checked_for_a_period_column"] == 6 and report["labelled_pages_with_a_readable_structure"] == 1
+
+
+def test_a_page_with_no_scale_or_currency_declared_is_found(tmp_path, llm):
+    from stress_layouts import variant
+
+    report = stress(tmp_path, llm, variant(scale_line=None))
+
+    assert report["scale_and_currency_declared"] == 0 and report["values_checked_for_a_declaration"] == 6 and report["ready"] is False
+
+
+def test_a_period_header_the_pipeline_cannot_resolve_is_found(tmp_path, llm):
+    from stress_layouts import variant
+
+    report = stress(tmp_path, llm, variant(headers=("FY 2024-25", "FY 2023-24")))
+
+    assert report["value_in_a_column_of_its_period"] == 0 and report["values_checked_for_a_period_column"] == 6 and report["ready"] is False
+
+
+def test_a_continuation_page_given_in_a_range_relies_on_the_first_pages_declaration(tmp_path, llm):
+    from stress_layouts import FILLER, variant
+
+    report = stress(tmp_path, llm, variant(second_page_from=1, filler=FILLER, page_range="1-2"))
+
+    assert report["scale_and_currency_declared"] == 6 and report["ready"] is True
+
+
+def test_a_value_on_a_page_that_continues_nothing_in_the_range_is_found(tmp_path, llm):
+    from stress_layouts import FILLER, variant
+
+    report = stress(tmp_path, llm, variant(second_page_from=1, filler=FILLER, page_range="2"))  # the range leaves out the first page
+
+    assert report["scale_and_currency_declared"] == 2 and report["values_checked_for_a_declaration"] == 6  # only the first row's values, which sit on page 1
+    assert report["page_range_covers_labelled_pages"] is False and report["ready"] is False
+
+
+def test_a_located_run_and_a_range_agree_on_a_statement_on_two_pages(tmp_path, llm):
+    from stress_layouts import FILLER, variant
+
+    located = stress(tmp_path, llm, variant(second_page_from=1, filler=FILLER), "a.pdf")
+    ranged = stress(tmp_path, llm, variant(second_page_from=1, filler=FILLER, page_range="1-2"), "b.pdf")
+
+    assert located["scale_and_currency_declared"] == ranged["scale_and_currency_declared"] == 6
+
+
+def test_the_declarations_are_read_with_the_pipelines_own_scale_and_currency_words(tmp_path, llm):
+    from stress_layouts import variant
+
+    lakhs = stress(tmp_path, llm, variant(scale_line="(Rs. in lakhs)", scale_token="lakh"), "l.pdf")
+    wrong = stress(tmp_path, llm, variant(scale_token="lakh"), "w.pdf")  # the page says crore and the labelled scale is lakh
+
+    assert lakhs["scale_and_currency_declared"] == 6 and wrong["scale_and_currency_declared"] == 0
+
+
+def test_the_report_with_the_new_counts_holds_only_counts_and_booleans(tmp_path, llm):
+    from stress_layouts import variant
+
+    text = json.dumps(stress(tmp_path, llm, variant()))
+
+    for forbidden in ("1,482.30", "Acme", "Consolidated", "31 March", str(tmp_path)):
+        assert forbidden not in text
+
+
+def test_a_labelled_currency_the_page_does_not_declare_is_found(tmp_path, llm):
+    from stress_layouts import variant
+
+    report = stress(tmp_path, llm, variant(currency_code="USD"), "usd.pdf")  # the page says Rs.
+
+    assert report["scale_and_currency_declared"] == 0 and report["ready"] is False
+
+
+def test_a_value_labelled_on_two_pages_is_counted_once(tmp_path, llm):
+    from credit_intel.evaluation.setupcheck import Item, Setup
+    from stress_layouts import FILLER, build, variant
+
+    layout = variant(second_page_from=1, filler=FILLER, page_range="1-2")
+    pdf = build(tmp_path / "two.pdf", layout)
+    setup = Setup("R9", file_sha256(pdf), "consolidated", "1-2", None, (Item("1,482.30", (1, 2), "current_assets", date(2025, 3, 31), "crore", "INR"),))
+    report = check_setup(setup, pdf, llm, records(tmp_path, pdf), ledger(tmp_path))
+
+    assert report["scale_and_currency_declared"] == report["values_checked_for_a_declaration"] == 1
+
+
+def test_a_value_counts_as_declared_if_any_of_its_pages_carries_a_declaration(tmp_path, llm):
+    from credit_intel.evaluation.setupcheck import Item, Setup
+    from stress_layouts import FILLER, build, variant
+
+    layout = variant(second_page_from=1, filler=FILLER)
+    pdf = build(tmp_path / "any.pdf", layout)
+    setup = Setup("R9", file_sha256(pdf), "consolidated", "2", None, (Item("600.00", (2, 1), "total_equity", date(2025, 3, 31), "crore", "INR"),))  # page 2 alone has no run
+    report = check_setup(setup, pdf, llm, records(tmp_path, pdf), ledger(tmp_path))
+
+    assert report["scale_and_currency_declared"] == 1
+
+
+def test_a_labelled_period_end_that_is_not_a_column_of_the_page_is_found(tmp_path, llm):
+    from credit_intel.evaluation.setupcheck import Item, Setup
+    from stress_layouts import build, variant
+
+    pdf = build(tmp_path / "pe.pdf", variant())
+    right = Setup("R9", file_sha256(pdf), "consolidated", None, None, (Item("1,482.30", (1,), "current_assets", date(2025, 3, 31), "crore", "INR"),))
+    wrong = Setup("R9", file_sha256(pdf), "consolidated", None, None, (Item("1,482.30", (1,), "current_assets", date(2025, 3, 30), "crore", "INR"),))
+
+    assert check_setup(right, pdf, llm, records(tmp_path, pdf), ledger(tmp_path))["value_in_a_column_of_its_period"] == 1
+    assert check_setup(wrong, pdf, llm, records(tmp_path, pdf), ledger(tmp_path))["value_in_a_column_of_its_period"] == 0
+
+
+def test_a_continuation_page_headed_by_years_only_is_found_and_the_pipeline_agrees(tmp_path, llm):
+    from stress_layouts import FILLER, variant
+
+    report = stress(tmp_path, llm, variant(second_page_from=1, filler=FILLER, page_range="1-2", second_page_headers=("2025", "2024")), "yy.pdf")
+
+    assert report["value_in_a_column_of_its_period"] == 2 and report["values_checked_for_a_period_column"] == 6 and report["ready"] is False  # stress matrix: period_not_verified x4

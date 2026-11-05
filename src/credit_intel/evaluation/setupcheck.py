@@ -27,6 +27,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
@@ -36,10 +37,17 @@ from credit_intel.evaluation.gate import GateReferenceError, load_reference
 from credit_intel.evaluation.guard import ASSIGNMENTS_PATH, SendRefused, file_sha256, load_current_sets
 from credit_intel.evaluation.ledger import LEDGER_PATH, LedgerUnreadable, read_ledger, used_shas
 from credit_intel.evaluation.score import LabelsError, load_labels
+from credit_intel.extraction.columns import analyse_structure
+from credit_intel.extraction.declarations import check_currency, check_scale
 from credit_intel.extraction.normalise import parse_value
+from credit_intel.extraction.periods import page_period_resolver
+from credit_intel.extraction.runs import range_page_types, run_start, statement_run_start
 from credit_intel.ingestion.errors import IngestionError
 from credit_intel.ingestion.ingest import ingest
-from credit_intel.ingestion.locator import parse_page_range
+from credit_intel.config import FIELD_STATEMENT_TYPES
+from credit_intel.ingestion.locator import locate_statements, parse_page_range
+from credit_intel.ingestion.pdfplumber_extractor import PdfplumberExtractor
+from credit_intel.models import Scale
 
 _EDGE = re.compile(r"^[^\w(+-]+|[^\w)%]+$")
 
@@ -52,6 +60,10 @@ class SetupCheckError(Exception):
 class Item:
     printed: str
     pages: tuple[int, ...]  # the labelled page(s) of the figure
+    field: str | None = None  # the field, the period end, the scale and the currency (where the file has one) of the figure, for the
+    period_end: date | None = None  # declaration and period-column checks (Phase 7c, S-4 widened); an item without them is not checked for those
+    scale: str | None = None
+    currency: str | None = None
 
 
 @dataclass(frozen=True)
@@ -65,16 +77,17 @@ class Setup:
 
 
 def _items(entries: list) -> tuple[Item, ...]:
-    """The printed figures and their pages, from the entries of a file the loaders have already accepted."""
+    """The printed figures with their pages, field, period end, scale and currency, from the entries of a file the loaders have already accepted."""
     out = []
     for entry in entries:
         if entry.get("absent") or entry.get("presented") is False:
             continue
+        field, end, currency = entry["field"], date.fromisoformat(entry["period_end"]), entry.get("currency")
         if "parts" in entry:
-            out += [Item(part["printed"], (part["page"],)) for part in entry["parts"]]
+            out += [Item(part["printed"], (part["page"],), field, end, part["scale"], currency) for part in entry["parts"]]
         else:
             pages = entry["pages"] if "pages" in entry else [entry["page"]]
-            out.append(Item(entry["printed"], tuple(sorted(set(pages)))))
+            out.append(Item(entry["printed"], tuple(sorted(set(pages))), field, end, entry["scale"], currency))
     return tuple(out)
 
 
@@ -135,6 +148,47 @@ def _figure(printed: str) -> Decimal | None:
     return None
 
 
+def _declarations_and_periods(setup: Setup, pdf: Path, document, by_number: dict, in_range: set[int] | None) -> tuple[int, int, int, int, int]:
+    """Model-free, with the pipeline's own functions (FR-005.8, FR-005.9): for each value that carries its field, period end, scale and
+    currency, whether a scale and currency declaration it can use is on its page or, for a continuation page, on the first page of its
+    statement run (for a page range, the run worked out from the pages given, v0.4.74), and whether the page has a column for its period end.
+    Returns (declared, in a period column, checked for a declaration, checked for a column, labelled pages with a readable structure)."""
+    items = [i for i in setup.items if i.field in FIELD_STATEMENT_TYPES and i.period_end is not None]
+    if in_range is not None:
+        range_types = range_page_types({n: by_number[n] for n in in_range if n in by_number})
+        start_of = lambda page, kind: run_start(range_types, page, kind)  # noqa: E731
+    else:
+        located = locate_statements(document.pages)
+        start_of = lambda page, kind: statement_run_start(located, page, kind)  # noqa: E731
+    pages = sorted({p for i in items for p in i.pages if p in by_number})
+    words = {w.page_number: w for w in PdfplumberExtractor().extract_words(pdf, pages)} if pages else {}
+    current_end = max((i.period_end for i in items), default=None)  # the later of the two labelled period ends is the current one
+    structures = {}
+    for number in pages:
+        if number in words:
+            resolver = page_period_resolver(words[number], by_number[number].text, None, None, known_current=current_end)
+            structures[number] = analyse_structure(words[number], resolver, None, None)
+    declared = columned = declaration_checked = period_checked = 0
+    for item in items:
+        if item.scale is not None:
+            declaration_checked += 1
+            kind = FIELD_STATEMENT_TYPES[item.field]
+            for page in item.pages:
+                if page not in by_number:
+                    continue
+                start = start_of(page, kind)
+                run_text = by_number[start].text if start is not None and start != page and start in by_number else None
+                scale_ok = check_scale(Scale(item.scale), by_number[page].text, run_text).ok
+                currency_ok = item.currency is None or check_currency(item.currency, by_number[page].text, run_text).ok
+                if scale_ok and currency_ok:
+                    declared += 1
+                    break
+        period_checked += 1
+        if any(p in structures and structures[p].valid and any(c.period_end == item.period_end for c in structures[p].columns) for p in item.pages):
+            columned += 1
+    return declared, columned, declaration_checked, period_checked, sum(1 for st in structures.values() if st.valid)
+
+
 def _guard(sha256: str, assignments: Path, ledger: Path) -> tuple[str, str]:
     """``(document id, set)`` of a document the check may read: a tuning document, or a held-out document no round has used. Fails closed."""
     try:
@@ -175,6 +229,8 @@ def check_setup(setup: Setup, pdf: Path, llm: LLMSettings, assignments: Path = A
         if any(item.printed in p.text for p in pages):
             literal += 1
 
+    declared, in_period_column, declaration_checked, period_checked, structures_valid = _declarations_and_periods(setup, pdf, document, by_number, in_range)
+
     run = dry_run(pdf, llm, basis=setup.basis, page_range=setup.pages, assert_basis=setup.assert_basis, assignments=assignments, allow_unused_held_out=kind == "held_out")
     candidates = set(run["candidate_pages"])
     gate = run["basis_gate"]
@@ -197,10 +253,16 @@ def check_setup(setup: Setup, pdf: Path, llm: LLMSettings, assignments: Path = A
         "basis_gate_error": gate["error_code"],
         "pages_dropped_for_unknown_basis": len(run["removed_for_unknown_basis"]),
         "every_labelled_page_is_sent": all_candidates,
+        "values_checked_for_a_declaration": declaration_checked,
+        "scale_and_currency_declared": declared,
+        "values_checked_for_a_period_column": period_checked,
+        "value_in_a_column_of_its_period": in_period_column,
+        "labelled_pages_with_a_readable_structure": structures_valid,
     }
     report["ready"] = (
         inside and covers and len(with_text) == len(figures) and found == len(figures) and report["basis_gate_passes"] and all_candidates
-    )
+        and declared == declaration_checked and in_period_column == period_checked
+    )  # fmt: skip
     return report
 
 
