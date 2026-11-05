@@ -1,4 +1,4 @@
-# PRD v0.4.73 — draft for the owner's approval (the release of a used held-out document; H3 reclassified as unused; not applied)
+# PRD v0.4.73 — draft (the release of a used held-out document; H3 reclassified as unused); approved by the owner on 2026-11-05 and applied to `docs/PRD.md` as written, with the status cell of OD-51 and the revision row saying the owner left the size blocker alone
 
 Nothing below is applied to `docs/PRD.md`. It records the owner's decision of 2026-11-05 (reasoning in `docs/PHASE7c_diagnosis_plan.md` section 9) and brings the held-out run tool's text into line with the code. The ledger line releasing H3 is already appended (`tests/eval/heldout_runs.jsonl`); on your word I apply this as written, run the suite and commit. It changes no requirement of the product and no setting.
 
