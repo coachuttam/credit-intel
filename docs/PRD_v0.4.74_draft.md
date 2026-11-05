@@ -1,0 +1,21 @@
+# PRD v0.4.74 — draft (a page range and the scale declaration of a continuation page); approved by the owner on 2026-11-05 and applied to `docs/PRD.md` as written; the example is numbered 194
+
+The code that carries it out follows in the next commit (it changes behaviour that FR-005.8 specifies, so the wording was approved first). It records the owner's instruction of 2026-11-05 ("Fix the page-range defect — yes, go ahead") and corrects my own earlier word: this is **not a coding mistake, it is what FR-005.8 says**. FR-005.8 allows a declaration "on the cited page, or, when the locator selected the page, on the first page of the same statement run", and a page range records no statement types, so a continuation page given by `--pages` had to carry its own declaration. The change widens that rule for the pages of a range.
+
+## 1. Header cells
+Version 0.4.73 → 0.4.74. Status: v0.4.73 → v0.4.74, plus: "**v0.4.74 (2026-11-05)** lets a page of a page range take the scale and currency declaration of the first page of its statement run, worked out from the pages given; it changes FR-005 criterion 8 and one sentence of FR-013 rule 7 and no other requirement."
+
+## 2. FR-005 criterion 8 (scale and currency)
+In "…found on the cited page, or, when the locator selected the page, on the first page of the same statement run (FR-013 rule 6)…" insert after "(FR-013 rule 6)": "**or, when the page is one of the pages of a page range, on the first page of the run of its statement type that the locator's own page rules (FR-013 rules 3a to 3c) find among the pages given (v0.4.74): consecutive given pages that qualify for the type form a run; a page that qualifies for no type, or has no earlier page of its type directly before it among the pages given, has no run and must carry its own declaration**". The currency is supported in the same way.
+
+## 3. FR-013 rule 7 (page range override)
+Add: "**(v0.4.74)** The range still records no statement types, selects no page beyond the range, and decides no basis (H.4.6; example 48 is unchanged). The statement runs of rule 6 are worked out among the pages given for the scale and currency declaration of FR-005.8 only."
+
+## 4. Appendix B.6, one example (after example 48 or at the end of the FR-005 block)
+| `--pages 36-37`; page 36 titled "Consolidated Balance Sheet" with "(Rs. in crore)" and two statement lines; page 37 repeats the title and has two more statement lines and no declaration | the values on page 37 take the scale and currency of page 36 (`supported_by` the run start); with `--pages 37` alone they are `scale_not_verified` and `currency_not_verified` | FR-005.8 (v0.4.74) |
+
+## 5. Decision row (after OD-51)
+| OD-52 | **Decided 2026-11-05.** A continuation page in a page range and the scale and currency declaration | (a) Keep FR-005.8 as it was: a page of a range carries its own declaration. (b) Work the run out among the pages given, by the locator's own page rules, for the declaration only. (c) Treat every consecutive page of a range as one run. | (b). A statement that continues on a second page is common; (a) refused its values with `scale_not_verified` when the pages were given (found on tuning document R1: 10 of 14 against 14 of 14 through the locator). (c) would let a page of another statement inherit a declaration. The basis is untouched. | Built and tested, not committed. |
+
+## 6. Revision row 0.4.74 (2026-11-05)
+"**Specification change: a continuation page of a page range and its scale and currency declaration, authorised by the project owner on 2026-11-05** ('Fix the page-range defect — yes, go ahead'). Changes FR-005 criterion 8 and one sentence of FR-013 rule 7. **The effect, plainly:** before this version a statement that continued onto a second page, given with `--pages`, lost the values on the second page to `scale_not_verified`; the held-out references of H5 and H6 both carried a `pages` range, so both runs went through that route, although this effect is not among their printed reasons and is a candidate contributing factor, not an explanation. **Not changed:** the basis of a page range, the choice of pages, any other check. **Evidence:** tuning document R1 through an explicit range 10 of 14 before and 14 of 14 after, the regression bar (36 of 36, 12 of 12, 34 of 34, 34 of 34) unchanged."
